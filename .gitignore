@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.for_bepy/
+.impeccable/
+.playwright-mcp/
+tsconfig.tsbuildinfo
+*.local
+public/test-track.wav
