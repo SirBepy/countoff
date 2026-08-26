@@ -1,28 +1,34 @@
 import { useEffect, useState } from 'react'
+import BackupModal from './components/BackupModal'
 import DropAudio from './components/DropAudio'
 import LyricsModal from './components/LyricsModal'
+import MarkerModal from './components/MarkerModal'
 import MoveLibrary from './components/MoveLibrary'
 import MoveModal from './components/MoveModal'
 import Rehearse from './components/Rehearse'
+import SelectionBar from './components/SelectionBar'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
 import Transport from './components/Transport'
 import { audio } from './lib/audio'
+import { requestPersistence } from './lib/backup'
 import { loadAudio, loadProject, wipe } from './lib/db'
 import { segmentAt, timeToBeat } from './lib/grid'
 import { markAt, splitSongAt } from './lib/markers'
 import { flushSave, getState, hasPendingSave, removeBlocks, set, updateProject, useStore } from './lib/store'
-import { requestPersistence } from './lib/backup'
-import BackupModal from './components/BackupModal'
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function App() {
   const project = useStore((s) => s.project)
   const view = useStore((s) => s.view)
   const status = useStore((s) => s.status)
+  const libraryOpen = useStore((s) => s.libraryOpen)
   const [booted, setBooted] = useState(false)
   const [segmentId, setSegmentId] = useState<string | null>(null)
   const [lyricsFor, setLyricsFor] = useState<string | null>(null)
   const [moveFor, setMoveFor] = useState<string | null>(null)
+  const [markerFor, setMarkerFor] = useState<string | null>(null)
   const [showBackup, setShowBackup] = useState(false)
 
   useEffect(() => {
@@ -40,14 +46,21 @@ export default function App() {
     })()
   }, [])
 
+  // Flush the debounced save on the way out. Never preventDefault here: that
+  // pops a "Leave site?" dialog on every navigation, and the flush already ran.
   useEffect(() => {
-    const onLeave = (e: BeforeUnloadEvent) => {
-      if (!hasPendingSave()) return
-      flushSave()
-      e.preventDefault()
+    const flush = () => {
+      if (hasPendingSave()) flushSave()
     }
-    window.addEventListener('beforeunload', onLeave)
-    return () => window.removeEventListener('beforeunload', onLeave)
+    const onHide = () => document.visibilityState === 'hidden' && flush()
+    window.addEventListener('pagehide', flush)
+    window.addEventListener('beforeunload', flush)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      window.removeEventListener('beforeunload', flush)
+      document.removeEventListener('visibilitychange', onHide)
+    }
   }, [])
 
   // The click has to follow whichever song is playing, so remap on every change.
@@ -90,7 +103,7 @@ export default function App() {
       } else if (e.key === 'r') {
         set({ view: getState().view === 'sheet' ? 'rehearse' : 'sheet' }, false)
       } else if (e.key === 'Escape') {
-        set({ view: 'sheet', selection: null }, false)
+        set({ view: 'sheet', selection: null, libraryOpen: false }, false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -99,10 +112,10 @@ export default function App() {
 
   if (!booted) return null
   if (!project) return <DropAudio />
-
   if (view === 'rehearse') return <Rehearse project={project} />
 
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
+  const marker = project.markers.find((m) => m.id === markerFor)
 
   return (
     <div className="app">
@@ -110,29 +123,22 @@ export default function App() {
         <div className="brand">
           <span className="dot" /> Countoff
         </div>
-        <input
-          value={project.name}
-          onChange={(e) => updateProject({ name: e.target.value })}
-          style={{ width: 220, background: 'transparent', border: '1px solid transparent' }}
-        />
-        <span className="chip">
-          <i className="ph ph-waveform i" /> {project.audioName}
+        <input className="project-name" value={project.name} onChange={(e) => updateProject({ name: e.target.value })} />
+        <span className="chip only-wide">
+          <i className="ph ph-list-numbers i" /> {project.blocks.length} placed
         </span>
-        <span className="chip">
-          <i className="ph ph-list-numbers i" /> {project.blocks.length} moves placed
+        <span className="chip only-wide">
+          <i className="ph ph-flag i" /> {plural(project.segments.length, 'song')}, {plural(project.markers.length, 'mark')}
         </span>
-        <span className="chip">
-          <i className="ph ph-flag i" /> {project.segments.length} songs, {project.markers.length} marks
+        <div className="spacer only-wide" />
+        <span className="faint only-wide" style={{ fontSize: 11 }}>
+          <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>T</kbd>ransition · <kbd>D</kbd>rop · <kbd>R</kbd>ehearse
         </span>
-        <div className="spacer" />
-        <span className="faint" style={{ fontSize: 11 }}>
-          <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>T</kbd>ransition · <kbd>D</kbd>rop · <kbd>M</kbd> click · <kbd>R</kbd>ehearse
-        </span>
-        <button className="ghost" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
-          <i className="ph ph-shield-check i" /> Data
+        <button className="ghost icon" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
+          <i className="ph ph-shield-check i" />
         </button>
         <button
-          className="ghost"
+          className="ghost icon"
           title="Delete this project and start from a new song"
           onClick={async () => {
             if (!confirm('Delete this choreography and start over? This cannot be undone.')) return
@@ -140,32 +146,41 @@ export default function App() {
             location.reload()
           }}
         >
-          <i className="ph ph-arrow-counter-clockwise i" /> Start over
+          <i className="ph ph-arrow-counter-clockwise i" />
         </button>
       </div>
 
       <div className="body">
-        <aside className="rail">
+        {libraryOpen && <div className="rail-scrim" onPointerDown={() => set({ libraryOpen: false }, false)} />}
+        <aside className={`rail${libraryOpen ? ' open' : ''}`}>
           <MoveLibrary project={project} onEditMove={setMoveFor} />
         </aside>
 
         <main className="main">
-          <SongMap project={project} selectedSegmentId={segmentId} onSelectSegment={setSegmentId} />
+          <SongMap
+            project={project}
+            selectedSegmentId={segmentId}
+            onSelectSegment={setSegmentId}
+            onEditMarker={setMarkerFor}
+          />
           <div className="scroll">
             <Sheet
               project={project}
               selectedSegmentId={segmentId}
               onSelectSegment={setSegmentId}
               onEditLyrics={setLyricsFor}
+              onEditMarker={setMarkerFor}
             />
           </div>
         </main>
       </div>
 
+      <SelectionBar project={project} />
       <Transport project={project} />
 
       {lyricSegment && <LyricsModal segment={lyricSegment} onClose={() => setLyricsFor(null)} />}
       {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
+      {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
       {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}
       {status && <div className="toast">{status}</div>}
     </div>

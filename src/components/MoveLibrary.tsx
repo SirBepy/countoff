@@ -27,7 +27,7 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
       flash('Select some counts on the sheet first')
       return
     }
-    set({ activeMoveId: move.id }, false)
+    set({ activeMoveId: move.id, libraryOpen: false }, false)
     fillSelection(selection, move.id)
   }
 
@@ -36,13 +36,8 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
       flash('Place one move first, then shift-click a second to alternate them')
       return
     }
+    set({ libraryOpen: false }, false)
     alternateSelection(selection, activeMoveId, move.id)
-  }
-
-  function newMove() {
-    const id = uid()
-    set({ activeMoveId: id }, false)
-    onEditMove(id)
   }
 
   return (
@@ -50,8 +45,19 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
       <div className="panel-head">
         <i className="ph ph-person-simple-walk i" /> Moves
         <div className="spacer" />
-        <button className="ghost icon" onClick={newMove} title="Add your own move">
+        <button
+          className="ghost sm icon"
+          onClick={() => {
+            const id = uid()
+            set({ activeMoveId: id }, false)
+            onEditMove(id)
+          }}
+          title="Add your own move"
+        >
           <i className="ph ph-plus" />
+        </button>
+        <button className="ghost sm icon rail-close" onClick={() => set({ libraryOpen: false }, false)} title="Close">
+          <i className="ph ph-x" />
         </button>
       </div>
 
@@ -75,9 +81,17 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
       </div>
 
       <div className="hint" style={{ borderTop: '1px solid var(--line-soft)' }}>
-        Drag across counts to select, then click a move to fill the selection with repeats.
-        <br />
-        <kbd>Shift</kbd>+click a second move to alternate A B A B.
+        {selection ? (
+          <>
+            Tap a move to fill the {selection.beats} selected {selection.beats === 1 ? 'count' : 'counts'} with repeats.
+          </>
+        ) : (
+          <>Drag across counts on the sheet to select, then pick a move.</>
+        )}
+        <span className="only-wide">
+          {' '}
+          <kbd>Shift</kbd>+click a second move to alternate A B A B.
+        </span>
       </div>
     </>
   )
@@ -99,7 +113,15 @@ function MoveCard({
   return (
     <div className={`move-card${active ? ' sel' : ''}`} onClick={(e) => onPlace(e.shiftKey)} title={move.note ?? move.name}>
       {clip ? (
-        <video className="move-thumb" src={clip} muted loop playsInline onMouseEnter={(e) => e.currentTarget.play()} onMouseLeave={(e) => e.currentTarget.pause()} />
+        <video
+          className="move-thumb"
+          src={clip}
+          muted
+          loop
+          playsInline
+          onMouseEnter={(e) => void e.currentTarget.play()}
+          onMouseLeave={(e) => e.currentTarget.pause()}
+        />
       ) : (
         <div className="move-thumb">
           <i className="ph ph-person-simple-tai-chi" />
@@ -112,8 +134,7 @@ function MoveCard({
       <div className="row" style={{ gap: 4 }}>
         <span className={`beat-badge e${move.energy}`}>{move.beats}</span>
         <button
-          className="ghost icon"
-          style={{ width: 24, height: 24 }}
+          className="ghost sm icon"
           title="Edit move, record a clip"
           onClick={(e) => {
             e.stopPropagation()

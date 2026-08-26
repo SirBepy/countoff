@@ -10,11 +10,12 @@ import SegmentHeader from './SegmentHeader'
 interface Props {
   project: Project
   onEditLyrics: (segmentId: string) => void
+  onEditMarker: (id: string) => void
   selectedSegmentId: string | null
   onSelectSegment: (id: string) => void
 }
 
-export default function Sheet({ project, onEditLyrics, selectedSegmentId, onSelectSegment }: Props) {
+export default function Sheet({ project, onEditLyrics, onEditMarker, selectedSegmentId, onSelectSegment }: Props) {
   const { time } = useAudio()
   const selection = useStore((s) => s.selection)
   const [editingLyric, setEditingLyric] = useState<string | null>(null)
@@ -45,6 +46,7 @@ export default function Sheet({ project, onEditLyrics, selectedSegmentId, onSele
                 nowBeat={nowBeat}
                 editingLyric={editingLyric}
                 setEditingLyric={setEditingLyric}
+                onEditMarker={onEditMarker}
                 selection={selection?.segmentId === seg.id ? selection : null}
               />
             ))}
@@ -63,10 +65,11 @@ interface RowProps {
   nowBeat: number | null
   editingLyric: string | null
   setEditingLyric: (v: string | null) => void
+  onEditMarker: (id: string) => void
   selection: { startBeat: number; beats: number } | null
 }
 
-function SheetRow({ project, segment, row, nowBeat, editingLyric, setEditingLyric, selection }: RowProps) {
+function SheetRow({ project, segment, row, nowBeat, editingLyric, setEditingLyric, onEditMarker, selection }: RowProps) {
   const rowStart = row * COUNTS_PER_ROW
   const rowEnd = rowStart + COUNTS_PER_ROW
   const from = beatToTime(segment, rowStart)
@@ -198,13 +201,22 @@ function SheetRow({ project, segment, row, nowBeat, editingLyric, setEditingLyri
             .filter((m) => m.time >= from && m.time < to)
             .map((marker) => {
               const meta = MARKER_KINDS[marker.kind]
+              const at = (marker.time - from) / (to - from)
               return (
                 <div
                   key={marker.id}
-                  className="count-marker"
-                  style={{ left: `${((marker.time - from) / (to - from)) * 100}%`, background: meta.colour }}
+                  // Past three quarters across, the label would run off the row.
+                  className={`count-marker${at > 0.72 ? ' flip' : ''}`}
+                  style={{ left: `${at * 100}%`, background: meta.colour }}
                 >
-                  <span style={{ background: meta.colour }}>{marker.label}</span>
+                  <button
+                    style={{ background: meta.colour }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => onEditMarker(marker.id)}
+                    title="Edit this marker"
+                  >
+                    {marker.label}
+                  </button>
                 </div>
               )
             })}

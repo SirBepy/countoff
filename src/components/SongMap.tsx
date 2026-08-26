@@ -4,8 +4,8 @@ import { loadAudio } from '../lib/db'
 import { formatTime, segmentEnd } from '../lib/grid'
 import { MARKER_KINDS, markAt, splitSongAt } from '../lib/markers'
 import { suggestTransitions, type Candidate } from '../lib/structure'
-import { flash, removeMarker, removeSegment, updateMarker, updateSegment } from '../lib/store'
-import type { Marker, MarkerKind, Project, Segment } from '../lib/types'
+import { flash, removeSegment, updateMarker, updateSegment } from '../lib/store'
+import type { Marker, Project, Segment } from '../lib/types'
 
 const SEG_COLOURS = ['#2a3350', '#3a2a4e', '#2a4340', '#4a3428', '#402a3a', '#28384a']
 
@@ -13,9 +13,10 @@ interface Props {
   project: Project
   selectedSegmentId: string | null
   onSelectSegment: (id: string) => void
+  onEditMarker: (id: string) => void
 }
 
-export default function SongMap({ project, selectedSegmentId, onSelectSegment }: Props) {
+export default function SongMap({ project, selectedSegmentId, onSelectSegment, onEditMarker }: Props) {
   const { time } = useAudio()
   const track = useRef<HTMLDivElement>(null)
   const [candidates, setCandidates] = useState<Candidate[] | null>(null)
@@ -28,14 +29,21 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment }:
     return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
   }
 
-  function dragOnTrack(onMove: (time: number) => void) {
+  /** Returns a pointerdown handler that drags along the track, then reports whether it moved. */
+  function dragOnTrack(onMove: (time: number) => void, onTap?: () => void) {
     return (e: React.PointerEvent) => {
       e.stopPropagation()
       e.preventDefault()
-      const move = (ev: PointerEvent) => onMove(timeAt(ev.clientX))
+      const originX = e.clientX
+      let moved = false
+      const move = (ev: PointerEvent) => {
+        if (Math.abs(ev.clientX - originX) > 4) moved = true
+        if (moved) onMove(timeAt(ev.clientX))
+      }
       const up = () => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
+        if (!moved) onTap?.()
       }
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
@@ -69,23 +77,23 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment }:
 
   return (
     <div className="songmap">
-      <div className="row" style={{ marginBottom: 8 }}>
+      <div className="row wrap" style={{ marginBottom: 8 }}>
         <strong style={{ fontSize: 13 }}>Song map</strong>
         <span className="faint mono" style={{ fontSize: 11 }}>
           {formatTime(time)} / {formatTime(duration)}
         </span>
         <div className="spacer" />
-        <span className="faint" style={{ fontSize: 11 }}>
+        <span className="faint only-wide" style={{ fontSize: 11 }}>
           While it plays, hit <kbd>S</kbd> for a song start, <kbd>T</kbd> transition, <kbd>D</kbd> drop, <kbd>B</kbd> break
         </span>
-        <button onClick={() => splitSongAt(audio.el.currentTime)} title="Start a new song at the playhead">
-          <i className="ph ph-scissors i" /> Song start
+        <button className="sm" onClick={() => splitSongAt(audio.el.currentTime)} title="Start a new song at the playhead">
+          <i className="ph ph-scissors i" /> Song
         </button>
-        <button onClick={() => markAt(audio.el.currentTime, 'transition')} title="Mark a DJ transition at the playhead">
-          <i className="ph ph-arrows-left-right i" /> Transition
+        <button className="sm" onClick={() => markAt(audio.el.currentTime, 'transition')} title="Mark a DJ transition at the playhead">
+          <i className="ph ph-arrows-left-right i" /> Mark
         </button>
-        <button onClick={scan} disabled={scanning} title="Find where the mix changes loudness">
-          <i className={`ph ${scanning ? 'ph-spinner' : 'ph-magic-wand'} i`} /> {scanning ? 'Scanning...' : 'Suggest'}
+        <button className="sm" onClick={scan} disabled={scanning} title="Find where the mix changes loudness">
+          <i className={`ph ${scanning ? 'ph-spinner' : 'ph-magic-wand'} i`} /> {scanning ? '...' : 'Suggest'}
         </button>
       </div>
 
@@ -115,9 +123,16 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment }:
         {project.segments.map(
           (seg, i) =>
             i > 0 && (
-              <div key={`cut-${seg.id}`} className="map-cut" style={{ left: pct(seg.start) }} onPointerDown={dragCut(seg)}>
+              <div
+                key={`cut-${seg.id}`}
+                // Near the end of the track the delete button would sit outside
+                // the clipped map and be unreachable, so it flips to the left.
+                className={`map-cut${seg.start / duration > 0.88 ? ' flip' : ''}`}
+                style={{ left: pct(seg.start) }}
+                onPointerDown={dragCut(seg)}
+              >
                 <button
-                  className="ghost icon cut-x"
+                  className="ghost cut-x"
                   title="Remove this song start"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -140,7 +155,16 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment }:
 
       <div className="map-markers">
         {project.markers.map((marker) => (
-          <MarkerPin key={marker.id} marker={marker} left={pct(marker.time)} onDrag={dragOnTrack((t) => updateMarker(marker.id, { time: t }))} />
+          <MarkerPin
+            key={marker.id}
+            marker={marker}
+            left={pct(marker.time)}
+            flip={marker.time / duration > 0.78}
+            onDrag={dragOnTrack(
+              (t) => updateMarker(marker.id, { time: t }),
+              () => onEditMarker(marker.id),
+            )}
+          />
         ))}
         {!project.markers.length && <span className="faint marker-empty">No transitions marked yet.</span>}
       </div>
@@ -149,37 +173,39 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment }:
 
       {candidates && candidates.length > 0 && (
         <div className="candidates">
-          <span className="faint" style={{ fontSize: 11 }}>
+          <span className="faint" style={{ fontSize: 11, width: '100%' }}>
             Suggested changes. Loudness only, so check each one by ear:
           </span>
           {candidates.map((c, i) => (
             <span key={i} className="chip candidate-chip">
-              <button className="ghost" onClick={() => audio.seek(Math.max(0, c.time - 2))} title="Listen from just before">
+              <button className="ghost sm" onClick={() => audio.seek(Math.max(0, c.time - 2))} title="Listen from just before">
                 <i className="ph ph-play i" /> {formatTime(c.time)}
               </button>
               <button
+                className="sm"
                 onClick={() => {
                   const id = splitSongAt(c.time)
                   if (id) onSelectSegment(id)
                   dismiss(c)
                 }}
               >
-                Song start
+                Song
               </button>
               <button
+                className="sm"
                 onClick={() => {
                   markAt(c.time, c.reason === 'drop' ? 'drop' : 'transition')
                   dismiss(c)
                 }}
               >
-                {c.reason === 'drop' ? 'Drop' : 'Transition'}
+                {c.reason === 'drop' ? 'Drop' : 'Mark'}
               </button>
-              <button className="ghost icon" onClick={() => dismiss(c)} title="Not a change">
+              <button className="ghost sm icon" onClick={() => dismiss(c)} title="Not a change">
                 <i className="ph ph-x" />
               </button>
             </span>
           ))}
-          <button className="ghost" onClick={() => setCandidates(null)}>
+          <button className="ghost sm" onClick={() => setCandidates(null)}>
             Dismiss all
           </button>
         </div>
@@ -197,7 +223,7 @@ function LyricRibbon({ project, time, pct }: { project: Project; time: number; p
   if (!lines.length) {
     return (
       <div className="map-lyrics">
-        <span className="ribbon-empty faint">No lyrics yet. Open a song below and hit "Get lyrics".</span>
+        <span className="ribbon-empty faint">No lyrics yet. Open a song below and hit "Lyrics".</span>
       </div>
     )
   }
@@ -213,56 +239,35 @@ function LyricRibbon({ project, time, pct }: { project: Project; time: number; p
       ))}
       <div className="ribbon-text">
         <strong>{current?.text ?? '...'}</strong>
-        {next && <span className="faint">{next.text}</span>}
+        {next && <span className="faint only-wide">{next.text}</span>}
       </div>
       <div className="playhead" style={{ left: pct(time) }} />
     </div>
   )
 }
 
-function MarkerPin({ marker, left, onDrag }: { marker: Marker; left: string; onDrag: (e: React.PointerEvent) => void }) {
-  const [editing, setEditing] = useState(false)
+function MarkerPin({
+  marker,
+  left,
+  flip,
+  onDrag,
+}: {
+  marker: Marker
+  left: string
+  flip: boolean
+  onDrag: (e: React.PointerEvent) => void
+}) {
   const meta = MARKER_KINDS[marker.kind]
-  const kinds = Object.keys(MARKER_KINDS) as MarkerKind[]
-
   return (
-    <div className="marker-pin" style={{ left, borderColor: meta.colour }} onPointerDown={onDrag}>
-      <button
-        className="ghost icon kind-cycle"
-        title={`${meta.label}. Click to change kind.`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => {
-          const next = kinds[(kinds.indexOf(marker.kind) + 1) % kinds.length]
-          updateMarker(marker.id, { kind: next, label: marker.label === meta.label ? MARKER_KINDS[next].label : marker.label })
-        }}
-      >
-        <i className={`ph ${meta.icon}`} style={{ color: meta.colour }} />
-      </button>
-      {editing ? (
-        <input
-          autoFocus
-          defaultValue={marker.label}
-          onPointerDown={(e) => e.stopPropagation()}
-          onBlur={(e) => {
-            updateMarker(marker.id, { label: e.target.value })
-            setEditing(false)
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-          style={{ width: 96, padding: '0 3px', height: 17 }}
-        />
-      ) : (
-        <span onPointerDown={(e) => e.stopPropagation()} onClick={() => setEditing(true)} title="Click to rename, drag the pin to move it">
-          {marker.label}
-        </span>
-      )}
-      <button
-        className="ghost icon kind-cycle"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => removeMarker(marker.id)}
-        title="Delete marker"
-      >
-        <i className="ph ph-x" style={{ fontSize: 10 }} />
-      </button>
+    <div
+      // A pin in the last fifth would run its label off the right edge.
+      className={`marker-pin${flip ? ' flip' : ''}`}
+      style={{ left }}
+      onPointerDown={onDrag}
+      title={`${marker.label}. Tap to edit, drag to move.`}
+    >
+      <i className={`ph ${meta.icon}`} style={{ color: meta.colour }} />
+      <span className="pin-label">{marker.label}</span>
     </div>
   )
 }

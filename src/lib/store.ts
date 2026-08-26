@@ -18,6 +18,8 @@ export interface UiState {
   status: string | null
   /** Scroll the sheet to keep the playing 8-count on screen. */
   follow: boolean
+  /** Only meaningful under 900px, where the move rail is a bottom sheet. */
+  libraryOpen: boolean
 }
 
 let state: UiState = {
@@ -28,6 +30,7 @@ let state: UiState = {
   activeMoveId: null,
   status: null,
   follow: true,
+  libraryOpen: false,
 }
 
 const listeners = new Set<() => void>()
