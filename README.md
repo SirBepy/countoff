@@ -34,7 +34,18 @@ and what comes next. Loop a section, turn on the click, slow to 60% without the 
 
 **Your data.** Everything stays in the browser: nothing is uploaded. Storage is marked persistent so
 the browser will not evict it, a version history is kept automatically, and the whole project
-including move clips exports to a single file.
+including move clips exports to a single file. The song is not in that file, so the same panel can
+swap in an audio file without disturbing a single count.
+
+## On a phone
+
+Built mobile first, and installable. Under 900px the move library becomes a bottom sheet you reach
+from the selection bar, tempo controls fold behind the BPM chip, and the transport collapses to the
+essentials with the rest one tap away. Add it to your home screen and it runs offline, which matters
+at a venue with no signal. Audio keeps playing with the screen locked, with lock-screen controls.
+
+Storage is per browser and per address, so a project built at `localhost` will not appear on the
+hosted URL. Move between them with Export backup and Restore from file, then re-pick the song.
 
 ## Running it
 
