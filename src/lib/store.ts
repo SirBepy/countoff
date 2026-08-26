@@ -63,6 +63,15 @@ export function flushSave() {
   if (state.project) void saveProject(state.project)
 }
 
+/**
+ * Drops a queued write. A restore writes straight to IndexedDB, so a pending
+ * save of the pre-restore project would land back on top of it.
+ */
+export function cancelPendingSave() {
+  clearTimeout(saveTimer)
+  saveTimer = undefined
+}
+
 export function set(patch: Partial<UiState>, persist = true) {
   state = { ...state, ...patch }
   emit(persist)
