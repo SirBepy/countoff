@@ -6,3 +6,9 @@ dist/
 tsconfig.tsbuildinfo
 *.local
 public/test-track.wav
+
+android/.gradle/
+android/local.properties
+android/**/build/
+android/**/*.keystore
+android/**/*.jks

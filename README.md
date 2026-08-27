@@ -56,3 +56,33 @@ npm run dev
 
 `npm run build` produces a static `dist/` that works from any path, installs as a PWA and runs
 offline.
+
+## Android shell
+
+For phones where a screen-time blocker treats installed PWAs as Chrome and blocks them, `android/`
+is a small hand-written WebView shell that points at the hosted app and runs as its own process
+instead. It carries no web assets of its own and needs no `npm install`; it is a separate Gradle
+project.
+
+The project has no Gradle wrapper: the `android.yml` workflow provides Gradle itself via
+`gradle/actions/setup-gradle`, so building locally means having a `gradle` command on your own
+`PATH` rather than running `./gradlew`.
+
+To install the APK on a phone, open the latest release on the (public) repo in a browser:
+
+```
+https://github.com/SirBepy/countoff/releases/latest
+```
+
+and download the `.apk` asset, which needs no authentication since the repo is public. To cut a
+new release:
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+which triggers the workflow and attaches a signed APK to the release. Signing needs four repo
+secrets configured first: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Without them the release build fails on purpose rather
+than shipping an unsigned APK.
