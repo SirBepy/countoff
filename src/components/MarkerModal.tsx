@@ -1,19 +1,17 @@
 import { audio } from '../lib/audio'
 import { formatTime } from '../lib/grid'
-import { MARKER_KINDS } from '../lib/markers'
+import { MARKER_COLOUR, MARKER_ICON } from '../lib/markers'
 import { removeMarker, updateMarker } from '../lib/store'
-import type { Marker, MarkerKind } from '../lib/types'
+import type { Marker } from '../lib/types'
 
 const NUDGES = [-1, -0.1, 0.1, 1]
 
 export default function MarkerModal({ marker, onClose }: { marker: Marker; onClose: () => void }) {
-  const kinds = Object.keys(MARKER_KINDS) as MarkerKind[]
-
   return (
     <div className="modal-back" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <header>
-          <i className={`ph ${MARKER_KINDS[marker.kind].icon} i`} style={{ color: MARKER_KINDS[marker.kind].colour }} />
+          <i className={`ph ${MARKER_ICON} i`} style={{ color: MARKER_COLOUR }} />
           Marker
           <div className="spacer" />
           <button className="ghost icon" onClick={onClose}>
@@ -29,27 +27,6 @@ export default function MarkerModal({ marker, onClose }: { marker: Marker; onClo
               value={marker.label}
               onChange={(e) => updateMarker(marker.id, { label: e.target.value }, `marker-label-${marker.id}`)}
             />
-          </div>
-
-          <div className="field">
-            <label>Kind</label>
-            <div className="row wrap">
-              {kinds.map((kind) => (
-                <button
-                  key={kind}
-                  className={marker.kind === kind ? 'on' : ''}
-                  onClick={() =>
-                    updateMarker(marker.id, {
-                      kind,
-                      label: marker.label === MARKER_KINDS[marker.kind].label ? MARKER_KINDS[kind].label : marker.label,
-                    })
-                  }
-                >
-                  <i className={`ph ${MARKER_KINDS[kind].icon} i`} style={{ color: MARKER_KINDS[kind].colour }} />
-                  {MARKER_KINDS[kind].label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="field">

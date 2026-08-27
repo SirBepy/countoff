@@ -412,28 +412,6 @@ input[type='number']::-webkit-inner-spin-button {
   padding-left: 8px;
 }
 
-.map-candidate {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
-  background: repeating-linear-gradient(var(--e2) 0 3px, transparent 3px 6px);
-  z-index: 2;
-}
-
-.candidates {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-.candidate-chip {
-  gap: 2px;
-  padding: 2px 3px;
-}
-
 .map-cut {
   position: absolute;
   top: 0;

@@ -33,7 +33,7 @@ export default function Transport({ project }: { project: Project }) {
         <button className="icon only-wide" onClick={() => audio.nudge(-5)} title="Back 5s">
           <i className="ph ph-rewind" />
         </button>
-        <button className="primary icon" onClick={() => audio.toggle()} title="Space">
+        <button className="primary icon" onClick={() => audio.toggle()} title={playing ? 'Pause (Space)' : 'Play (Space)'}>
           <i className={`ph ${playing ? 'ph-pause' : 'ph-play'}`} style={{ fontSize: 19 }} />
         </button>
         <button className="icon only-wide" onClick={() => audio.nudge(5)} title="Forward 5s">
@@ -62,7 +62,7 @@ export default function Transport({ project }: { project: Project }) {
 
         <div className="spacer only-wide" />
 
-        <button className="primary" onClick={() => set({ view: view === 'sheet' ? 'rehearse' : 'sheet' }, false)} title="Rehearse">
+        <button className="primary" onClick={() => set({ view: view === 'sheet' ? 'rehearse' : 'sheet' }, false)} title="Rehearse (R)">
           <i className="ph ph-projector-screen i" />
           <span className="only-wide">Rehearse</span>
         </button>

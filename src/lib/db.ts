@@ -1,9 +1,19 @@
 import { uid } from './store'
-import type { Project } from './types'
+import type { Marker, Project } from './types'
 
 const DB_NAME = 'countoff'
 const DB_VERSION = 1
 const STORES = ['project', 'audio', 'clips'] as const
+
+// Pre-collapse marker shape: retired 2026-08-27 when `kind` merged into `label`.
+const OLD_KIND_LABEL: Record<string, string> = { transition: 'Transition', drop: 'Drop', break: 'Break', cue: 'Cue' }
+
+/** Old markers carried `kind` with no free-text label; give the dev back what it meant. */
+function migrateMarker(m: Marker & { kind?: string }): Marker {
+  const { kind, ...rest } = m
+  const label = rest.label || (kind ? (OLD_KIND_LABEL[kind] ?? kind) : rest.label)
+  return { ...rest, label }
+}
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -38,7 +48,7 @@ export const saveProject = (p: Project) => tx('project', 'readwrite', (s) => s.p
 export function migrateProject(p: Project): Project {
   return {
     ...p,
-    markers: p.markers ?? [],
+    markers: (p.markers ?? []).map(migrateMarker),
     blocks: p.blocks ?? [],
     segments: (p.segments ?? []).map((s) => ({
       ...s,

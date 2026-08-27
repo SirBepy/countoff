@@ -14,8 +14,7 @@ import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
 import { loadAudio, loadProject } from './lib/db'
 import { segmentAt, timeToBeat } from './lib/grid'
-import { addLyricAt } from './lib/lrc'
-import { markAt, splitSongAt } from './lib/markers'
+import { splitSongAt } from './lib/markers'
 import { flushSave, getState, hasPendingSave, redo, removeBlocks, set, undo, updateProject, useStore } from './lib/store'
 import { isConfigured } from './lib/sync'
 import { pullNow, scheduleSync } from './lib/syncEngine'
@@ -119,18 +118,6 @@ export default function App() {
       } else if (e.key === 's') {
         const id = splitSongAt(audio.el.currentTime)
         if (id) setSegmentId(id)
-      } else if (e.key === 't') {
-        markAt(audio.el.currentTime, 'transition')
-      } else if (e.key === 'd') {
-        markAt(audio.el.currentTime, 'drop')
-      } else if (e.key === 'b') {
-        markAt(audio.el.currentTime, 'break')
-      } else if (e.key === 'l') {
-        // The new line's input autofocuses within this same keydown dispatch, so without
-        // this the browser's own keypress action types a literal "l" into it.
-        e.preventDefault()
-        const id = addLyricAt(audio.el.currentTime)
-        if (id) set({ editingLyricId: id }, false)
       } else if (e.key === 'm') {
         audio.setMetronome(!audio.getMetronome())
       } else if (e.key === 'r') {
@@ -169,7 +156,7 @@ export default function App() {
         </span>
         <div className="spacer only-wide" />
         <span className="faint only-wide" style={{ fontSize: 11 }}>
-          <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>T</kbd>ransition · <kbd>D</kbd>rop · <kbd>L</kbd>yric · <kbd>R</kbd>ehearse
+          <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
         </span>
         <button className="ghost icon" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
           <i className="ph ph-shield-check i" />

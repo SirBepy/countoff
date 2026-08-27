@@ -1,12 +1,7 @@
 import { addMarker, addSegment, flash, getState, uid } from './store'
-import type { MarkerKind } from './types'
 
-export const MARKER_KINDS: Record<MarkerKind, { label: string; icon: string; colour: string }> = {
-  transition: { label: 'Transition', icon: 'ph-arrows-left-right', colour: '#7c5cff' },
-  drop: { label: 'Drop', icon: 'ph-lightning', colour: '#ff5d8f' },
-  break: { label: 'Break', icon: 'ph-pause', colour: '#3fb8b0' },
-  cue: { label: 'Cue', icon: 'ph-flag', colour: '#f0a63c' },
-}
+export const MARKER_ICON = 'ph-flag'
+export const MARKER_COLOUR = '#f0a63c'
 
 /** Starts a new song at `time`, inheriting the previous song's tempo as a guess. */
 export function splitSongAt(time: number): string | null {
@@ -32,10 +27,13 @@ export function splitSongAt(time: number): string | null {
   return id
 }
 
-export function markAt(time: number, kind: MarkerKind) {
+/** Marks a moment worth choreographing to, at `time`. Editable afterwards in MarkerModal. */
+export function markAt(time: number): string | null {
   const project = getState().project
-  if (!project) return
-  if (project.markers.some((m) => Math.abs(m.time - time) < 0.2)) return
-  addMarker({ id: uid(), time, kind, label: MARKER_KINDS[kind].label })
-  flash(`${MARKER_KINDS[kind].label} marked at ${time.toFixed(2)}s`)
+  if (!project) return null
+  if (project.markers.some((m) => Math.abs(m.time - time) < 0.2)) return null
+  const id = uid()
+  addMarker({ id, time, label: 'Mark' })
+  flash(`Marked at ${time.toFixed(2)}s`)
+  return id
 }

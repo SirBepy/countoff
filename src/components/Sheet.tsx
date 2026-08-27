@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { COUNTS_PER_ROW, beatDuration, beatToTime, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
-import { MARKER_KINDS } from '../lib/markers'
+import { MARKER_COLOUR } from '../lib/markers'
 import { beginGesture, endGesture, removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
 import type { Block, Project, Segment } from '../lib/types'
 import SegmentHeader from './SegmentHeader'
@@ -210,17 +210,16 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
           {project.markers
             .filter((m) => m.time >= from && m.time < to)
             .map((marker) => {
-              const meta = MARKER_KINDS[marker.kind]
               const at = (marker.time - from) / (to - from)
               return (
                 <div
                   key={marker.id}
                   // Past three quarters across, the label would run off the row.
                   className={`count-marker${at > 0.72 ? ' flip' : ''}`}
-                  style={{ left: `${at * 100}%`, background: meta.colour }}
+                  style={{ left: `${at * 100}%`, background: MARKER_COLOUR }}
                 >
                   <button
-                    style={{ background: meta.colour }}
+                    style={{ background: MARKER_COLOUR }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onEditMarker(marker.id)}
                     title="Edit this marker"

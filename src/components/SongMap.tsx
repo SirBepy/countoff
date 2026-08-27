@@ -1,10 +1,8 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { loadAudio } from '../lib/db'
 import { formatTime, segmentEnd } from '../lib/grid'
-import { MARKER_KINDS, markAt, splitSongAt } from '../lib/markers'
-import { suggestTransitions, type Candidate } from '../lib/structure'
-import { beginGesture, endGesture, flash, removeSegment, updateMarker, updateSegment } from '../lib/store'
+import { MARKER_COLOUR, MARKER_ICON, markAt, splitSongAt } from '../lib/markers'
+import { beginGesture, endGesture, removeSegment, updateMarker, updateSegment } from '../lib/store'
 import type { Marker, Project, Segment } from '../lib/types'
 
 const SEG_COLOURS = ['#2a3350', '#3a2a4e', '#2a4340', '#4a3428', '#402a3a', '#28384a']
@@ -19,8 +17,6 @@ interface Props {
 export default function SongMap({ project, selectedSegmentId, onSelectSegment, onEditMarker }: Props) {
   const { time } = useAudio()
   const track = useRef<HTMLDivElement>(null)
-  const [candidates, setCandidates] = useState<Candidate[] | null>(null)
-  const [scanning, setScanning] = useState(false)
   const duration = project.duration || 1
 
   const pct = (t: number) => `${(t / duration) * 100}%`
@@ -63,25 +59,6 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
     return dragOnTrack(`cut-${seg.id}`, (start, key) => updateSegment(seg.id, { start, anchor: start + offset }, key))
   }
 
-  async function scan() {
-    setScanning(true)
-    try {
-      const blob = await loadAudio()
-      if (!blob) throw new Error('no audio')
-      const ctx = new AudioContext()
-      const buffer = await ctx.decodeAudioData(await blob.arrayBuffer())
-      const found = suggestTransitions(buffer)
-      void ctx.close()
-      setCandidates(found)
-      flash(found.length ? `${found.length} spots where the mix changes` : 'No obvious changes found')
-    } catch {
-      flash('Could not analyse the audio')
-    }
-    setScanning(false)
-  }
-
-  const dismiss = (c: Candidate) => setCandidates((list) => (list ?? []).filter((x) => x !== c))
-
   return (
     <div className="songmap">
       <div className="row wrap" style={{ marginBottom: 8 }}>
@@ -91,16 +68,13 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
         </span>
         <div className="spacer" />
         <span className="faint only-wide" style={{ fontSize: 11 }}>
-          While it plays, hit <kbd>S</kbd> for a song start, <kbd>T</kbd> transition, <kbd>D</kbd> drop, <kbd>B</kbd> break
+          While it plays, hit <kbd>S</kbd> for a song start
         </span>
-        <button className="sm" onClick={() => splitSongAt(audio.el.currentTime)} title="Start a new song at the playhead">
+        <button className="sm" onClick={() => splitSongAt(audio.el.currentTime)} title="Start a new song at the playhead (S)">
           <i className="ph ph-scissors i" /> Song
         </button>
-        <button className="sm" onClick={() => markAt(audio.el.currentTime, 'transition')} title="Mark a DJ transition at the playhead">
-          <i className="ph ph-arrows-left-right i" /> Mark
-        </button>
-        <button className="sm" onClick={scan} disabled={scanning} title="Find where the mix changes loudness">
-          <i className={`ph ${scanning ? 'ph-spinner' : 'ph-magic-wand'} i`} /> {scanning ? '...' : 'Suggest'}
+        <button className="sm" onClick={() => markAt(audio.el.currentTime)} title="Mark a moment at the playhead">
+          <i className="ph ph-flag i" /> Mark
         </button>
       </div>
 
@@ -153,10 +127,6 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
             ),
         )}
 
-        {candidates?.map((c, i) => (
-          <div key={`cand-${i}`} className="map-candidate" style={{ left: pct(c.time) }} title={`Possible ${c.reason}`} />
-        ))}
-
         <div className="playhead" style={{ left: pct(time) }} />
       </div>
 
@@ -174,50 +144,10 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
             )}
           />
         ))}
-        {!project.markers.length && <span className="faint marker-empty">No transitions marked yet.</span>}
+        {!project.markers.length && <span className="faint marker-empty">No marks yet.</span>}
       </div>
 
       <LyricRibbon project={project} time={time} pct={pct} />
-
-      {candidates && candidates.length > 0 && (
-        <div className="candidates">
-          <span className="faint" style={{ fontSize: 11, width: '100%' }}>
-            Suggested changes. Loudness only, so check each one by ear:
-          </span>
-          {candidates.map((c, i) => (
-            <span key={i} className="chip candidate-chip">
-              <button className="ghost sm" onClick={() => audio.seek(Math.max(0, c.time - 2))} title="Listen from just before">
-                <i className="ph ph-play i" /> {formatTime(c.time)}
-              </button>
-              <button
-                className="sm"
-                onClick={() => {
-                  const id = splitSongAt(c.time)
-                  if (id) onSelectSegment(id)
-                  dismiss(c)
-                }}
-              >
-                Song
-              </button>
-              <button
-                className="sm"
-                onClick={() => {
-                  markAt(c.time, c.reason === 'drop' ? 'drop' : 'transition')
-                  dismiss(c)
-                }}
-              >
-                {c.reason === 'drop' ? 'Drop' : 'Mark'}
-              </button>
-              <button className="ghost sm icon" onClick={() => dismiss(c)} title="Not a change">
-                <i className="ph ph-x" />
-              </button>
-            </span>
-          ))}
-          <button className="ghost sm" onClick={() => setCandidates(null)}>
-            Dismiss all
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -265,7 +195,6 @@ function MarkerPin({
   flip: boolean
   onDrag: (e: React.PointerEvent) => void
 }) {
-  const meta = MARKER_KINDS[marker.kind]
   return (
     <div
       // A pin in the last fifth would run its label off the right edge.
@@ -274,7 +203,7 @@ function MarkerPin({
       onPointerDown={onDrag}
       title={`${marker.label}. Tap to edit, drag to move.`}
     >
-      <i className={`ph ${meta.icon}`} style={{ color: meta.colour }} />
+      <i className={`ph ${MARKER_ICON}`} style={{ color: MARKER_COLOUR }} />
       <span className="pin-label">{marker.label}</span>
     </div>
   )

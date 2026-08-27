@@ -37,8 +37,6 @@ export interface Segment {
   lrcSource?: string
 }
 
-export type MarkerKind = 'transition' | 'drop' | 'break' | 'cue'
-
 /**
  * A moment worth choreographing to: a twirl over a DJ blend, a riser, a drop.
  * A segment boundary is different, it starts a song with its own tempo.
@@ -46,7 +44,6 @@ export type MarkerKind = 'transition' | 'drop' | 'break' | 'cue'
 export interface Marker {
   id: string
   time: number
-  kind: MarkerKind
   label: string
 }
 
