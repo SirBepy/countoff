@@ -326,6 +326,11 @@ input[type='number']::-webkit-inner-spin-button {
 .map-seg.sel {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
+/* Every song but the first has a cut at its left edge, and that cut's delete
+   button sits at the top, so the name indents past the 20px button. */
+.map-seg + .map-seg {
+  padding-left: 28px;
+}
 .map-seg-name {
   font-weight: 600;
   white-space: nowrap;

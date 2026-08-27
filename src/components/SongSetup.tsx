@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { flash, set, updateSegment } from '../lib/store'
+import { flash, redo, set, undo, updateSegment, useStore } from '../lib/store'
 import type { Project, Segment } from '../lib/types'
 
 /** m:ss.mmm, always three fractional digits so a typed value round-trips exactly. */
@@ -217,6 +217,20 @@ function SongRow({ segment, index, segments, duration }: RowProps) {
 /** Flow steps 1-4 in one re-enterable list. Never a modal: chunk 7 makes this a landing screen. */
 export default function SongSetup({ project }: { project: Project }) {
   const segments = [...project.segments].sort((a, b) => a.start - b.start)
+  const canUndo = useStore((s) => s.canUndo)
+  const canRedo = useStore((s) => s.canRedo)
+
+  // A field's draft (e.g. TimeField) only writes to the store on blur, so blur
+  // whatever's focused before undoing/redoing - otherwise that pending value
+  // lands back on top right after, and the undo looks like it did nothing.
+  const commitThenUndo = () => {
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    undo()
+  }
+  const commitThenRedo = () => {
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    redo()
+  }
 
   return (
     <div className="setup">
@@ -226,6 +240,12 @@ export default function SongSetup({ project }: { project: Project }) {
           {segments.length} song{segments.length === 1 ? '' : 's'}
         </span>
         <div className="spacer" />
+        <button className="ghost icon" onClick={commitThenUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+          <i className="ph ph-arrow-counter-clockwise i" />
+        </button>
+        <button className="ghost icon" onClick={commitThenRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+          <i className="ph ph-arrow-clockwise i" />
+        </button>
         <button onClick={() => set({ view: 'sheet' }, false)}>
           <i className="ph ph-arrow-left i" /> Back to sheet
         </button>
