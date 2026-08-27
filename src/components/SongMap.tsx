@@ -70,7 +70,11 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
         <span className="faint only-wide" style={{ fontSize: 11 }}>
           While it plays, hit <kbd>S</kbd> for a song start
         </span>
-        <button className="sm" onClick={() => splitSongAt(audio.el.currentTime)} title="Start a new song at the playhead (S)">
+        <button
+          className="sm"
+          onClick={() => void splitSongAt(audio.el.currentTime).then((id) => id && onSelectSegment(id))}
+          title="Start a new song at the playhead (S)"
+        >
           <i className="ph ph-scissors i" /> Song
         </button>
         <button className="sm" onClick={() => markAt(audio.el.currentTime)} title="Mark a moment at the playhead">

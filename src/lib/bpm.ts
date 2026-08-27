@@ -1,3 +1,5 @@
+import { loadAudio } from './db'
+
 const HOP = 512
 const MIN_BPM = 70
 const MAX_BPM = 185
@@ -117,4 +119,22 @@ export function bpmFromTaps(times: number[]): number | null {
   gaps.sort((a, b) => a - b)
   const median = gaps[Math.floor(gaps.length / 2)]
   return Math.round((60 / median) * 10) / 10
+}
+
+/** Only place that opens a transient decode `AudioContext`; always closes it, even on failure. */
+export async function decodeAudioBlob(blob: Blob): Promise<AudioBuffer> {
+  const ctx = new AudioContext()
+  try {
+    return await ctx.decodeAudioData(await blob.arrayBuffer())
+  } finally {
+    void ctx.close()
+  }
+}
+
+/** Re-decodes the stored audio and measures tempo over [from, to); null if there is none yet. */
+export async function measureStoredTempo(from: number, to: number, origin = from): Promise<TempoEstimate | null> {
+  const blob = await loadAudio()
+  if (!blob) return null
+  const buffer = await decodeAudioBlob(blob)
+  return detectTempo(buffer, from, to, origin)
 }

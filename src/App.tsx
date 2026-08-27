@@ -116,8 +116,7 @@ export default function App() {
         )
         removeBlocks(doomed.map((b) => b.id))
       } else if (e.key === 's') {
-        const id = splitSongAt(audio.el.currentTime)
-        if (id) setSegmentId(id)
+        void splitSongAt(audio.el.currentTime).then((id) => id && setSegmentId(id))
       } else if (e.key === 'm') {
         audio.setMetronome(!audio.getMetronome())
       } else if (e.key === 'r') {

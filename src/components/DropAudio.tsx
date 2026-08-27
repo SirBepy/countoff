@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { detectTempo } from '../lib/bpm'
+import { decodeAudioBlob, detectTempo } from '../lib/bpm'
 import { saveAudio, saveProject } from '../lib/db'
 import { DEFAULT_COUNTS_PER_ROW } from '../lib/grid'
 import { STARTER_MOVES } from '../lib/moves'
@@ -13,16 +13,12 @@ export default function DropAudio() {
   const input = useRef<HTMLInputElement>(null)
 
   async function accept(file: File) {
-    setBusy('Reading audio')
-    const bytes = await file.arrayBuffer()
     setBusy('Decoding')
-    const ctx = new AudioContext()
-    const buffer = await ctx.decodeAudioData(bytes.slice(0))
+    const buffer = await decodeAudioBlob(file)
     setBusy('Finding the tempo')
     // Sample the middle of the track: intros and fades skew the estimate.
     const from = Math.min(20, buffer.duration * 0.1)
     const estimate = detectTempo(buffer, from, Math.min(from + 60, buffer.duration))
-    void ctx.close()
 
     const project: Project = {
       id: uid(),
