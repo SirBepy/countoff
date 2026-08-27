@@ -866,6 +866,54 @@ input[type='number']::-webkit-inner-spin-button {
   height: 16px;
 }
 
+/* ---------- setup ---------- */
+
+.setup {
+  height: 100%;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--bg);
+}
+.setup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(6px + var(--safe-t)) 12px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+}
+.setup-list {
+  overflow: auto;
+  padding: 12px;
+  padding-bottom: calc(12px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.setup-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-1);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setup-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 /* ---------- drop / modal / misc ---------- */
 
 .drop {

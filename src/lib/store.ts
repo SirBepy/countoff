@@ -13,7 +13,7 @@ export interface UiState {
   project: Project | null
   audioUrl: string | null
   selection: Selection | null
-  view: 'sheet' | 'rehearse'
+  view: 'sheet' | 'rehearse' | 'setup'
   activeMoveId: string | null
   status: string | null
   /** Scroll the sheet to keep the playing 8-count on screen. */

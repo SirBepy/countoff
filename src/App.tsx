@@ -9,6 +9,7 @@ import Rehearse from './components/Rehearse'
 import SelectionBar from './components/SelectionBar'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
+import SongSetup from './components/SongSetup'
 import Transport from './components/Transport'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
@@ -132,6 +133,7 @@ export default function App() {
   if (!booted) return null
   if (!project) return <DropAudio />
   if (view === 'rehearse') return <Rehearse project={project} />
+  if (view === 'setup') return <SongSetup project={project} />
 
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
   const marker = project.markers.find((m) => m.id === markerFor)
@@ -157,6 +159,9 @@ export default function App() {
         <span className="faint only-wide" style={{ fontSize: 11 }}>
           <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
         </span>
+        <button className="ghost icon" onClick={() => set({ view: 'setup' }, false)} title="Song setup: cuts, transitions, downbeats, tempo">
+          <i className="ph ph-sliders-horizontal i" />
+        </button>
         <button className="ghost icon" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
           <i className="ph ph-shield-check i" />
         </button>
