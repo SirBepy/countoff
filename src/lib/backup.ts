@@ -1,4 +1,4 @@
-import { loadClip, loadProject, saveClip, saveProject } from './db'
+import { loadClip, loadProject, migrateProject, saveClip, saveProject } from './db'
 import type { Project } from './types'
 
 const SNAPSHOT_KEY = 'countoff.snapshots'
@@ -53,7 +53,7 @@ export function readSnapshots(): Snapshot[] {
 }
 
 export async function restoreSnapshot(snap: Snapshot): Promise<Project> {
-  const project = { ...snap.project, updatedAt: Date.now() }
+  const project = migrateProject({ ...snap.project, updatedAt: Date.now() })
   await saveProject(project)
   return project
 }
@@ -86,7 +86,7 @@ export async function exportBackup(): Promise<Blob> {
 export async function importBackup(file: File): Promise<Project> {
   const data = JSON.parse(await file.text())
   if (data.format !== FORMAT || !data.project) throw new Error('Not a Countoff backup')
-  const project = { ...(data.project as Project), updatedAt: Date.now() }
+  const project = migrateProject({ ...(data.project as Project), updatedAt: Date.now() })
   await saveProject(project)
   for (const [moveId, dataUrl] of Object.entries((data.clips ?? {}) as Record<string, string>)) {
     await saveClip(moveId, await (await fetch(dataUrl)).blob())

@@ -1,3 +1,5 @@
+import { segmentAt } from './grid'
+import { getState, updateSegment, uid } from './store'
 import type { LyricLine } from './types'
 
 const API = 'https://lrclib.net/api'
@@ -21,17 +23,22 @@ export async function searchLyrics(query: string): Promise<LrcResult[]> {
   return rows.sort((a, b) => Number(!!b.syncedLyrics) - Number(!!a.syncedLyrics)).slice(0, 12)
 }
 
-/** Parses `[mm:ss.xx] text`, the format LRCLIB returns in `syncedLyrics`. */
+/** Parses `[mm:ss.xx] text`, the format LRCLIB returns in `syncedLyrics`. A row with no
+ * stamp is kept as an untimed line (time -1) rather than dropped, so it's never silently lost. */
 export function parseLrc(lrc: string): LyricLine[] {
   const lines: LyricLine[] = []
   for (const row of lrc.split('\n')) {
     const stamps = [...row.matchAll(/\[(\d+):(\d+)(?:[.:](\d+))?\]/g)]
-    if (!stamps.length) continue
     const text = row.replace(/\[[^\]]*\]/g, '').trim()
     if (!text) continue
+    if (!stamps.length) {
+      lines.push({ id: uid(), time: -1, text })
+      continue
+    }
     for (const [, mm, ss, frac] of stamps) {
       const fraction = frac ? Number(`0.${frac}`) : 0
-      lines.push({ time: Number(mm) * 60 + Number(ss) + fraction, text })
+      const time = Number(mm) * 60 + Number(ss) + fraction
+      lines.push({ id: uid(), time, text, srcTime: time })
     }
   }
   return lines.sort((a, b) => a.time - b.time)
@@ -43,7 +50,18 @@ export function parsePlain(text: string): LyricLine[] {
     .split('\n')
     .map((t) => t.trim())
     .filter(Boolean)
-    .map((t) => ({ time: -1, text: t }))
+    .map((t) => ({ id: uid(), time: -1, text: t }))
+}
+
+/** Hand-placed line at `time`, addressed to the segment that owns that moment. No srcTime, so Phase 2's re-fit skips it. */
+export function addLyricAt(time: number): string | null {
+  const project = getState().project
+  if (!project?.segments.length) return null
+  const segment = segmentAt(project.segments, time)
+  const id = uid()
+  const line: LyricLine = { id, time, text: '' }
+  updateSegment(segment.id, { lyrics: [...segment.lyrics, line].sort((a, b) => a.time - b.time) })
+  return id
 }
 
 export const shiftLyrics = (lines: LyricLine[], by: number): LyricLine[] =>

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { COUNTS_PER_ROW, beatDuration, beatToTime, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
-import { lyricsBetween } from '../lib/lrc'
+import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { MARKER_KINDS } from '../lib/markers'
 import { removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
 import type { Block, Project, Segment } from '../lib/types'
@@ -18,7 +18,6 @@ interface Props {
 export default function Sheet({ project, onEditLyrics, onEditMarker, selectedSegmentId, onSelectSegment }: Props) {
   const { time } = useAudio()
   const selection = useStore((s) => s.selection)
-  const [editingLyric, setEditingLyric] = useState<string | null>(null)
 
   return (
     <div className="sheet">
@@ -44,8 +43,6 @@ export default function Sheet({ project, onEditLyrics, onEditMarker, selectedSeg
                 segment={seg}
                 row={r}
                 nowBeat={nowBeat}
-                editingLyric={editingLyric}
-                setEditingLyric={setEditingLyric}
                 onEditMarker={onEditMarker}
                 selection={selection?.segmentId === seg.id ? selection : null}
               />
@@ -63,13 +60,11 @@ interface RowProps {
   segment: Segment
   row: number
   nowBeat: number | null
-  editingLyric: string | null
-  setEditingLyric: (v: string | null) => void
   onEditMarker: (id: string) => void
   selection: { startBeat: number; beats: number } | null
 }
 
-function SheetRow({ project, segment, row, nowBeat, editingLyric, setEditingLyric, onEditMarker, selection }: RowProps) {
+function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: RowProps) {
   const rowStart = row * COUNTS_PER_ROW
   const rowEnd = rowStart + COUNTS_PER_ROW
   const from = beatToTime(segment, rowStart)
@@ -82,6 +77,7 @@ function SheetRow({ project, segment, row, nowBeat, editingLyric, setEditingLyri
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
   const el = useRef<HTMLDivElement>(null)
   const follow = useStore((s) => s.follow)
+  const editingLyricId = useStore((s) => s.editingLyricId)
 
   useEffect(() => {
     if (active && follow && !audio.el.paused) el.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -144,42 +140,51 @@ function SheetRow({ project, segment, row, nowBeat, editingLyric, setEditingLyri
     updateSegment(segment.id, { lyrics: segment.lyrics.map((l) => (l === line ? { ...l, text } : l)) })
   }
 
-  const lyricKey = (i: number) => `${segment.id}-${row}-${i}`
+  function addLyricHere(e: React.PointerEvent<HTMLDivElement>) {
+    if (lines.length) return
+    // Mounting the new input's autoFocus mid-gesture races the browser's own
+    // mousedown focus resolution, which would otherwise blur it right back out.
+    e.preventDefault()
+    const id = addLyricAt(beatToTime(segment, beatFromEvent(e, e.currentTarget)))
+    if (id) set({ editingLyricId: id }, false)
+  }
 
   return (
     <div ref={el} className={`sheet-row${active ? ' active' : ''}`}>
       <div className="row-no mono">{row + 1}</div>
       <div>
-        <div className="row-lyric">
+        <div className={`row-lyric${lines.length ? '' : ' addable'}`} onPointerDown={addLyricHere}>
           {lines.length ? (
             lines.map((line, i) =>
-              editingLyric === lyricKey(i) ? (
+              editingLyricId === line.id ? (
                 <input
-                  key={lyricKey(i)}
+                  key={line.id}
                   autoFocus
                   defaultValue={line.text}
                   style={{ width: 'auto', flex: 1, minWidth: 200 }}
                   onBlur={(e) => {
                     editLyricText(line, e.target.value)
-                    setEditingLyric(null)
+                    set({ editingLyricId: null }, false)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') e.currentTarget.blur()
-                    if (e.key === 'Escape') setEditingLyric(null)
+                    if (e.key === 'Escape') set({ editingLyricId: null }, false)
                   }}
                 />
               ) : (
                 <span
-                  key={lyricKey(i)}
+                  key={line.id}
                   title="Click to edit. Shift-click to retime to the playhead."
-                  onClick={(e) => (e.shiftKey ? retimeLyric(i) : setEditingLyric(lyricKey(i)))}
+                  onClick={(e) => (e.shiftKey ? retimeLyric(i) : set({ editingLyricId: line.id }, false))}
                 >
                   {line.text}
                 </span>
               ),
             )
           ) : (
-            <span className="none">&nbsp;</span>
+            <span className="none" title="Click to add a lyric here">
+              + Add lyric
+            </span>
           )}
         </div>
 

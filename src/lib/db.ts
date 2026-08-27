@@ -1,3 +1,4 @@
+import { uid } from './store'
 import type { Project } from './types'
 
 const DB_NAME = 'countoff'
@@ -32,15 +33,23 @@ async function tx<T>(store: string, mode: IDBTransactionMode, run: (s: IDBObject
 
 export const saveProject = (p: Project) => tx('project', 'readwrite', (s) => s.put(p, 'current'))
 
-/** Fills in fields added after a project was last saved, so older files still open. */
-function migrate(p: Project | undefined): Project | undefined {
-  if (!p) return p
+/** Fills in fields added after a project was last saved. Exported so backup import
+ * and sync pull, which skip loadProject, apply the same backfill. */
+export function migrateProject(p: Project): Project {
   return {
     ...p,
     markers: p.markers ?? [],
     blocks: p.blocks ?? [],
-    segments: (p.segments ?? []).map((s) => ({ ...s, lyrics: s.lyrics ?? [], lyricOffset: s.lyricOffset ?? 0 })),
+    segments: (p.segments ?? []).map((s) => ({
+      ...s,
+      lyrics: (s.lyrics ?? []).map((l) => (l.id ? l : { ...l, id: uid() })),
+      lyricOffset: s.lyricOffset ?? 0,
+    })),
   }
+}
+
+function migrate(p: Project | undefined): Project | undefined {
+  return p ? migrateProject(p) : p
 }
 
 export const loadProject = () =>

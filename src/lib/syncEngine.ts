@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { loadClip, saveClip, saveProject } from './db'
+import { loadClip, migrateProject, saveClip, saveProject } from './db'
 import {
   clipChanged,
   getConfig,
@@ -75,7 +75,8 @@ export const refreshStatus = () => emit()
 
 /** Writes to IndexedDB, cancels the debounced local save, then adopts in memory.
  * Cancels before the clip fetch: a network call can easily outlast the 400ms window ad4299b guards. */
-async function adoptRemoteProject(project: Project, config: SyncConfig) {
+async function adoptRemoteProject(remoteProject: Project, config: SyncConfig) {
+  const project = migrateProject(remoteProject)
   await saveProject(project)
   cancelPendingSave()
   const remoteClipIds = await listRemoteClips(config)

@@ -20,6 +20,8 @@ export interface UiState {
   follow: boolean
   /** Only meaningful under 900px, where the move rail is a bottom sheet. */
   libraryOpen: boolean
+  /** Which lyric line's inline editor is open, so a hand-placed line can land in edit mode immediately. */
+  editingLyricId: string | null
 }
 
 let state: UiState = {
@@ -31,6 +33,7 @@ let state: UiState = {
   status: null,
   follow: true,
   libraryOpen: false,
+  editingLyricId: null,
 }
 
 const listeners = new Set<() => void>()

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { audio } from '../lib/audio'
 import { formatTime } from '../lib/grid'
 import { parseLrc, parsePlain, searchLyrics, shiftLyrics, type LrcResult } from '../lib/lrc'
-import { flash, updateSegment } from '../lib/store'
+import { flash, uid, updateSegment } from '../lib/store'
 import type { LyricLine, Segment } from '../lib/types'
 
 interface Props {
@@ -36,7 +36,7 @@ export default function LyricsModal({ segment, onClose }: Props) {
       const lines = shiftLyrics(parseLrc(row.syncedLyrics), segment.start)
       setLyrics(lines)
       updateSegment(segment.id, { lyricOffset: segment.start, lrcSource: `${row.artistName} - ${row.trackName}` })
-      flash(`${lines.length} timed lines. Nudge the offset until they land.`)
+      flash(`${describeCounts(lines)}. Nudge the offset until they land.`)
     } else if (row.plainLyrics) {
       setLyrics(parsePlain(row.plainLyrics))
       flash('Plain lyrics only. Use "Set to playhead" on each line to time them.')
@@ -50,7 +50,14 @@ export default function LyricsModal({ segment, onClose }: Props) {
   }
 
   function addLine() {
-    setLyrics([...segment.lyrics, { time: audio.el.currentTime, text: 'New line' }])
+    setLyrics([...segment.lyrics, { id: uid(), time: audio.el.currentTime, text: 'New line' }])
+  }
+
+  /** Reports the timed/untimed split after a paste or import, since a silent partial import is the actual defect. */
+  function describeCounts(lines: LyricLine[]) {
+    const timed = lines.filter((l) => l.time >= 0).length
+    const untimed = lines.length - timed
+    return untimed ? `${timed} timed, ${untimed} still need timing` : `${timed} timed lines`
   }
 
   function updateLine(index: number, patch: Partial<LyricLine>) {
@@ -120,6 +127,7 @@ export default function LyricsModal({ segment, onClose }: Props) {
                   if (!lines.length) return flash('Nothing to import')
                   setLyrics(lines)
                   setTab('edit')
+                  flash(describeCounts(lines))
                 }}
               >
                 Import {pasted.split('\n').filter((l) => l.trim()).length} lines

@@ -590,6 +590,13 @@ input[type='number']::-webkit-inner-spin-button {
   font-style: italic;
   opacity: 0.5;
 }
+.row-lyric.addable {
+  cursor: pointer;
+}
+.row-lyric.addable:hover .none {
+  opacity: 1;
+  color: var(--e1);
+}
 
 .counts {
   position: relative;

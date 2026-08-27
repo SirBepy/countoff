@@ -13,9 +13,12 @@ export interface Move {
 }
 
 export interface LyricLine {
-  /** Seconds into the audio file, already offset-corrected on load. */
+  id: string
+  /** Seconds into the audio file. */
   time: number
   text: string
+  /** Time in the source track's own timeline, kept so a re-fit stays lossless. Absent on hand-placed lines. */
+  srcTime?: number
 }
 
 /** One song inside the medley. Cut markers are the boundaries between segments. */
