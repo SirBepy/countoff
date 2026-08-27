@@ -53,11 +53,12 @@ export function migrateProject(p: Project): Project {
     blocks: p.blocks ?? [],
     // Pre-transition shape: retired 2026-08-27 when count length and transitions went per-song.
     segments: (p.segments ?? []).map((raw) => {
-      const { beatsPerBar, ...s } = raw as Segment & { beatsPerBar?: number }
+      const { beatsPerBar, lyricOffset, ...s } = raw as Segment & { beatsPerBar?: number; lyricOffset?: number }
       return {
         ...s,
         lyrics: (s.lyrics ?? []).map((l) => (l.id ? l : { ...l, id: uid() })),
-        lyricOffset: s.lyricOffset ?? 0,
+        // Pre-fit shape: retired 2026-08-27 when the flat offset became offset+scale.
+        fit: s.fit ?? { offset: lyricOffset ?? 0, scale: 1 },
         countsPerRow: s.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
         transitionIn: s.transitionIn ?? 0,
       }

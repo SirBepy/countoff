@@ -201,7 +201,7 @@ export default function App() {
       <SelectionBar project={project} />
       <Transport project={project} />
 
-      {lyricSegment && <LyricsModal segment={lyricSegment} onClose={() => setLyricsFor(null)} />}
+      {lyricSegment && <LyricsModal project={project} segment={lyricSegment} onClose={() => setLyricsFor(null)} />}
       {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
       {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
       {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}

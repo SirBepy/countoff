@@ -35,8 +35,9 @@ export interface Segment {
   /** The row/count unit for this song, e.g. 8 for an 8-count, 6 for a 6-count. */
   countsPerRow: number
   lyrics: LyricLine[]
-  /** Applied when importing from LRCLIB, kept so the user can re-nudge later. */
-  lyricOffset: number
+  /** Maps a line's `srcTime` onto this cut: placed time = srcTime * scale + offset.
+   * Lines with no `srcTime` (hand-placed) are never touched by it. */
+  fit: { offset: number; scale: number }
   lrcSource?: string
 }
 

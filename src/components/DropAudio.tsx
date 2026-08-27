@@ -40,7 +40,7 @@ export default function DropAudio() {
           transitionIn: 0,
           countsPerRow: DEFAULT_COUNTS_PER_ROW,
           lyrics: [],
-          lyricOffset: 0,
+          fit: { offset: 0, scale: 1 },
         },
       ],
       blocks: [],

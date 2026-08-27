@@ -62,7 +62,7 @@ export async function splitSongAt(time: number): Promise<string | null> {
       transitionIn: 0,
       countsPerRow: previous?.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
       lyrics: [],
-      lyricOffset: 0,
+      fit: { offset: 0, scale: 1 },
     })
     flash(
       measured
