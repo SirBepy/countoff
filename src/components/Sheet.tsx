@@ -3,7 +3,7 @@ import { audio, useAudio } from '../lib/audio'
 import { COUNTS_PER_ROW, beatDuration, beatToTime, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { MARKER_KINDS } from '../lib/markers'
-import { removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
+import { beginGesture, endGesture, removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
 import type { Block, Project, Segment } from '../lib/types'
 import SegmentHeader from './SegmentHeader'
 
@@ -117,18 +117,23 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
     const beatWidth = rect.width / COUNTS_PER_ROW
     const originX = e.clientX
     const { startBeat, beats } = block
+    const gestureKey = `block-${mode}-${block.id}`
+    beginGesture(gestureKey)
 
     const onMove = (ev: PointerEvent) => {
       const delta = Math.round((ev.clientX - originX) / beatWidth)
-      if (mode === 'move') updateBlock(block.id, { startBeat: Math.max(0, startBeat + delta) })
-      else updateBlock(block.id, { beats: Math.max(1, beats + delta) })
+      if (mode === 'move') updateBlock(block.id, { startBeat: Math.max(0, startBeat + delta) }, gestureKey)
+      else updateBlock(block.id, { beats: Math.max(1, beats + delta) }, gestureKey)
     }
     const up = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      endGesture()
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   function retimeLyric(index: number) {

@@ -4,7 +4,7 @@ import { loadAudio } from '../lib/db'
 import { formatTime, segmentEnd } from '../lib/grid'
 import { MARKER_KINDS, markAt, splitSongAt } from '../lib/markers'
 import { suggestTransitions, type Candidate } from '../lib/structure'
-import { flash, removeSegment, updateMarker, updateSegment } from '../lib/store'
+import { beginGesture, endGesture, flash, removeSegment, updateMarker, updateSegment } from '../lib/store'
 import type { Marker, Project, Segment } from '../lib/types'
 
 const SEG_COLOURS = ['#2a3350', '#3a2a4e', '#2a4340', '#4a3428', '#402a3a', '#28384a']
@@ -29,31 +29,38 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
     return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
   }
 
-  /** Returns a pointerdown handler that drags along the track, then reports whether it moved. */
-  function dragOnTrack(onMove: (time: number) => void, onTap?: () => void) {
+  /**
+   * Returns a pointerdown handler that drags along the track, then reports whether it moved.
+   * `gestureKey` scopes every `onMove` mutation into one undo entry for the whole drag.
+   */
+  function dragOnTrack(gestureKey: string, onMove: (time: number, key: string) => void, onTap?: () => void) {
     return (e: React.PointerEvent) => {
       e.stopPropagation()
       e.preventDefault()
       const originX = e.clientX
       let moved = false
+      beginGesture(gestureKey)
       const move = (ev: PointerEvent) => {
         if (Math.abs(ev.clientX - originX) > 4) moved = true
-        if (moved) onMove(timeAt(ev.clientX))
+        if (moved) onMove(timeAt(ev.clientX), gestureKey)
       }
       const up = () => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
+        window.removeEventListener('pointercancel', up)
+        endGesture()
         if (!moved) onTap?.()
       }
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
+      window.addEventListener('pointercancel', up)
     }
   }
 
   function dragCut(seg: Segment) {
     // Carry the downbeat with the cut so the grid does not jump on every drag.
     const offset = seg.anchor - seg.start
-    return dragOnTrack((start) => updateSegment(seg.id, { start, anchor: start + offset }))
+    return dragOnTrack(`cut-${seg.id}`, (start, key) => updateSegment(seg.id, { start, anchor: start + offset }, key))
   }
 
   async function scan() {
@@ -161,7 +168,8 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
             left={pct(marker.time)}
             flip={marker.time / duration > 0.78}
             onDrag={dragOnTrack(
-              (t) => updateMarker(marker.id, { time: t }),
+              `marker-${marker.id}`,
+              (t, key) => updateMarker(marker.id, { time: t }, key),
               () => onEditMarker(marker.id),
             )}
           />

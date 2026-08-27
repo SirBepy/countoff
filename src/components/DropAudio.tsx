@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { detectTempo } from '../lib/bpm'
 import { saveAudio, saveProject } from '../lib/db'
 import { STARTER_MOVES } from '../lib/moves'
-import { flash, set, uid } from '../lib/store'
+import { flash, replaceProject, uid } from '../lib/store'
 import type { Project } from '../lib/types'
 import { audio } from '../lib/audio'
 
@@ -50,7 +50,7 @@ export default function DropAudio() {
     await saveProject(project)
     const url = URL.createObjectURL(file)
     audio.load(url)
-    set({ project, audioUrl: url })
+    replaceProject(project, { audioUrl: url })
     flash(`Detected ${estimate.bpm} BPM. Check the "1" before building.`)
     setBusy(null)
   }

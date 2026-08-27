@@ -42,7 +42,7 @@ export default function MoveModal({ project, moveId, onClose }: Props) {
       flash('Give the move a name')
       return
     }
-    upsertMove({ ...draft, name: draft.name.trim(), builtin: existing?.builtin })
+    upsertMove({ ...draft, name: draft.name.trim(), builtin: existing?.builtin }, `move-${draft.id}`)
     onClose()
   }
 

@@ -24,7 +24,11 @@ export default function MarkerModal({ marker, onClose }: { marker: Marker; onClo
         <div className="content">
           <div className="field">
             <label>Label</label>
-            <input autoFocus value={marker.label} onChange={(e) => updateMarker(marker.id, { label: e.target.value })} />
+            <input
+              autoFocus
+              value={marker.label}
+              onChange={(e) => updateMarker(marker.id, { label: e.target.value }, `marker-label-${marker.id}`)}
+            />
           </div>
 
           <div className="field">

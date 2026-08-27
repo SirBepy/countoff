@@ -15,7 +15,7 @@ import {
   SyncConflictError,
   type SyncConfig,
 } from './sync'
-import { cancelPendingSave, flash, getState, set } from './store'
+import { cancelPendingSave, flash, getState, replaceProject, set } from './store'
 import type { Project } from './types'
 
 // A GitHub PUT is a real commit over the network, not a local write. This waits
@@ -85,7 +85,8 @@ async function adoptRemoteProject(remoteProject: Project, config: SyncConfig) {
     const blob = await pullClip(config, moveId)
     if (blob) await saveClip(moveId, blob)
   }
-  set({ project, selection: null }, false)
+  // Undoing past a document that arrived from the other device is incoherent.
+  replaceProject(project, { selection: null }, false)
 }
 
 export async function pullNow(): Promise<void> {

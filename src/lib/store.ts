@@ -22,6 +22,9 @@ export interface UiState {
   libraryOpen: boolean
   /** Which lyric line's inline editor is open, so a hand-placed line can land in edit mode immediately. */
   editingLyricId: string | null
+  /** Mirrors the undo/redo stacks so buttons can grey out without reaching into store internals. */
+  canUndo: boolean
+  canRedo: boolean
 }
 
 let state: UiState = {
@@ -34,6 +37,8 @@ let state: UiState = {
   follow: true,
   libraryOpen: false,
   editingLyricId: null,
+  canUndo: false,
+  canRedo: false,
 }
 
 const listeners = new Set<() => void>()
@@ -94,15 +99,91 @@ export function useStore<T>(select: (s: UiState) => T): T {
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
-function withProject(fn: (p: Project) => Project) {
-  if (!state.project) return
-  set({ project: { ...fn(state.project), updatedAt: Date.now() } })
+const UNDO_LIMIT = 50
+// A rename fires a mutation per keystroke; merge consecutive edits under the same
+// key into the entry already on top of the stack instead of one step per letter.
+const COALESCE_WINDOW = 800
+
+let undoStack: Project[] = []
+let redoStack: Project[] = []
+let coalesce: { key: string; at: number } | null = null
+// An open gesture (pointerdown..pointerup) holds its first mutation's "before" snapshot
+// regardless of elapsed time, unlike `coalesce` which lapses after COALESCE_WINDOW.
+let gesture: { key: string; pushed: boolean } | null = null
+
+/**
+ * Opens a gesture scope: every `withProject` call passing this same key merges into
+ * the entry already pushed for it, however long the gesture runs. Call on pointerdown.
+ */
+export function beginGesture(key: string) {
+  endGesture()
+  gesture = { key, pushed: false }
 }
 
-export const updateProject = (patch: Partial<Project>) => withProject((p) => ({ ...p, ...patch }))
+/** Closes the gesture scope. Call from the same cleanup that removes the pointermove listener. */
+export function endGesture() {
+  gesture = null
+}
 
-export const updateSegment = (id: string, patch: Partial<Segment>) =>
-  withProject((p) => ({ ...p, segments: p.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)) }))
+/** Pushes `previous` unless it merges with the in-progress coalesce run or open gesture. Always drops redo: a new edit invalidates it. */
+function pushHistory(previous: Project, coalesceKey?: string) {
+  const now = Date.now()
+  const inGesture = !!coalesceKey && gesture !== null && gesture.key === coalesceKey
+  const merging = inGesture
+    ? gesture!.pushed
+    : !!coalesceKey && coalesce !== null && coalesce.key === coalesceKey && now - coalesce.at < COALESCE_WINDOW
+  if (!merging) {
+    undoStack.push(previous)
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift()
+  }
+  if (inGesture) gesture!.pushed = true
+  coalesce = coalesceKey ? { key: coalesceKey, at: now } : null
+  redoStack = []
+}
+
+function withProject(fn: (p: Project) => Project, coalesceKey?: string) {
+  if (!state.project) return
+  pushHistory(state.project, coalesceKey)
+  set({ project: { ...fn(state.project), updatedAt: Date.now() }, canUndo: true, canRedo: false })
+}
+
+export function undo() {
+  if (!state.project || undoStack.length === 0) return
+  const previous = undoStack.pop()!
+  redoStack.push(state.project)
+  if (redoStack.length > UNDO_LIMIT) redoStack.shift()
+  coalesce = null
+  gesture = null
+  set({ project: previous, canUndo: undoStack.length > 0, canRedo: true })
+}
+
+export function redo() {
+  if (!state.project || redoStack.length === 0) return
+  const next = redoStack.pop()!
+  undoStack.push(state.project)
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift()
+  coalesce = null
+  gesture = null
+  set({ project: next, canUndo: true, canRedo: redoStack.length > 0 })
+}
+
+/**
+ * Chokepoint for writes that REPLACE the whole project (new file, backup restore, sync
+ * pull). Undoing past a document that arrived from elsewhere is incoherent, so both stacks reset.
+ */
+export function replaceProject(project: Project, patch: Partial<UiState> = {}, persist = true) {
+  undoStack = []
+  redoStack = []
+  coalesce = null
+  gesture = null
+  set({ project, canUndo: false, canRedo: false, ...patch }, persist)
+}
+
+export const updateProject = (patch: Partial<Project>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, ...patch }), coalesceKey)
+
+export const updateSegment = (id: string, patch: Partial<Segment>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, segments: p.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)) }), coalesceKey)
 
 export function addSegment(seg: Segment) {
   withProject((p) => ({ ...p, segments: [...p.segments, seg].sort((a, b) => a.start - b.start) }))
@@ -119,27 +200,33 @@ export function removeSegment(id: string) {
 export const addMarker = (marker: Marker) =>
   withProject((p) => ({ ...p, markers: [...p.markers, marker].sort((a, b) => a.time - b.time) }))
 
-export const updateMarker = (id: string, patch: Partial<Marker>) =>
-  withProject((p) => ({
-    ...p,
-    markers: p.markers.map((m) => (m.id === id ? { ...m, ...patch } : m)).sort((a, b) => a.time - b.time),
-  }))
+export const updateMarker = (id: string, patch: Partial<Marker>, coalesceKey?: string) =>
+  withProject(
+    (p) => ({
+      ...p,
+      markers: p.markers.map((m) => (m.id === id ? { ...m, ...patch } : m)).sort((a, b) => a.time - b.time),
+    }),
+    coalesceKey,
+  )
 
 export const removeMarker = (id: string) => withProject((p) => ({ ...p, markers: p.markers.filter((m) => m.id !== id) }))
 
 export const addBlocks = (blocks: Block[]) => withProject((p) => ({ ...p, blocks: [...p.blocks, ...blocks] }))
 
-export const updateBlock = (id: string, patch: Partial<Block>) =>
-  withProject((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }))
+export const updateBlock = (id: string, patch: Partial<Block>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }), coalesceKey)
 
 export const removeBlocks = (ids: string[]) =>
   withProject((p) => ({ ...p, blocks: p.blocks.filter((b) => !ids.includes(b.id)) }))
 
-export const upsertMove = (move: Move) =>
-  withProject((p) => ({
-    ...p,
-    moves: p.moves.some((m) => m.id === move.id) ? p.moves.map((m) => (m.id === move.id ? move : m)) : [...p.moves, move],
-  }))
+export const upsertMove = (move: Move, coalesceKey?: string) =>
+  withProject(
+    (p) => ({
+      ...p,
+      moves: p.moves.some((m) => m.id === move.id) ? p.moves.map((m) => (m.id === move.id ? move : m)) : [...p.moves, move],
+    }),
+    coalesceKey,
+  )
 
 export const removeMove = (id: string) =>
   withProject((p) => ({ ...p, moves: p.moves.filter((m) => m.id !== id), blocks: p.blocks.filter((b) => b.moveId !== id) }))

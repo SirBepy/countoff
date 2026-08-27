@@ -12,11 +12,11 @@ import SongMap from './components/SongMap'
 import Transport from './components/Transport'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
-import { loadAudio, loadProject, wipe } from './lib/db'
+import { loadAudio, loadProject } from './lib/db'
 import { segmentAt, timeToBeat } from './lib/grid'
 import { addLyricAt } from './lib/lrc'
 import { markAt, splitSongAt } from './lib/markers'
-import { flushSave, getState, hasPendingSave, removeBlocks, set, updateProject, useStore } from './lib/store'
+import { flushSave, getState, hasPendingSave, redo, removeBlocks, set, undo, updateProject, useStore } from './lib/store'
 import { isConfigured } from './lib/sync'
 import { pullNow, scheduleSync } from './lib/syncEngine'
 
@@ -27,6 +27,8 @@ export default function App() {
   const view = useStore((s) => s.view)
   const status = useStore((s) => s.status)
   const libraryOpen = useStore((s) => s.libraryOpen)
+  const canUndo = useStore((s) => s.canUndo)
+  const canRedo = useStore((s) => s.canRedo)
   const [booted, setBooted] = useState(false)
   const [segmentId, setSegmentId] = useState<string | null>(null)
   const [lyricsFor, setLyricsFor] = useState<string | null>(null)
@@ -92,9 +94,17 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
       const { selection } = getState()
-      if (e.code === 'Space') {
+      const key = e.key.toLowerCase()
+      if ((e.ctrlKey || e.metaKey) && key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+      } else if ((e.ctrlKey || e.metaKey) && key === 'y') {
+        e.preventDefault()
+        redo()
+      } else if (e.code === 'Space') {
         e.preventDefault()
         audio.toggle()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -146,7 +156,11 @@ export default function App() {
         <div className="brand">
           <span className="dot" /> Countoff
         </div>
-        <input className="project-name" value={project.name} onChange={(e) => updateProject({ name: e.target.value })} />
+        <input
+          className="project-name"
+          value={project.name}
+          onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
+        />
         <span className="chip only-wide">
           <i className="ph ph-list-numbers i" /> {project.blocks.length} placed
         </span>
@@ -160,16 +174,11 @@ export default function App() {
         <button className="ghost icon" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
           <i className="ph ph-shield-check i" />
         </button>
-        <button
-          className="ghost icon"
-          title="Delete this project and start from a new song"
-          onClick={async () => {
-            if (!confirm('Delete this choreography and start over? This cannot be undone.')) return
-            await wipe()
-            location.reload()
-          }}
-        >
+        <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
           <i className="ph ph-arrow-counter-clockwise i" />
+        </button>
+        <button className="ghost icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+          <i className="ph ph-arrow-clockwise i" />
         </button>
       </div>
 

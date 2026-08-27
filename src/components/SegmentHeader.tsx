@@ -37,7 +37,7 @@ export default function SegmentHeader({ segment, end, selected, removable, onSel
       <input
         className="seg-title"
         value={segment.name}
-        onChange={(e) => updateSegment(segment.id, { name: e.target.value })}
+        onChange={(e) => updateSegment(segment.id, { name: e.target.value }, `segment-name-${segment.id}`)}
       />
 
       <button className={`sm only-narrow${toolsOpen ? ' on' : ''}`} onClick={() => setToolsOpen(!toolsOpen)}>

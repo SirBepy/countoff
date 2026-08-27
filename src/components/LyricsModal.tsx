@@ -17,8 +17,8 @@ export default function LyricsModal({ segment, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [pasted, setPasted] = useState('')
 
-  const setLyrics = (lyrics: LyricLine[]) =>
-    updateSegment(segment.id, { lyrics: [...lyrics].sort((a, b) => a.time - b.time) })
+  const setLyrics = (lyrics: LyricLine[], coalesceKey?: string) =>
+    updateSegment(segment.id, { lyrics: [...lyrics].sort((a, b) => a.time - b.time) }, coalesceKey)
 
   async function search() {
     setBusy(true)
@@ -60,8 +60,11 @@ export default function LyricsModal({ segment, onClose }: Props) {
     return untimed ? `${timed} timed, ${untimed} still need timing` : `${timed} timed lines`
   }
 
-  function updateLine(index: number, patch: Partial<LyricLine>) {
-    setLyrics(segment.lyrics.map((l, i) => (i === index ? { ...l, ...patch } : l)))
+  function updateLine(index: number, patch: Partial<LyricLine>, coalesceKey?: string) {
+    setLyrics(
+      segment.lyrics.map((l, i) => (i === index ? { ...l, ...patch } : l)),
+      coalesceKey,
+    )
   }
 
   return (
@@ -159,7 +162,10 @@ export default function LyricsModal({ segment, onClose }: Props) {
                     placeholder="--"
                     onChange={(e) => updateLine(i, { time: Number(e.target.value) })}
                   />
-                  <input value={line.text} onChange={(e) => updateLine(i, { text: e.target.value })} />
+                  <input
+                    value={line.text}
+                    onChange={(e) => updateLine(i, { text: e.target.value }, `lyric-text-${line.id}`)}
+                  />
                   <button className="ghost icon" title="Set to playhead" onClick={() => updateLine(i, { time: audio.el.currentTime })}>
                     <i className="ph ph-crosshair" />
                   </button>

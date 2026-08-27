@@ -10,8 +10,8 @@ import {
   type Snapshot,
 } from '../lib/backup'
 import { audio } from '../lib/audio'
-import { saveAudio } from '../lib/db'
-import { cancelPendingSave, flash, set, updateProject } from '../lib/store'
+import { saveAudio, wipe } from '../lib/db'
+import { cancelPendingSave, flash, replaceProject, updateProject } from '../lib/store'
 import { clearConfig, DEFAULT_REPO, getConfig, testConnection, setConfig as setSyncConfig } from '../lib/sync'
 import { pullNow, pushNow, refreshStatus, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
@@ -73,7 +73,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
       // Adopt the restored project in memory and drop any queued write first,
       // or the unload flush puts the old project straight back on top of it.
       cancelPendingSave()
-      set({ project: restored, selection: null }, false)
+      replaceProject(restored, { selection: null }, false)
       flash('Backup restored. Reloading...')
       setTimeout(() => location.reload(), 700)
     } catch {
@@ -198,6 +198,24 @@ export default function BackupModal({ project, onClose }: { project: Project; on
           </div>
 
           <div className="field">
+            <label>Start over</label>
+            <p className="muted" style={{ margin: 0 }}>
+              Deletes this choreography and its moves from this device and starts a new song from scratch.
+            </p>
+            <button
+              className="ghost"
+              style={{ color: 'var(--danger)' }}
+              onClick={async () => {
+                if (!confirm('Delete this choreography and start over? This cannot be undone.')) return
+                await wipe()
+                location.reload()
+              }}
+            >
+              <i className="ph ph-trash i" /> Delete and start over
+            </button>
+          </div>
+
+          <div className="field">
             <label>Sync across devices</label>
             {syncStatus.configured ? (
               <>
@@ -280,7 +298,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                     onClick={async () => {
                       if (!confirm('Replace the current choreography with this version?')) return
                       const restored = await restoreSnapshot(snap)
-                      set({ project: restored })
+                      replaceProject(restored)
                       flash('Restored')
                       onClose()
                     }}
