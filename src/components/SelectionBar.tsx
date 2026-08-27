@@ -5,14 +5,14 @@ import { beatToTime } from '../lib/grid'
 import { flash, removeBlocks, set, updateSegment, useStore } from '../lib/store'
 import type { Project } from '../lib/types'
 
-interface Proposal {
+interface ProposalRange {
   segmentId: string
   startBeat: number
   beats: number
-  bpm: number
-  phase: number
-  confidence: number
 }
+type Proposal =
+  | (ProposalRange & { measurable: true; bpm: number; phase: number; confidence: number })
+  | (ProposalRange & { measurable: false; secondsNeeded: number })
 
 /**
  * The bridge between picking counts and picking a move. On a phone the library
@@ -47,24 +47,22 @@ export default function SelectionBar({ project }: { project: Project }) {
     setMeasuring(true)
     const from = beatToTime(segment, selection.startBeat)
     const to = beatToTime(segment, selection.startBeat + selection.beats)
-    const estimate = await measureStoredTempo(from, to, from).catch(() => null)
+    const result = await measureStoredTempo(from, to, from).catch(() => null)
     setMeasuring(false)
-    if (!estimate) {
+    if (!result) {
       flash('Could not read the audio to measure tempo')
       return
     }
-    setProposal({
-      segmentId: selection.segmentId,
-      startBeat: selection.startBeat,
-      beats: selection.beats,
-      bpm: estimate.bpm,
-      phase: estimate.phase,
-      confidence: estimate.confidence,
-    })
+    const range = { segmentId: selection.segmentId, startBeat: selection.startBeat, beats: selection.beats }
+    setProposal(
+      result.measurable
+        ? { ...range, measurable: true, bpm: result.bpm, phase: result.phase, confidence: result.confidence }
+        : { ...range, measurable: false, secondsNeeded: result.secondsNeeded },
+    )
   }
 
   const onAccept = () => {
-    if (!active || !segment) return
+    if (!active || !segment || !active.measurable) return
     updateSegment(segment.id, { bpm: active.bpm, anchor: active.phase })
     flash(`Tempo set to ${active.bpm} BPM`)
     setProposal(null)
@@ -106,11 +104,17 @@ export default function SelectionBar({ project }: { project: Project }) {
       )}
       {active && (
         <span className="row" style={{ gap: 6 }}>
-          <span className="mono">{active.bpm} BPM measured</span>
-          {active.confidence < 0.25 && <span className="faint">low confidence</span>}
-          <button className="sm" onClick={onAccept}>
-            Accept
-          </button>
+          {active.measurable ? (
+            <>
+              <span className="mono">{active.bpm} BPM measured</span>
+              {active.confidence < 0.25 && <span className="faint">low confidence</span>}
+              <button className="sm" onClick={onAccept}>
+                Accept
+              </button>
+            </>
+          ) : (
+            <span className="faint">Too short to measure - select at least {active.secondsNeeded}s of audio</span>
+          )}
           <button className="ghost icon" title="Dismiss" onClick={() => setProposal(null)}>
             <i className="ph ph-x" />
           </button>

@@ -96,15 +96,34 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
     return rowStart + Math.max(0, Math.min(visibleCount - 1, Math.floor(ratio * perRow)))
   }
 
+  /** Row rects for this segment only, captured once per drag - filtering by segment
+   * id here is what stops a selection from crossing into another song's rows. */
+  function rowsInSegment() {
+    return Array.from(document.querySelectorAll<HTMLElement>('.counts'))
+      .filter((el) => el.dataset.segmentId === segment.id)
+      .map((el) => ({ row: Number(el.dataset.row), rect: el.getBoundingClientRect() }))
+      .sort((a, b) => a.row - b.row)
+  }
+
+  function beatFromPoint(rows: { row: number; rect: DOMRect }[], clientX: number, clientY: number) {
+    // Rows stack top to bottom, so the last row whose top is at or above the
+    // pointer owns it; above the first row's top, that default is the first row.
+    let g = rows[0]
+    for (const r of rows) if (clientY >= r.rect.top) g = r
+    const ratio = (clientX - g.rect.left) / g.rect.width
+    const visible = countsInRow(segment, g.row, end)
+    return g.row * perRow + Math.max(0, Math.min(visible - 1, Math.floor(ratio * perRow)))
+  }
+
   function startSelect(e: React.PointerEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest('.block')) return
-    const container = e.currentTarget
-    const anchor = beatFromEvent(e, container)
+    const rows = rowsInSegment()
+    const anchor = rows.length ? beatFromPoint(rows, e.clientX, e.clientY) : beatFromEvent(e, e.currentTarget)
     set({ selection: { segmentId: segment.id, startBeat: anchor, beats: 1 } })
     audio.seek(beatToTime(segment, anchor))
 
     const move = (ev: PointerEvent) => {
-      const beat = beatFromEvent(ev, container)
+      const beat = rows.length ? beatFromPoint(rows, ev.clientX, ev.clientY) : beatFromEvent(ev, e.currentTarget)
       const startBeat = Math.min(anchor, beat)
       set({ selection: { segmentId: segment.id, startBeat, beats: Math.abs(beat - anchor) + 1 } })
     }
@@ -200,7 +219,13 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
           )}
         </div>
 
-        <div className="counts" style={{ gridTemplateColumns: `repeat(${perRow}, 1fr)` }} onPointerDown={startSelect}>
+        <div
+          className="counts"
+          data-segment-id={segment.id}
+          data-row={row}
+          style={{ gridTemplateColumns: `repeat(${perRow}, 1fr)` }}
+          onPointerDown={startSelect}
+        >
           {Array.from({ length: visibleCount }, (_, c) => {
             const beat = rowStart + c
             const inSelection = !!selection && beat >= selection.startBeat && beat < selection.startBeat + selection.beats

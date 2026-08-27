@@ -12,6 +12,14 @@ export interface TempoEstimate {
   confidence: number
 }
 
+const MIN_MEASURABLE_SECONDS = 8
+
+/**
+ * `measurable: false` is its own outcome, not a low-confidence reading, so a range
+ * too short to analyse can never be mistaken for a fabricated 120 BPM guess.
+ */
+export type TempoResult = ({ measurable: true } & TempoEstimate) | { measurable: false; secondsNeeded: number }
+
 /**
  * Rectified energy difference per hop. Rising energy marks note onsets, which
  * pulse at the beat rate far more cleanly than raw amplitude does.
@@ -48,12 +56,12 @@ function normalise(env: Float32Array) {
  * Autocorrelation over the onset envelope: the lag with the highest correlation
  * inside the BPM window is the beat period.
  */
-export function detectTempo(buffer: AudioBuffer, from = 0, to = Infinity, origin = 0): TempoEstimate {
+export function detectTempo(buffer: AudioBuffer, from = 0, to = Infinity, origin = 0): TempoResult {
   const { env: raw, fps } = onsetEnvelope(buffer)
   const startFrame = Math.max(0, Math.floor(from * fps))
   const endFrame = Math.min(raw.length, Math.ceil(Math.min(to, buffer.duration) * fps))
   const slice = normalise(raw.subarray(startFrame, endFrame))
-  if (slice.length < fps * 8) return { bpm: 120, phase: origin, confidence: 0 }
+  if (slice.length < fps * MIN_MEASURABLE_SECONDS) return { measurable: false, secondsNeeded: MIN_MEASURABLE_SECONDS }
 
   const minLag = Math.floor((60 / MAX_BPM) * fps)
   const maxLag = Math.ceil((60 / MIN_BPM) * fps)
@@ -108,7 +116,7 @@ export function detectTempo(buffer: AudioBuffer, from = 0, to = Infinity, origin
   const detected = from + bestPhase / fps
   const phase = detected - Math.floor((detected - origin) / beat) * beat
 
-  return { bpm: rounded, phase, confidence }
+  return { measurable: true, bpm: rounded, phase, confidence }
 }
 
 /** Median inter-tap interval, so one clumsy tap does not wreck the estimate. */
@@ -132,7 +140,7 @@ export async function decodeAudioBlob(blob: Blob): Promise<AudioBuffer> {
 }
 
 /** Re-decodes the stored audio and measures tempo over [from, to); null if there is none yet. */
-export async function measureStoredTempo(from: number, to: number, origin = from): Promise<TempoEstimate | null> {
+export async function measureStoredTempo(from: number, to: number, origin = from): Promise<TempoResult | null> {
   const blob = await loadAudio()
   if (!blob) return null
   const buffer = await decodeAudioBlob(blob)

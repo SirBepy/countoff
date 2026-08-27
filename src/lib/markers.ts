@@ -35,9 +35,13 @@ export async function splitSongAt(time: number): Promise<string | null> {
     let bpm = previous?.bpm ?? 120
     let anchor = time
     const estimate = await measureStoredTempo(time, end, time).catch(() => null)
-    if (estimate && estimate.confidence > 0) {
-      bpm = estimate.bpm
-      anchor = estimate.phase
+    // A cut near the end of the file, or right before the next one, can leave less
+    // than the measurable floor - fall back to the previous song's tempo rather than
+    // claim a reading that was never taken.
+    const measured = estimate && estimate.measurable && estimate.confidence > 0 ? estimate : null
+    if (measured) {
+      bpm = measured.bpm
+      anchor = measured.phase
     }
 
     // The map may have changed while decoding (another cut, a sync pull); re-check
@@ -61,7 +65,7 @@ export async function splitSongAt(time: number): Promise<string | null> {
       lyricOffset: 0,
     })
     flash(
-      estimate && estimate.confidence > 0
+      measured
         ? `Song start at ${time.toFixed(2)}s, detected ${bpm} BPM. Check the "1".`
         : `Song start at ${time.toFixed(2)}s. Could not detect a tempo, set it by hand.`,
     )

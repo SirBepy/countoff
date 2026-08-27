@@ -19,6 +19,11 @@ export default function DropAudio() {
     // Sample the middle of the track: intros and fades skew the estimate.
     const from = Math.min(20, buffer.duration * 0.1)
     const estimate = detectTempo(buffer, from, Math.min(from + 60, buffer.duration))
+    // A dropped file under the measurable floor (a short test clip, a stub) still
+    // needs a starting point - fall back to 120 rather than block the drop, same
+    // as the detect-on-cut fallback in markers.ts.
+    const bpm = estimate.measurable ? estimate.bpm : 120
+    const anchor = estimate.measurable ? estimate.phase : 0
 
     const project: Project = {
       id: uid(),
@@ -30,8 +35,8 @@ export default function DropAudio() {
           id: uid(),
           name: 'Song 1',
           start: 0,
-          bpm: estimate.bpm,
-          anchor: estimate.phase,
+          bpm,
+          anchor,
           transitionIn: 0,
           countsPerRow: DEFAULT_COUNTS_PER_ROW,
           lyrics: [],
@@ -49,7 +54,11 @@ export default function DropAudio() {
     const url = URL.createObjectURL(file)
     audio.load(url)
     replaceProject(project, { audioUrl: url })
-    flash(`Detected ${estimate.bpm} BPM. Check the "1" before building.`)
+    flash(
+      estimate.measurable
+        ? `Detected ${bpm} BPM. Check the "1" before building.`
+        : `Could not detect a tempo (track too short). Set it by hand.`,
+    )
     setBusy(null)
   }
 
