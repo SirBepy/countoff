@@ -30,7 +30,10 @@ export interface Segment {
   bpm: number
   /** Absolute time of the first downbeat at or after `start`. */
   anchor: number
-  beatsPerBar: number
+  /** Seconds of blend before this song takes over; 0 on the first segment. */
+  transitionIn: number
+  /** The row/count unit for this song, e.g. 8 for an 8-count, 6 for a 6-count. */
+  countsPerRow: number
   lyrics: LyricLine[]
   /** Applied when importing from LRCLIB, kept so the user can re-nudge later. */
   lyricOffset: number

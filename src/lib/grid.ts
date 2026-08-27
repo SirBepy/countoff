@@ -8,18 +8,30 @@ export const beatToTime = (seg: Segment, beat: number) => seg.anchor + beat * be
 /** Fractional beat index at an absolute audio time. Negative before the anchor. */
 export const timeToBeat = (seg: Segment, time: number) => (time - seg.anchor) / beatDuration(seg.bpm)
 
-/** Dancers count in 8s, so an 8-count is the row unit everywhere in the UI. */
-export const COUNTS_PER_ROW = 8
+/** Dancers count in 8s by default; each song can override via Segment.countsPerRow. */
+export const DEFAULT_COUNTS_PER_ROW = 8
 
 export function segmentEnd(segments: Segment[], index: number, duration: number) {
   const next = segments[index + 1]
   return next ? next.start : duration
 }
 
-/** How many full 8-count rows fit between the anchor and the segment's end. */
+/** How many full rows fit between the anchor and the segment's end. */
 export function rowCount(seg: Segment, end: number) {
   const beats = (end - seg.anchor) / beatDuration(seg.bpm)
-  return Math.max(0, Math.ceil(beats / COUNTS_PER_ROW))
+  return Math.max(0, Math.ceil(beats / seg.countsPerRow))
+}
+
+/**
+ * How many count cells actually fall before `end` in this row, so a cut that lands
+ * mid-row truncates instead of showing counts past the song's end.
+ */
+export function countsInRow(seg: Segment, row: number, end: number) {
+  const totalBeats = (end - seg.anchor) / beatDuration(seg.bpm)
+  const rowStart = row * seg.countsPerRow
+  // Epsilon guards a cut that lands exactly on a beat from rounding up one extra cell.
+  const visible = Math.ceil(totalBeats - rowStart - 1e-9)
+  return Math.max(0, Math.min(seg.countsPerRow, visible))
 }
 
 export function segmentAt(segments: Segment[], time: number) {

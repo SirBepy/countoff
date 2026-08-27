@@ -1,3 +1,4 @@
+import { DEFAULT_COUNTS_PER_ROW } from './grid'
 import { addMarker, addSegment, flash, getState, uid } from './store'
 
 export const MARKER_ICON = 'ph-flag'
@@ -19,7 +20,8 @@ export function splitSongAt(time: number): string | null {
     start: time,
     bpm: previous?.bpm ?? 120,
     anchor: time,
-    beatsPerBar: 4,
+    transitionIn: 0,
+    countsPerRow: previous?.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
     lyrics: [],
     lyricOffset: 0,
   })

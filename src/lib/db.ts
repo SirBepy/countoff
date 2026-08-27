@@ -1,5 +1,6 @@
+import { DEFAULT_COUNTS_PER_ROW } from './grid'
 import { uid } from './store'
-import type { Marker, Project } from './types'
+import type { Marker, Project, Segment } from './types'
 
 const DB_NAME = 'countoff'
 const DB_VERSION = 1
@@ -50,11 +51,17 @@ export function migrateProject(p: Project): Project {
     ...p,
     markers: (p.markers ?? []).map(migrateMarker),
     blocks: p.blocks ?? [],
-    segments: (p.segments ?? []).map((s) => ({
-      ...s,
-      lyrics: (s.lyrics ?? []).map((l) => (l.id ? l : { ...l, id: uid() })),
-      lyricOffset: s.lyricOffset ?? 0,
-    })),
+    // Pre-transition shape: retired 2026-08-27 when count length and transitions went per-song.
+    segments: (p.segments ?? []).map((raw) => {
+      const { beatsPerBar, ...s } = raw as Segment & { beatsPerBar?: number }
+      return {
+        ...s,
+        lyrics: (s.lyrics ?? []).map((l) => (l.id ? l : { ...l, id: uid() })),
+        lyricOffset: s.lyricOffset ?? 0,
+        countsPerRow: s.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
+        transitionIn: s.transitionIn ?? 0,
+      }
+    }),
   }
 }
 
@@ -62,8 +69,14 @@ function migrate(p: Project | undefined): Project | undefined {
   return p ? migrateProject(p) : p
 }
 
-export const loadProject = () =>
-  tx<Project | undefined>('project', 'readonly', (s) => s.get('current')).then(migrate)
+/** Loads and migrates, then writes the migrated shape back so it doesn't linger
+ * old-shape in IndexedDB until the dev's first edit saves over it. */
+export async function loadProject(): Promise<Project | undefined> {
+  const raw = await tx<Project | undefined>('project', 'readonly', (s) => s.get('current'))
+  const migrated = migrate(raw)
+  if (migrated && JSON.stringify(migrated) !== JSON.stringify(raw)) await saveProject(migrated)
+  return migrated
+}
 
 export const saveAudio = (blob: Blob) => tx('audio', 'readwrite', (s) => s.put(blob, 'current'))
 export const loadAudio = () => tx<Blob | undefined>('audio', 'readonly', (s) => s.get('current'))

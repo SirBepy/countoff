@@ -12,7 +12,7 @@ export default function SelectionBar({ project }: { project: Project }) {
   if (!selection) return null
 
   const segment = project.segments.find((s) => s.id === selection.segmentId)
-  const first = selection.startBeat % 8
+  const first = selection.startBeat % (segment?.countsPerRow ?? 8)
   const covered = project.blocks.filter(
     (b) =>
       b.segmentId === selection.segmentId &&

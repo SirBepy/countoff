@@ -10,11 +10,13 @@ interface Props {
   end: number
   selected: boolean
   removable: boolean
+  /** True for the opening segment, which has no incoming transition to adjust. */
+  first: boolean
   onSelect: () => void
   onEditLyrics: () => void
 }
 
-export default function SegmentHeader({ segment, end, selected, removable, onSelect, onEditLyrics }: Props) {
+export default function SegmentHeader({ segment, end, selected, removable, first, onSelect, onEditLyrics }: Props) {
   const taps = useRef<number[]>([])
   const [tapping, setTapping] = useState(false)
   // Eleven tempo controls do not fit a phone header, so they fold behind the BPM chip.
@@ -31,6 +33,8 @@ export default function SegmentHeader({ segment, end, selected, removable, onSel
   }
 
   const nudgeAnchor = (by: number) => updateSegment(segment.id, { anchor: segment.anchor + by })
+  const nudgeTransition = (by: number) =>
+    updateSegment(segment.id, { transitionIn: Math.max(0, Number((segment.transitionIn + by).toFixed(2))) })
 
   return (
     <div className="seg-head" onPointerDown={onSelect} style={{ opacity: selected ? 1 : 0.85 }}>
@@ -105,6 +109,36 @@ export default function SegmentHeader({ segment, end, selected, removable, onSel
         >
           <i className="ph ph-crosshair i" /> Set the 1
         </button>
+
+        <span className="chip">
+          Count in
+          <input
+            className="mono"
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            value={segment.countsPerRow}
+            onChange={(e) =>
+              updateSegment(segment.id, { countsPerRow: Math.max(1, Math.round(Number(e.target.value)) || segment.countsPerRow) })
+            }
+            style={{ width: 42 }}
+          />
+        </span>
+
+        {!first && (
+          <>
+            <span className="chip mono" title="Seconds of blend before this song takes over">
+              Transition {segment.transitionIn.toFixed(1)}s
+            </span>
+            <button className="ghost sm icon" onClick={() => nudgeTransition(-0.5)} title="Shorten the transition by 0.5s">
+              <i className="ph ph-caret-left" />
+            </button>
+            <button className="ghost sm icon" onClick={() => nudgeTransition(0.5)} title="Lengthen the transition by 0.5s">
+              <i className="ph ph-caret-right" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

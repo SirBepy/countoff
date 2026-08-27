@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { detectTempo } from '../lib/bpm'
 import { saveAudio, saveProject } from '../lib/db'
+import { DEFAULT_COUNTS_PER_ROW } from '../lib/grid'
 import { STARTER_MOVES } from '../lib/moves'
 import { flash, replaceProject, uid } from '../lib/store'
 import type { Project } from '../lib/types'
@@ -35,7 +36,8 @@ export default function DropAudio() {
           start: 0,
           bpm: estimate.bpm,
           anchor: estimate.phase,
-          beatsPerBar: 4,
+          transitionIn: 0,
+          countsPerRow: DEFAULT_COUNTS_PER_ROW,
           lyrics: [],
           lyricOffset: 0,
         },

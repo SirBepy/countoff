@@ -32,7 +32,7 @@ export function nowState(project: Project, time: number): NowState {
   return {
     segment,
     beat,
-    countInRow: ((Math.floor(beat) % 8) + 8) % 8,
+    countInRow: ((Math.floor(beat) % segment.countsPerRow) + segment.countsPerRow) % segment.countsPerRow,
     block,
     move: find(block?.moveId),
     next: find(upcoming?.moveId),

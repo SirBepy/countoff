@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { COUNTS_PER_ROW, beatDuration, beatToTime, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
+import { beatDuration, beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { MARKER_COLOUR } from '../lib/markers'
 import { beginGesture, endGesture, removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
@@ -35,6 +35,7 @@ export default function Sheet({ project, onEditLyrics, onEditMarker, selectedSeg
               onSelect={() => onSelectSegment(seg.id)}
               onEditLyrics={() => onEditLyrics(seg.id)}
               removable={i > 0}
+              first={i === 0}
             />
             {Array.from({ length: rows }, (_, r) => (
               <SheetRow
@@ -42,6 +43,7 @@ export default function Sheet({ project, onEditLyrics, onEditMarker, selectedSeg
                 project={project}
                 segment={seg}
                 row={r}
+                end={end}
                 nowBeat={nowBeat}
                 onEditMarker={onEditMarker}
                 selection={selection?.segmentId === seg.id ? selection : null}
@@ -59,14 +61,17 @@ interface RowProps {
   project: Project
   segment: Segment
   row: number
+  end: number
   nowBeat: number | null
   onEditMarker: (id: string) => void
   selection: { startBeat: number; beats: number } | null
 }
 
-function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: RowProps) {
-  const rowStart = row * COUNTS_PER_ROW
-  const rowEnd = rowStart + COUNTS_PER_ROW
+function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection }: RowProps) {
+  const perRow = segment.countsPerRow
+  const rowStart = row * perRow
+  const rowEnd = rowStart + perRow
+  const visibleCount = countsInRow(segment, row, end)
   const from = beatToTime(segment, rowStart)
   const to = beatToTime(segment, rowEnd)
   const lines = lyricsBetween(segment.lyrics, from, to)
@@ -86,7 +91,9 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
   function beatFromEvent(e: React.PointerEvent<HTMLDivElement> | PointerEvent, container: HTMLElement) {
     const rect = container.getBoundingClientRect()
     const ratio = (e.clientX - rect.left) / rect.width
-    return rowStart + Math.max(0, Math.min(COUNTS_PER_ROW - 1, Math.floor(ratio * COUNTS_PER_ROW)))
+    // Clamp to the counts that actually exist, so a truncated final row can't be
+    // clicked past the cut into cells that were never rendered.
+    return rowStart + Math.max(0, Math.min(visibleCount - 1, Math.floor(ratio * perRow)))
   }
 
   function startSelect(e: React.PointerEvent<HTMLDivElement>) {
@@ -114,7 +121,7 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
     e.preventDefault()
     const container = (e.currentTarget as HTMLElement).closest('.counts') as HTMLElement
     const rect = container.getBoundingClientRect()
-    const beatWidth = rect.width / COUNTS_PER_ROW
+    const beatWidth = rect.width / perRow
     const originX = e.clientX
     const { startBeat, beats } = block
     const gestureKey = `block-${mode}-${block.id}`
@@ -193,8 +200,8 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
           )}
         </div>
 
-        <div className="counts" onPointerDown={startSelect}>
-          {Array.from({ length: COUNTS_PER_ROW }, (_, c) => {
+        <div className="counts" style={{ gridTemplateColumns: `repeat(${perRow}, 1fr)` }} onPointerDown={startSelect}>
+          {Array.from({ length: visibleCount }, (_, c) => {
             const beat = rowStart + c
             const inSelection = !!selection && beat >= selection.startBeat && beat < selection.startBeat + selection.beats
             return (
@@ -242,8 +249,8 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
                 key={block.id}
                 className={`block e${move?.energy ?? 2}${now ? ' now' : ''}`}
                 style={{
-                  left: `${((visStart - rowStart) / COUNTS_PER_ROW) * 100}%`,
-                  width: `${((visEnd - visStart) / COUNTS_PER_ROW) * 100}%`,
+                  left: `${((visStart - rowStart) / perRow) * 100}%`,
+                  width: `${((visEnd - visStart) / perRow) * 100}%`,
                   borderTopLeftRadius: isHead ? 6 : 0,
                   borderBottomLeftRadius: isHead ? 6 : 0,
                   borderTopRightRadius: isTail ? 6 : 0,
@@ -267,4 +274,4 @@ function SheetRow({ project, segment, row, nowBeat, onEditMarker, selection }: R
   )
 }
 
-export const rowDuration = (seg: Segment) => beatDuration(seg.bpm) * COUNTS_PER_ROW
+export const rowDuration = (seg: Segment) => beatDuration(seg.bpm) * seg.countsPerRow
