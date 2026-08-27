@@ -1,3 +1,5 @@
+<!-- Claude Conductor scans a fixed candidate list for a project icon and public/icon.svg is not on
+     it, so this root copy is what it actually reads. Keep in sync with public/icon.svg. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" rx="112" fill="#0d0f14" />
   <circle cx="256" cy="256" r="190" fill="none" stroke="#7c5cff" stroke-width="14" opacity="0.28" />
