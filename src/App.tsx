@@ -16,6 +16,8 @@ import { loadAudio, loadProject, wipe } from './lib/db'
 import { segmentAt, timeToBeat } from './lib/grid'
 import { markAt, splitSongAt } from './lib/markers'
 import { flushSave, getState, hasPendingSave, removeBlocks, set, updateProject, useStore } from './lib/store'
+import { isConfigured } from './lib/sync'
+import { pullNow, scheduleSync } from './lib/syncEngine'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -39,12 +41,26 @@ export default function App() {
         audio.load(url, saved.name)
         set({ project: saved, audioUrl: url }, false)
         setSegmentId(saved.segments[0]?.id ?? null)
+        if (isConfigured()) void pullNow()
       }
       setBooted(true)
       // Asking early means the grant is in place before there is work to lose.
       void requestPersistence()
     })()
   }, [])
+
+  // Pull whenever the tab comes back into view, and push once local edits settle.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && getState().project && isConfigured()) void pullNow()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  useEffect(() => {
+    if (project) scheduleSync(project)
+  }, [project])
 
   // Flush the debounced save on the way out. Never preventDefault here: that
   // pops a "Leave site?" dialog on every navigation, and the flush already ran.

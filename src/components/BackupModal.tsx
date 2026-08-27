@@ -12,6 +12,8 @@ import {
 import { audio } from '../lib/audio'
 import { saveAudio } from '../lib/db'
 import { cancelPendingSave, flash, set, updateProject } from '../lib/store'
+import { clearConfig, DEFAULT_REPO, getConfig, testConnection, setConfig as setSyncConfig } from '../lib/sync'
+import { pullNow, pushNow, refreshStatus, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -20,8 +22,11 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [persisted, setPersisted] = useState<boolean | null>(null)
   const [usage, setUsage] = useState({ used: 0, quota: 0 })
+  const [tokenInput, setTokenInput] = useState('')
+  const [connecting, setConnecting] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
+  const syncStatus = useSyncStatus()
 
   useEffect(() => {
     setSnapshots(readSnapshots())
@@ -74,6 +79,30 @@ export default function BackupModal({ project, onClose }: { project: Project; on
     } catch {
       flash('That file is not a Countoff backup')
     }
+  }
+
+  async function connect() {
+    const token = tokenInput.trim()
+    if (!token) return
+    setConnecting(true)
+    const result = await testConnection({ token, repo: DEFAULT_REPO })
+    setConnecting(false)
+    if (!result.ok) {
+      flash(result.message)
+      return
+    }
+    setSyncConfig(token)
+    setTokenInput('')
+    refreshStatus()
+    flash('Connected. Syncing...')
+    await pullNow()
+  }
+
+  function disconnect() {
+    if (!confirm('Disconnect sync and forget the stored token on this device?')) return
+    clearConfig()
+    refreshStatus()
+    flash('Disconnected')
   }
 
   return (
@@ -169,6 +198,73 @@ export default function BackupModal({ project, onClose }: { project: Project; on
           </div>
 
           <div className="field">
+            <label>Sync across devices</label>
+            {syncStatus.configured ? (
+              <>
+                <div className="result" style={{ cursor: 'default' }}>
+                  <i className="ph ph-cloud-check i" style={{ color: 'var(--e1)', fontSize: 20 }} />
+                  <div style={{ flex: 1 }}>
+                    <div className="move-name">Connected to {getConfig()?.repo}</div>
+                    <div className="move-note">
+                      {syncStatus.syncing
+                        ? 'Syncing...'
+                        : syncStatus.lastSyncedAt
+                          ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString()}`
+                          : 'Not synced yet'}
+                    </div>
+                  </div>
+                  <button onClick={() => void pushNow()} disabled={syncStatus.syncing}>
+                    Sync now
+                  </button>
+                </div>
+                <span className="faint" style={{ fontSize: 11 }}>
+                  Pushes the choreography and any new or changed move clips to the private repo, and pulls in
+                  whatever changed elsewhere. The song itself never leaves this device.
+                </span>
+                <button className="ghost" onClick={disconnect}>
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="muted" style={{ margin: 0 }}>
+                  Connect a private GitHub repo to carry this choreography between devices. Paste a fine-grained
+                  personal access token scoped to that one repo, with read and write access to Contents.
+                </p>
+                <div className="row">
+                  <input
+                    type="password"
+                    placeholder="GitHub token"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <button className="primary" disabled={!tokenInput.trim() || connecting} onClick={connect}>
+                    {connecting ? 'Connecting...' : 'Connect'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {syncStatus.conflict && (
+            <div className="field">
+              <label>Sync conflict</label>
+              <p className="muted" style={{ margin: 0 }}>
+                This device saved at {new Date(syncStatus.conflict.local.updatedAt).toLocaleString()}. GitHub has a
+                version saved at {new Date(syncStatus.conflict.remote.updatedAt).toLocaleString()}, the{' '}
+                {syncStatus.conflict.remote.updatedAt > syncStatus.conflict.local.updatedAt ? 'newer' : 'older'} one.
+              </p>
+              <div className="row">
+                <button className="primary" onClick={() => void resolveConflictKeepMine()}>
+                  Keep this device's version
+                </button>
+                <button onClick={() => void resolveConflictTakeRemote()}>Take the GitHub version</button>
+              </div>
+            </div>
+          )}
+
+          <div className="field">
             <label>Automatic history ({snapshots.length})</label>
             {snapshots.length ? (
               snapshots.map((snap, i) => (
@@ -183,8 +279,8 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                   <button
                     onClick={async () => {
                       if (!confirm('Replace the current choreography with this version?')) return
-                      await restoreSnapshot(snap)
-                      set({ project: snap.project })
+                      const restored = await restoreSnapshot(snap)
+                      set({ project: restored })
                       flash('Restored')
                       onClose()
                     }}
