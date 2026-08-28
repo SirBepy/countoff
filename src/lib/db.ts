@@ -5,6 +5,7 @@ import type { Marker, Project, Segment } from './types'
 const DB_NAME = 'countoff'
 const DB_VERSION = 1
 const STORES = ['project', 'audio', 'clips'] as const
+const ACTIVE_KEY = 'countoff.activeProjectId'
 
 // Pre-collapse marker shape: retired 2026-08-27 when `kind` merged into `label`.
 const OLD_KIND_LABEL: Record<string, string> = { transition: 'Transition', drop: 'Drop', break: 'Break', cue: 'Cue' }
@@ -42,7 +43,16 @@ async function tx<T>(store: string, mode: IDBTransactionMode, run: (s: IDBObject
   })
 }
 
-export const saveProject = (p: Project) => tx('project', 'readwrite', (s) => s.put(p, 'current'))
+export const getActiveProjectId = () => localStorage.getItem(ACTIVE_KEY)
+export const setActiveProjectId = (id: string) => localStorage.setItem(ACTIVE_KEY, id)
+
+/** Writes the record without touching which project is active; use for editing a project that isn't the open one. */
+export const saveProjectRecord = (p: Project) => tx('project', 'readwrite', (s) => s.put(p, p.id))
+
+export async function saveProject(p: Project): Promise<void> {
+  await saveProjectRecord(p)
+  setActiveProjectId(p.id)
+}
 
 /** Fills in fields added after a project was last saved. Exported so backup import
  * and sync pull, which skip loadProject, apply the same backfill. */
@@ -70,32 +80,105 @@ function migrate(p: Project | undefined): Project | undefined {
   return p ? migrateProject(p) : p
 }
 
-/** Loads and migrates, then writes the migrated shape back so it doesn't linger
- * old-shape in IndexedDB until the dev's first edit saves over it. */
-export async function loadProject(): Promise<Project | undefined> {
-  const raw = await tx<Project | undefined>('project', 'readonly', (s) => s.get('current'))
+/** Loads and migrates the project at `id`, writing the migrated shape back so it
+ * doesn't linger old-shape in IndexedDB. Never touches which project is active. */
+export async function loadProjectById(id: string): Promise<Project | undefined> {
+  const raw = await tx<Project | undefined>('project', 'readonly', (s) => s.get(id))
   const migrated = migrate(raw)
-  if (migrated && JSON.stringify(migrated) !== JSON.stringify(raw)) await saveProject(migrated)
+  if (migrated && JSON.stringify(migrated) !== JSON.stringify(raw)) await saveProjectRecord(migrated)
   return migrated
 }
 
-export const saveAudio = (blob: Blob) => tx('audio', 'readwrite', (s) => s.put(blob, 'current'))
-export const loadAudio = () => tx<Blob | undefined>('audio', 'readonly', (s) => s.get('current'))
+export async function loadProject(): Promise<Project | undefined> {
+  const id = getActiveProjectId()
+  return id ? loadProjectById(id) : undefined
+}
 
-export const saveClip = (moveId: string, blob: Blob) => tx('clips', 'readwrite', (s) => s.put(blob, moveId))
-export const loadClip = (moveId: string) => tx<Blob | undefined>('clips', 'readonly', (s) => s.get(moveId))
-export const deleteClip = (moveId: string) => tx('clips', 'readwrite', (s) => s.delete(moveId))
+export const saveAudio = (id: string, blob: Blob) => tx('audio', 'readwrite', (s) => s.put(blob, id))
 
-export async function wipe() {
-  const db = await open()
-  await Promise.all(
-    STORES.map(
-      (store) =>
-        new Promise<void>((resolve, reject) => {
-          const req = db.transaction(store, 'readwrite').objectStore(store).clear()
-          req.onsuccess = () => resolve()
-          req.onerror = () => reject(req.error)
-        }),
-    ),
-  )
+/** Falls back to the active project when called with no id, e.g. bpm.ts's tempo re-detect. */
+export function loadAudio(id?: string): Promise<Blob | undefined> {
+  const key = id ?? getActiveProjectId()
+  return key ? tx<Blob | undefined>('audio', 'readonly', (s) => s.get(key)) : Promise.resolve(undefined)
+}
+
+// Clips are keyed `${projectId}:${moveId}` because starter moves share ids (e.g. 'bounce')
+// across every project; a bare moveId key would let two projects overwrite one clip.
+const clipKey = (moveId: string) => `${getActiveProjectId()}:${moveId}`
+
+export const saveClip = (moveId: string, blob: Blob) => tx('clips', 'readwrite', (s) => s.put(blob, clipKey(moveId)))
+export const loadClip = (moveId: string) => tx<Blob | undefined>('clips', 'readonly', (s) => s.get(clipKey(moveId)))
+export const deleteClip = (moveId: string) => tx('clips', 'readwrite', (s) => s.delete(clipKey(moveId)))
+
+export async function listProjects(): Promise<Project[]> {
+  const all = await tx<Project[]>('project', 'readonly', (s) => s.getAll())
+  return all.filter((p) => p && p.id).sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+async function clipKeysFor(id: string): Promise<string[]> {
+  const keys = await tx<IDBValidKey[]>('clips', 'readonly', (s) => s.getAllKeys())
+  const prefix = `${id}:`
+  return keys.filter((k): k is string => typeof k === 'string' && k.startsWith(prefix))
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await tx('project', 'readwrite', (s) => s.delete(id))
+  await tx('audio', 'readwrite', (s) => s.delete(id))
+  for (const key of await clipKeysFor(id)) await tx('clips', 'readwrite', (s) => s.delete(key))
+}
+
+export async function duplicateProject(id: string): Promise<Project> {
+  const source = await loadProjectById(id)
+  if (!source) throw new Error('Project not found')
+  const newId = uid()
+  const copy: Project = { ...source, id: newId, name: `${source.name} copy`, updatedAt: Date.now() }
+  await saveProjectRecord(copy)
+
+  const audioBlob = await tx<Blob | undefined>('audio', 'readonly', (s) => s.get(id))
+  if (audioBlob) await tx('audio', 'readwrite', (s) => s.put(audioBlob, newId))
+
+  for (const key of await clipKeysFor(id)) {
+    const moveId = key.slice(`${id}:`.length)
+    const blob = await tx<Blob | undefined>('clips', 'readonly', (s) => s.get(key))
+    if (blob) await tx('clips', 'readwrite', (s) => s.put(blob, `${newId}:${moveId}`))
+  }
+  return copy
+}
+
+/**
+ * One-time move off the pre-library key scheme (everything under the literal key
+ * 'current'). Safe on every boot: once that record is gone there is nothing left to migrate.
+ */
+export async function migrateKeySpace(): Promise<void> {
+  const legacy = await tx<Project | undefined>('project', 'readonly', (s) => s.get('current'))
+  if (!legacy) return
+  const id = legacy.id
+  // Without an id there is nowhere to move it to, and deleting 'current' would
+  // orphan the only copy. Leave it alone and let the app read it as-is.
+  if (!id) return
+  await saveProjectRecord(legacy)
+  await tx('project', 'readwrite', (s) => s.delete('current'))
+  setActiveProjectId(id)
+
+  const legacyAudio = await tx<Blob | undefined>('audio', 'readonly', (s) => s.get('current'))
+  if (legacyAudio) {
+    await tx('audio', 'readwrite', (s) => s.put(legacyAudio, id))
+    await tx('audio', 'readwrite', (s) => s.delete('current'))
+  }
+
+  const clipKeys = await tx<IDBValidKey[]>('clips', 'readonly', (s) => s.getAllKeys())
+  for (const key of clipKeys) {
+    if (typeof key !== 'string' || key.includes(':')) continue
+    const blob = await tx<Blob | undefined>('clips', 'readonly', (s) => s.get(key))
+    if (!blob) continue
+    await tx('clips', 'readwrite', (s) => s.put(blob, `${id}:${key}`))
+    await tx('clips', 'readwrite', (s) => s.delete(key))
+  }
+
+  // Same move, same key format backup.ts already uses: carry the rolling history over too.
+  const legacySnapshots = localStorage.getItem('countoff.snapshots')
+  if (legacySnapshots) {
+    localStorage.setItem(`countoff.snapshots.${id}`, legacySnapshots)
+    localStorage.removeItem('countoff.snapshots')
+  }
 }

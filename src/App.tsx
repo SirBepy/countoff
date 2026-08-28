@@ -5,6 +5,7 @@ import LyricsModal from './components/LyricsModal'
 import MarkerModal from './components/MarkerModal'
 import MoveLibrary from './components/MoveLibrary'
 import MoveModal from './components/MoveModal'
+import ProjectsModal from './components/ProjectsModal'
 import Rehearse from './components/Rehearse'
 import SelectionBar from './components/SelectionBar'
 import Sheet from './components/Sheet'
@@ -13,7 +14,7 @@ import SongSetup from './components/SongSetup'
 import Transport from './components/Transport'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
-import { loadAudio, loadProject } from './lib/db'
+import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace } from './lib/db'
 import { segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { flushSave, getState, hasPendingSave, redo, removeBlocks, set, undo, updateProject, useStore } from './lib/store'
@@ -35,10 +36,14 @@ export default function App() {
   const [moveFor, setMoveFor] = useState<string | null>(null)
   const [markerFor, setMarkerFor] = useState<string | null>(null)
   const [showBackup, setShowBackup] = useState(false)
+  const [showProjects, setShowProjects] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     void (async () => {
-      const [saved, blob] = await Promise.all([loadProject(), loadAudio()])
+      await migrateKeySpace()
+      const activeId = getActiveProjectId()
+      const [saved, blob] = await Promise.all([loadProject(), activeId ? loadAudio(activeId) : Promise.resolve(undefined)])
       if (saved && blob) {
         const url = URL.createObjectURL(blob)
         audio.load(url, saved.name)
@@ -53,6 +58,12 @@ export default function App() {
       void requestPersistence()
     })()
   }, [])
+
+  // Switching or creating a project changes which document is open, so the
+  // deliberate "New" screen (opened without a null project) always steps aside.
+  useEffect(() => {
+    setCreating(false)
+  }, [project?.id])
 
   // Pull whenever the tab comes back into view, and push once local edits settle.
   useEffect(() => {
@@ -133,7 +144,7 @@ export default function App() {
   }, [project])
 
   if (!booted) return null
-  if (!project) return <DropAudio />
+  if (!project || creating) return <DropAudio onCancel={project ? () => setCreating(false) : undefined} />
   if (view === 'rehearse') return <Rehearse project={project} />
   if (view === 'setup') return <SongSetup project={project} />
 
@@ -163,6 +174,9 @@ export default function App() {
         </span>
         <button className="ghost icon" onClick={() => set({ view: 'setup' }, false)} title="Song setup: cuts, transitions, downbeats, tempo">
           <i className="ph ph-sliders-horizontal i" />
+        </button>
+        <button className="ghost icon" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
+          <i className="ph ph-folders i" />
         </button>
         <button className="ghost icon" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
           <i className="ph ph-shield-check i" />
@@ -207,6 +221,16 @@ export default function App() {
       {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
       {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
       {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}
+      {showProjects && (
+        <ProjectsModal
+          activeProjectId={project.id}
+          onClose={() => setShowProjects(false)}
+          onCreateNew={() => {
+            setShowProjects(false)
+            setCreating(true)
+          }}
+        />
+      )}
       {status && <div className="toast">{status}</div>}
     </div>
   )

@@ -10,7 +10,7 @@ import {
   type Snapshot,
 } from '../lib/backup'
 import { audio } from '../lib/audio'
-import { saveAudio, wipe } from '../lib/db'
+import { deleteProject, saveAudio } from '../lib/db'
 import { cancelPendingSave, flash, replaceProject, updateProject } from '../lib/store'
 import { clearConfig, DEFAULT_REPO, getConfig, testConnection, setConfig as setSyncConfig } from '../lib/sync'
 import { pullNow, pushNow, refreshStatus, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
@@ -29,10 +29,10 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   const syncStatus = useSyncStatus()
 
   useEffect(() => {
-    setSnapshots(readSnapshots())
+    setSnapshots(readSnapshots(project.id))
     void navigator.storage?.persisted?.().then(setPersisted)
     void storageEstimate().then(setUsage)
-  }, [])
+  }, [project.id])
 
   async function askPersistence() {
     const ok = await requestPersistence()
@@ -58,7 +58,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
       const ctx = new AudioContext()
       const buffer = await ctx.decodeAudioData(await file.arrayBuffer())
       void ctx.close()
-      await saveAudio(file)
+      await saveAudio(project.id, file)
       audio.load(URL.createObjectURL(file), project.name)
       updateProject({ audioName: file.name, duration: buffer.duration })
       flash(`Loaded ${file.name}. Counts and lyrics are unchanged.`)
@@ -207,7 +207,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
               style={{ color: 'var(--danger)' }}
               onClick={async () => {
                 if (!confirm('Delete this choreography and start over? This cannot be undone.')) return
-                await wipe()
+                await deleteProject(project.id)
                 location.reload()
               }}
             >

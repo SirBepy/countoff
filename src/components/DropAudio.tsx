@@ -7,7 +7,7 @@ import { flash, replaceProject, uid } from '../lib/store'
 import type { Project } from '../lib/types'
 import { audio } from '../lib/audio'
 
-export default function DropAudio() {
+export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) {
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -49,7 +49,7 @@ export default function DropAudio() {
       updatedAt: Date.now(),
     }
 
-    await saveAudio(file)
+    await saveAudio(project.id, file)
     await saveProject(project)
     const url = URL.createObjectURL(file)
     audio.load(url)
@@ -64,6 +64,16 @@ export default function DropAudio() {
 
   return (
     <div className="drop">
+      {onCancel && (
+        <button
+          className="ghost icon"
+          style={{ position: 'fixed', top: 16, right: 16 }}
+          onClick={onCancel}
+          title="Back to current project"
+        >
+          <i className="ph ph-x" />
+        </button>
+      )}
       <div
         className={`drop-inner${over ? ' over' : ''}`}
         onDragOver={(e) => {
