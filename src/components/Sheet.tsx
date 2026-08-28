@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { beatDuration, beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
@@ -6,6 +6,26 @@ import { MARKER_COLOUR } from '../lib/markers'
 import { beginGesture, endGesture, removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
 import type { Block, Project, Segment } from '../lib/types'
 import SegmentHeader from './SegmentHeader'
+
+/**
+ * Preview of where a move-card drag from the rail would land, set by MoveLibrary.
+ * Lives outside the undo-tracked store since it's a transient UI highlight, never project data.
+ */
+let dropTarget: { segmentId: string; startBeat: number; beats: number } | null = null
+const dropListeners = new Set<() => void>()
+export function setDropTarget(target: typeof dropTarget) {
+  dropTarget = target
+  dropListeners.forEach((l) => l())
+}
+function useDropTarget() {
+  return useSyncExternalStore(
+    (cb) => {
+      dropListeners.add(cb)
+      return () => dropListeners.delete(cb)
+    },
+    () => dropTarget,
+  )
+}
 
 interface Props {
   project: Project
@@ -83,6 +103,8 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
   const el = useRef<HTMLDivElement>(null)
   const follow = useStore((s) => s.follow)
   const editingLyricId = useStore((s) => s.editingLyricId)
+  const dropTarget = useDropTarget()
+  const drop = dropTarget?.segmentId === segment.id ? dropTarget : null
 
   useEffect(() => {
     if (active && follow && !audio.el.paused) el.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -229,10 +251,11 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
           {Array.from({ length: visibleCount }, (_, c) => {
             const beat = rowStart + c
             const inSelection = !!selection && beat >= selection.startBeat && beat < selection.startBeat + selection.beats
+            const inDrop = !!drop && beat >= drop.startBeat && beat < drop.startBeat + drop.beats
             return (
               <div
                 key={c}
-                className={`count-cell${inSelection ? ' sel' : ''}${currentCount === c ? ' beat' : ''}`}
+                className={`count-cell${inSelection ? ' sel' : ''}${currentCount === c ? ' beat' : ''}${inDrop ? ' drop' : ''}`}
               >
                 {c + 1}
               </div>

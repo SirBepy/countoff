@@ -1,26 +1,69 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { alternateSelection, fillSelection } from '../lib/arrange'
 import { useClip } from '../lib/clips'
-import { flash, set, uid, useStore } from '../lib/store'
+import { countsInRow, segmentEnd } from '../lib/grid'
+import { flash, set, uid, updateProject, useStore } from '../lib/store'
 import type { Move, Project } from '../lib/types'
+import { setDropTarget } from './Sheet'
 
 interface Props {
   project: Project
   onEditMove: (moveId: string) => void
 }
 
+/** Unused first, then used; within a group, manual `order` wins, else the old beats/name sort. */
+function sortMoves(moves: Move[], usedIds: Set<string>) {
+  return [...moves].sort((a, b) => {
+    const usedA = usedIds.has(a.id)
+    const usedB = usedIds.has(b.id)
+    if (usedA !== usedB) return usedA ? 1 : -1
+    if (a.order == null && b.order == null) return a.beats - b.beats || a.name.localeCompare(b.name)
+    if (a.order == null) return 1
+    if (b.order == null) return -1
+    return a.order - b.order
+  })
+}
+
+/** Resolves a client point to a sheet drop target, mirroring Sheet.tsx's own beatFromPoint math. */
+function overSheet(project: Project, clientX: number, clientY: number) {
+  const containers = document.querySelectorAll<HTMLElement>('.counts')
+  for (const el of containers) {
+    const rect = el.getBoundingClientRect()
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) continue
+    const segmentId = el.dataset.segmentId
+    const row = Number(el.dataset.row)
+    const idx = project.segments.findIndex((s) => s.id === segmentId)
+    if (idx < 0) continue
+    const segment = project.segments[idx]
+    const end = segmentEnd(project.segments, idx, project.duration)
+    const perRow = segment.countsPerRow
+    const visible = countsInRow(segment, row, end)
+    if (!visible) continue
+    const ratio = (clientX - rect.left) / rect.width
+    const c = Math.max(0, Math.min(visible - 1, Math.floor(ratio * perRow)))
+    return { segmentId: segment.id, startBeat: row * perRow + c }
+  }
+  return null
+}
+
 export default function MoveLibrary({ project, onEditMove }: Props) {
   const [query, setQuery] = useState('')
   const selection = useStore((s) => s.selection)
   const activeMoveId = useStore((s) => s.activeMoveId)
+  const railRef = useRef<HTMLDivElement>(null)
 
+  const usedIds = useMemo(() => new Set(project.blocks.map((b) => b.moveId)), [project.blocks])
+  const useCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const b of project.blocks) m.set(b.moveId, (m.get(b.moveId) ?? 0) + 1)
+    return m
+  }, [project.blocks])
+
+  const sorted = useMemo(() => sortMoves(project.moves, usedIds), [project.moves, usedIds])
   const moves = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = q
-      ? project.moves.filter((m) => m.name.toLowerCase().includes(q) || m.note?.toLowerCase().includes(q))
-      : project.moves
-    return [...list].sort((a, b) => a.beats - b.beats || a.name.localeCompare(b.name))
-  }, [project.moves, query])
+    return q ? sorted.filter((m) => m.name.toLowerCase().includes(q) || m.note?.toLowerCase().includes(q)) : sorted
+  }, [sorted, query])
 
   function place(move: Move) {
     if (!selection) {
@@ -38,6 +81,85 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
     }
     set({ libraryOpen: false }, false)
     alternateSelection(selection, activeMoveId, move.id)
+  }
+
+  function dropOnSheet(move: Move, clientX: number, clientY: number) {
+    const drop = overSheet(project, clientX, clientY)
+    if (!drop) return false
+    set({ activeMoveId: move.id, libraryOpen: false }, false)
+    fillSelection({ segmentId: drop.segmentId, startBeat: drop.startBeat, beats: move.beats }, move.id)
+    return true
+  }
+
+  function overRail(clientX: number, clientY: number) {
+    const rect = railRef.current?.getBoundingClientRect()
+    return !!rect && clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+  }
+
+  function reorderInRail(moveId: string, clientY: number) {
+    const full = sortMoves(project.moves, usedIds)
+    const dragIdx = full.findIndex((m) => m.id === moveId)
+    if (dragIdx < 0) return
+    const [dragged] = full.splice(dragIdx, 1)
+
+    const cards = Array.from(railRef.current?.querySelectorAll<HTMLElement>('.move-card') ?? [])
+    let insertAt = full.length
+    for (const card of cards) {
+      const id = card.dataset.moveId
+      const idx = full.findIndex((m) => m.id === id)
+      if (idx < 0) continue
+      if (clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2) {
+        insertAt = idx
+        break
+      }
+    }
+    full.splice(insertAt, 0, dragged)
+    updateProject({ moves: full.map((m, i) => ({ ...m, order: i })) })
+  }
+
+  function startDrag(move: Move, downEvent: React.PointerEvent<HTMLElement>, fromHandle: boolean) {
+    const originX = downEvent.clientX
+    const originY = downEvent.clientY
+    // A finger swiping the rail is scrolling, not dragging, so touch only picks a
+    // card up from the grip. A mouse cannot scroll by dragging, so it grabs anywhere.
+    const canDrag = fromHandle || downEvent.pointerType === 'mouse'
+    let moved = false
+    let ghost: HTMLDivElement | null = null
+
+    const onMove = (ev: PointerEvent) => {
+      if (!canDrag) return
+      if (!moved) {
+        if (Math.hypot(ev.clientX - originX, ev.clientY - originY) < 5) return
+        moved = true
+        ghost = document.createElement('div')
+        ghost.className = 'move-drag-ghost'
+        ghost.textContent = move.name
+        document.body.appendChild(ghost)
+      }
+      ghost!.style.left = `${ev.clientX}px`
+      ghost!.style.top = `${ev.clientY}px`
+      const drop = overSheet(project, ev.clientX, ev.clientY)
+      setDropTarget(drop ? { segmentId: drop.segmentId, startBeat: drop.startBeat, beats: move.beats } : null)
+    }
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', cleanup)
+      setDropTarget(null)
+      ghost?.remove()
+    }
+    const onUp = (ev: PointerEvent) => {
+      cleanup()
+      if (!moved) {
+        ev.shiftKey ? alternate(move) : place(move)
+        return
+      }
+      if (dropOnSheet(move, ev.clientX, ev.clientY)) return
+      if (overRail(ev.clientX, ev.clientY)) reorderInRail(move.id, ev.clientY)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', cleanup)
   }
 
   return (
@@ -66,13 +188,15 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
       </div>
 
       <div className="scroll">
-        <div className="move-list">
+        <div className="move-list" ref={railRef}>
           {moves.map((move) => (
             <MoveCard
               key={move.id}
               move={move}
               active={move.id === activeMoveId}
-              onPlace={(shift) => (shift ? alternate(move) : place(move))}
+              used={usedIds.has(move.id)}
+              useCount={useCounts.get(move.id) ?? 0}
+              onStartDrag={(e, fromHandle) => startDrag(move, e, fromHandle)}
               onEdit={() => onEditMove(move.id)}
             />
           ))}
@@ -83,10 +207,11 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
       <div className="hint" style={{ borderTop: '1px solid var(--line-soft)' }}>
         {selection ? (
           <>
-            Tap a move to fill the {selection.beats} selected {selection.beats === 1 ? 'count' : 'counts'} with repeats.
+            Tap a move to fill the {selection.beats} selected {selection.beats === 1 ? 'count' : 'counts'} with repeats, or
+            drag one onto the sheet.
           </>
         ) : (
-          <>Drag across counts on the sheet to select, then pick a move.</>
+          <>Drag across counts on the sheet to select, then pick a move, or drag a move straight onto a count.</>
         )}
         <span className="only-wide">
           {' '}
@@ -100,18 +225,27 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
 function MoveCard({
   move,
   active,
-  onPlace,
+  used,
+  useCount,
+  onStartDrag,
   onEdit,
 }: {
   move: Move
   active: boolean
-  onPlace: (shift: boolean) => void
+  used: boolean
+  useCount: number
+  onStartDrag: (e: React.PointerEvent<HTMLElement>, fromHandle: boolean) => void
   onEdit: () => void
 }) {
   const clip = useClip(move.id, move.hasClip)
 
   return (
-    <div className={`move-card${active ? ' sel' : ''}`} onClick={(e) => onPlace(e.shiftKey)} title={move.note ?? move.name}>
+    <div
+      className={`move-card${active ? ' sel' : ''}${used ? ' used' : ''}`}
+      data-move-id={move.id}
+      onPointerDown={(e) => onStartDrag(e, false)}
+      title={move.note ?? move.name}
+    >
       {clip ? (
         <video
           className="move-thumb"
@@ -132,10 +266,19 @@ function MoveCard({
         {move.note && <div className="move-note">{move.note}</div>}
       </div>
       <div className="row" style={{ gap: 4 }}>
+        {useCount > 0 && <span className="use-count">x{useCount}</span>}
+        <span
+          className="move-grip"
+          title="Drag onto a count to place it, or up and down to reorder"
+          onPointerDown={(e) => onStartDrag(e, true)}
+        >
+          <i className="ph ph-dots-six-vertical" />
+        </span>
         <span className={`beat-badge e${move.energy}`}>{move.beats}</span>
         <button
           className="ghost sm icon"
           title="Edit move, record a clip"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             onEdit()

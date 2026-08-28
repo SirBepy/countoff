@@ -10,6 +10,8 @@ export interface Move {
   /** Set when the user records or uploads a clip; the blob itself lives in IndexedDB. */
   hasClip?: boolean
   builtin?: boolean
+  /** Manual rail position from dragging to reorder; absent until the first drag. */
+  order?: number
 }
 
 export interface LyricLine {
