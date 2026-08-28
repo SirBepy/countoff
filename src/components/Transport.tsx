@@ -54,6 +54,7 @@ export default function Transport({ project }: { project: Project }) {
         <div className="now-move">
           <div className="label">Now</div>
           <div className="value">{now.move?.name ?? '-'}</div>
+          {now.block?.note && <div className="value faint">{now.block.note}</div>}
         </div>
         <div className="now-move only-wide">
           <div className="label">Next{now.beatsUntilNext ? ` in ${now.beatsUntilNext}` : ''}</div>

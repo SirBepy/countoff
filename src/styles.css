@@ -718,6 +718,36 @@ input[type='number']::-webkit-inner-spin-button {
   background: rgba(0, 0, 0, 0.22);
   touch-action: none;
 }
+.block-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.block-note {
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  opacity: 0.65;
+}
+.block-note-dot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+/* Overflow must open up so the note editor isn't clipped by the block's own hidden bounds. */
+.block.editing-note {
+  overflow: visible;
+  z-index: 5;
+}
+.block-note-input {
+  width: 160px;
+  max-width: 50vw;
+}
 
 /* ---------- move library contents ---------- */
 
@@ -938,6 +968,11 @@ input[type='number']::-webkit-inner-spin-button {
 .rehearse-lyric {
   font-size: clamp(15px, 4vw, 30px);
   color: var(--text-dim);
+}
+.rehearse-note {
+  font-size: clamp(18px, 5vw, 40px);
+  font-weight: 700;
+  color: var(--accent);
 }
 .rehearse-next {
   font-size: clamp(13px, 3.4vw, 22px);

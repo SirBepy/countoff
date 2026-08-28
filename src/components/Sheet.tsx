@@ -103,6 +103,7 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
   const el = useRef<HTMLDivElement>(null)
   const follow = useStore((s) => s.follow)
   const editingLyricId = useStore((s) => s.editingLyricId)
+  const editingBlockNoteId = useStore((s) => s.editingBlockNoteId)
   const dropTarget = useDropTarget()
   const drop = dropTarget?.segmentId === segment.id ? dropTarget : null
 
@@ -166,9 +167,11 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
     const originX = e.clientX
     const { startBeat, beats } = block
     const gestureKey = `block-${mode}-${block.id}`
+    let moved = false
     beginGesture(gestureKey)
 
     const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - originX) > 4) moved = true
       const delta = Math.round((ev.clientX - originX) / beatWidth)
       if (mode === 'move') updateBlock(block.id, { startBeat: Math.max(0, startBeat + delta) }, gestureKey)
       else updateBlock(block.id, { beats: Math.max(1, beats + delta) }, gestureKey)
@@ -178,6 +181,7 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
       endGesture()
+      if (!moved && mode === 'move') set({ editingBlockNoteId: block.id }, false)
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', up)
@@ -292,10 +296,11 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
             const isHead = block.startBeat >= rowStart
             const isTail = block.startBeat + block.beats <= rowEnd
             const now = nowBeat !== null && nowBeat >= block.startBeat && nowBeat < block.startBeat + block.beats
+            const editing = editingBlockNoteId === block.id
             return (
               <div
                 key={block.id}
-                className={`block e${move?.energy ?? 2}${now ? ' now' : ''}`}
+                className={`block e${move?.energy ?? 2}${now ? ' now' : ''}${editing ? ' editing-note' : ''}`}
                 style={{
                   left: `${((visStart - rowStart) / perRow) * 100}%`,
                   width: `${((visEnd - visStart) / perRow) * 100}%`,
@@ -304,15 +309,38 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
                   borderTopRightRadius: isTail ? 6 : 0,
                   borderBottomRightRadius: isTail ? 6 : 0,
                 }}
-                title={`${move?.name ?? 'Unknown move'} - ${block.beats} beats. Drag to move, drag the right edge to stretch, right-click to delete.`}
-                onPointerDown={(e) => isHead && dragBlock(block, e, 'move')}
+                title={`${move?.name ?? 'Unknown move'} - ${block.beats} beats.${block.note ? ` Note: ${block.note}.` : ''} Drag to move, drag the right edge to stretch, tap to add a note, right-click to delete.`}
+                onPointerDown={(e) => isHead && !editing && dragBlock(block, e, 'move')}
                 onContextMenu={(e) => {
                   e.preventDefault()
+                  if (block.note && !window.confirm(`Delete this block and its note "${block.note}"?`)) return
                   removeBlocks([block.id])
                 }}
               >
-                {isHead && (move?.name ?? '?')}
-                {isTail && <span className="grip" onPointerDown={(e) => dragBlock(block, e, 'resize')} />}
+                {editing ? (
+                  <input
+                    autoFocus
+                    className="block-note-input"
+                    defaultValue={block.note ?? ''}
+                    placeholder="Note"
+                    onBlur={(e) => {
+                      const note = e.target.value.trim()
+                      updateBlock(block.id, { note: note || undefined }, `block-note-${block.id}`)
+                      set({ editingBlockNoteId: null }, false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') set({ editingBlockNoteId: null }, false)
+                    }}
+                  />
+                ) : (
+                  <>
+                    {isHead && <span className="block-name">{move?.name ?? '?'}</span>}
+                    {isHead && block.note && <span className="block-note">{block.note}</span>}
+                    {block.note && <span className="block-note-dot" />}
+                    {isTail && <span className="grip" onPointerDown={(e) => dragBlock(block, e, 'resize')} />}
+                  </>
+                )}
               </div>
             )
           })}

@@ -22,6 +22,8 @@ export interface UiState {
   libraryOpen: boolean
   /** Which lyric line's inline editor is open, so a hand-placed line can land in edit mode immediately. */
   editingLyricId: string | null
+  /** Which block's note editor is open; opened by a tap that stays under the drag threshold. */
+  editingBlockNoteId: string | null
   /** Mirrors the undo/redo stacks so buttons can grey out without reaching into store internals. */
   canUndo: boolean
   canRedo: boolean
@@ -37,6 +39,7 @@ let state: UiState = {
   follow: true,
   libraryOpen: false,
   editingLyricId: null,
+  editingBlockNoteId: null,
   canUndo: false,
   canRedo: false,
 }

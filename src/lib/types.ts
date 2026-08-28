@@ -60,6 +60,8 @@ export interface Block {
   /** Beat index relative to the segment's anchor. */
   startBeat: number
   beats: number
+  /** Annotates this one placement, unlike `Move.note` which is shared by every copy. */
+  note?: string
 }
 
 export interface Project {

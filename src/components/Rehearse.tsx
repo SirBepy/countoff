@@ -31,6 +31,7 @@ export default function Rehearse({ project }: { project: Project }) {
         <div className="rehearse-lyric">{now.lyric ?? ' '}</div>
         {clip && <video className="rehearse-clip" src={clip} autoPlay muted loop playsInline />}
         <div className="rehearse-move">{now.move?.name ?? 'Waiting'}</div>
+        {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
         <div className="pulse">
           {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (
             <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
