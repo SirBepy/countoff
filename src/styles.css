@@ -504,16 +504,10 @@ input[type='number']::-webkit-inner-spin-button {
   min-height: 32px;
   padding: 2px 4px;
 }
-.seg-tools {
-  display: none;
-  width: 100%;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  padding-bottom: 4px;
-}
-.seg-tools.open {
-  display: flex;
+.seg-time {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 .chip {
@@ -535,6 +529,44 @@ input[type='number']::-webkit-inner-spin-button {
   border: none;
   font-size: 13px;
 }
+.seg-anchor {
+  position: relative;
+}
+.seg-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  max-width: calc(100vw - 24px);
+}
+.seg-bpm-pop {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.seg-menu-item {
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  width: 100%;
+}
+.seg-menu-transition {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 0 8px;
+}
 
 .sheet-row {
   display: grid;
@@ -542,9 +574,16 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 6px;
   padding: 6px 0;
   border-top: 1px solid var(--line-soft);
+  -webkit-user-select: none;
+  user-select: none;
 }
 .sheet-row.active {
   background: rgba(124, 92, 255, 0.07);
+}
+/* Lyric text and its inline edit input opt back into selection despite the row-wide none above. */
+.sheet-row .row-lyric {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .row-no {
@@ -598,6 +637,8 @@ input[type='number']::-webkit-inner-spin-button {
   font-size: 10px;
   color: var(--text-faint);
   padding: 1px 0 0 3px;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .count-cell:nth-child(4n + 1) {
   border-left: 1px solid var(--line);
@@ -607,6 +648,11 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .count-cell.beat {
   background: rgba(255, 255, 255, 0.06);
+}
+.count-cell.drop {
+  background: rgba(124, 92, 255, 0.2);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
 }
 
 .count-marker {
@@ -693,6 +739,16 @@ input[type='number']::-webkit-inner-spin-button {
   cursor: pointer;
   background: var(--bg-2);
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.move-grip {
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  color: var(--text-dim);
+  cursor: grab;
+  touch-action: none;
 }
 .move-card:hover {
   border-color: var(--line);
@@ -701,6 +757,33 @@ input[type='number']::-webkit-inner-spin-button {
 .move-card.sel {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+.move-card.used {
+  opacity: 0.55;
+}
+.move-card.used .move-name {
+  color: var(--text-dim);
+}
+.use-count {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.move-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  transform: translate(-50%, -130%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .move-thumb {
   width: 44px;
@@ -1167,12 +1250,6 @@ kbd {
     flex: none;
     width: 180px;
   }
-  .seg-tools {
-    display: flex;
-    width: auto;
-    flex: 1;
-  }
-
   .transport-main {
     padding: 0 14px;
     height: 68px;
