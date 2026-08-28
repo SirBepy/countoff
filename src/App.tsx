@@ -42,7 +42,9 @@ export default function App() {
       if (saved && blob) {
         const url = URL.createObjectURL(blob)
         audio.load(url, saved.name)
-        set({ project: saved, audioUrl: url }, false)
+        // No blocks placed yet means he hasn't started choreographing; land on setup.
+        const view = saved.blocks.length === 0 ? 'setup' : 'sheet'
+        set({ project: saved, audioUrl: url, view }, false)
         setSegmentId(saved.segments[0]?.id ?? null)
         if (isConfigured()) void pullNow()
       }
