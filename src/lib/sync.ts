@@ -114,7 +114,8 @@ export async function testConnection(config: Pick<SyncConfig, 'token' | 'repo'>)
   return { ok: true }
 }
 
-export async function pullProject(config: SyncConfig): Promise<{ project: Project; sha: string } | null> {
+/** Legacy single-project layout, retired 2026-08-29 in favour of one file per project. */
+export async function pullLegacyProject(config: SyncConfig): Promise<{ project: Project; sha: string } | null> {
   const res = await api(config, 'project.json')
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`Pull failed (${res.status})`)
@@ -122,37 +123,61 @@ export async function pullProject(config: SyncConfig): Promise<{ project: Projec
   return { project: JSON.parse(base64ToUtf8(data.content)) as Project, sha: data.sha as string }
 }
 
-export async function pushProject(config: SyncConfig, project: Project, sha: string | null): Promise<string> {
+export async function deleteLegacyProject(config: SyncConfig, sha: string): Promise<void> {
+  const res = await api(config, 'project.json', {
+    method: 'DELETE',
+    body: JSON.stringify({ message: 'sync: migrate to per-project layout', sha }),
+  })
+  if (!res.ok) throw new Error(`Delete failed (${res.status})`)
+}
+
+export async function listRemoteProjects(config: SyncConfig): Promise<string[]> {
+  const res = await api(config, 'projects')
+  if (res.status === 404) return []
+  if (!res.ok) throw new Error(`List failed (${res.status})`)
+  const entries = (await res.json()) as { name: string }[]
+  return entries.filter((e) => e.name.endsWith('.json')).map((e) => e.name.slice(0, -'.json'.length))
+}
+
+export async function pullProjectById(config: SyncConfig, id: string): Promise<{ project: Project; sha: string } | null> {
+  const res = await api(config, `projects/${encodeURIComponent(id)}.json`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Pull failed (${res.status})`)
+  const data = await res.json()
+  return { project: JSON.parse(base64ToUtf8(data.content)) as Project, sha: data.sha as string }
+}
+
+export async function pushProjectById(config: SyncConfig, project: Project, sha: string | null): Promise<string> {
   const body: Record<string, unknown> = {
     message: `sync: ${project.name || 'project'}`,
     content: utf8ToBase64(JSON.stringify(project)),
   }
   if (sha) body.sha = sha
-  const res = await api(config, 'project.json', { method: 'PUT', body: JSON.stringify(body) })
+  const res = await api(config, `projects/${encodeURIComponent(project.id)}.json`, { method: 'PUT', body: JSON.stringify(body) })
   if (res.status === 409 || res.status === 422) throw new SyncConflictError()
   if (!res.ok) throw new Error(`Push failed (${res.status})`)
   const data = await res.json()
   return data.content.sha as string
 }
 
-export async function listRemoteClips(config: SyncConfig): Promise<string[]> {
-  const res = await api(config, 'clips')
+export async function listRemoteClips(config: SyncConfig, projectId: string): Promise<string[]> {
+  const res = await api(config, `clips/${encodeURIComponent(projectId)}`)
   if (res.status === 404) return []
   if (!res.ok) throw new Error(`List failed (${res.status})`)
   const entries = (await res.json()) as { name: string }[]
   return entries.filter((e) => e.name.endsWith('.webm')).map((e) => e.name.slice(0, -'.webm'.length))
 }
 
-export async function pullClip(config: SyncConfig, moveId: string): Promise<Blob | null> {
-  const res = await api(config, `clips/${encodeURIComponent(moveId)}.webm`)
+export async function pullClip(config: SyncConfig, projectId: string, moveId: string): Promise<Blob | null> {
+  const res = await api(config, `clips/${encodeURIComponent(projectId)}/${encodeURIComponent(moveId)}.webm`)
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`Clip pull failed (${res.status})`)
   const data = await res.json()
   return new Blob([base64ToBytes(data.content)], { type: 'video/webm' })
 }
 
-export async function pushClip(config: SyncConfig, moveId: string, blob: Blob): Promise<void> {
-  const path = `clips/${encodeURIComponent(moveId)}.webm`
+export async function pushClip(config: SyncConfig, projectId: string, moveId: string, blob: Blob): Promise<void> {
+  const path = `clips/${encodeURIComponent(projectId)}/${encodeURIComponent(moveId)}.webm`
   const existing = await api(config, path)
   const sha = existing.ok ? ((await existing.json()).sha as string) : undefined
   const bytes = new Uint8Array(await blob.arrayBuffer())
@@ -175,14 +200,18 @@ function getClipHashes(): Record<string, string> {
   }
 }
 
+// Keyed by projectId:moveId, not moveId alone: starter moves share ids across
+// projects, and a hash recorded for one project's clip must not gate another's.
+const clipHashKey = (projectId: string, moveId: string) => `${projectId}:${moveId}`
+
 /** True (and remembers the hash) when a clip's content differs from what was last pushed. */
-export async function clipChanged(moveId: string, blob: Blob): Promise<boolean> {
+export async function clipChanged(projectId: string, moveId: string, blob: Blob): Promise<boolean> {
   const hash = await hashBlob(blob)
-  return getClipHashes()[moveId] !== hash
+  return getClipHashes()[clipHashKey(projectId, moveId)] !== hash
 }
 
-export async function markClipPushed(moveId: string, blob: Blob): Promise<void> {
+export async function markClipPushed(projectId: string, moveId: string, blob: Blob): Promise<void> {
   const map = getClipHashes()
-  map[moveId] = await hashBlob(blob)
+  map[clipHashKey(projectId, moveId)] = await hashBlob(blob)
   localStorage.setItem(KEY_CLIP_HASHES, JSON.stringify(map))
 }

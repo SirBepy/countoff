@@ -13,7 +13,7 @@ import { audio } from '../lib/audio'
 import { deleteProject, saveAudio } from '../lib/db'
 import { cancelPendingSave, flash, replaceProject, updateProject } from '../lib/store'
 import { clearConfig, DEFAULT_REPO, getConfig, testConnection, setConfig as setSyncConfig } from '../lib/sync'
-import { pullNow, pushNow, refreshStatus, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
+import { pullNow, pushAllProjects, pushNow, refreshStatus, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -24,6 +24,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   const [usage, setUsage] = useState({ used: 0, quota: 0 })
   const [tokenInput, setTokenInput] = useState('')
   const [connecting, setConnecting] = useState(false)
+  const [syncingAll, setSyncingAll] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
   const syncStatus = useSyncStatus()
@@ -96,6 +97,17 @@ export default function BackupModal({ project, onClose }: { project: Project; on
     refreshStatus()
     flash('Connected. Syncing...')
     await pullNow()
+  }
+
+  async function syncAll() {
+    setSyncingAll(true)
+    const result = await pushAllProjects()
+    setSyncingAll(false)
+    flash(
+      result.failed.length
+        ? `Synced ${result.pushed}, ${result.failed.length} failed: ${result.failed.map((f) => f.name).join(', ')}`
+        : `Synced ${result.pushed} project${result.pushed === 1 ? '' : 's'}`,
+    )
   }
 
   function disconnect() {
@@ -239,9 +251,14 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                   Pushes the choreography and any new or changed move clips to the private repo, and pulls in
                   whatever changed elsewhere. The song itself never leaves this device.
                 </span>
-                <button className="ghost" onClick={disconnect}>
-                  Disconnect
-                </button>
+                <div className="row">
+                  <button onClick={() => void syncAll()} disabled={syncStatus.syncing || syncingAll}>
+                    <i className="ph ph-cloud-arrow-up i" /> {syncingAll ? 'Syncing all...' : 'Sync all projects'}
+                  </button>
+                  <button className="ghost" onClick={disconnect}>
+                    Disconnect
+                  </button>
+                </div>
               </>
             ) : (
               <>

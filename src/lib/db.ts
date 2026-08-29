@@ -104,11 +104,18 @@ export function loadAudio(id?: string): Promise<Blob | undefined> {
 
 // Clips are keyed `${projectId}:${moveId}` because starter moves share ids (e.g. 'bounce')
 // across every project; a bare moveId key would let two projects overwrite one clip.
-const clipKey = (moveId: string) => `${getActiveProjectId()}:${moveId}`
+const clipKeyFor = (projectId: string, moveId: string) => `${projectId}:${moveId}`
+const clipKey = (moveId: string) => clipKeyFor(getActiveProjectId() ?? '', moveId)
 
 export const saveClip = (moveId: string, blob: Blob) => tx('clips', 'readwrite', (s) => s.put(blob, clipKey(moveId)))
 export const loadClip = (moveId: string) => tx<Blob | undefined>('clips', 'readonly', (s) => s.get(clipKey(moveId)))
 export const deleteClip = (moveId: string) => tx('clips', 'readwrite', (s) => s.delete(clipKey(moveId)))
+
+/** Same as saveClip/loadClip but for a project that isn't necessarily the active one, e.g. a sync pull. */
+export const saveClipFor = (projectId: string, moveId: string, blob: Blob) =>
+  tx('clips', 'readwrite', (s) => s.put(blob, clipKeyFor(projectId, moveId)))
+export const loadClipFor = (projectId: string, moveId: string) =>
+  tx<Blob | undefined>('clips', 'readonly', (s) => s.get(clipKeyFor(projectId, moveId)))
 
 export async function listProjects(): Promise<Project[]> {
   const all = await tx<Project[]>('project', 'readonly', (s) => s.getAll())

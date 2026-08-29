@@ -1,16 +1,19 @@
 import { useSyncExternalStore } from 'react'
-import { loadClip, migrateProject, saveClip, saveProject } from './db'
+import { getActiveProjectId, listProjects, loadClipFor, loadProjectById, migrateProject, saveClipFor, saveProject, saveProjectRecord } from './db'
 import {
   clipChanged,
+  deleteLegacyProject,
   getConfig,
   getLastSyncedAt,
   isConfigured,
   listRemoteClips,
+  listRemoteProjects,
   markClipPushed,
   pullClip,
-  pullProject,
+  pullLegacyProject,
+  pullProjectById,
   pushClip,
-  pushProject,
+  pushProjectById,
   setLastSyncedAt,
   SyncConflictError,
   type SyncConfig,
@@ -28,11 +31,17 @@ interface Conflict {
   remote: Project
 }
 
+export interface SyncAllResult {
+  pushed: number
+  failed: { id: string; name: string }[]
+}
+
 let syncing = false
 let lastError: string | null = null
 let conflict: Conflict | null = null
-let remoteSha: string | null = null
-let remoteUpdatedAt: number | null = null
+// Per project id: the remote layout is one file per project, so each tracks its own sha.
+const remoteShas: Record<string, string> = {}
+const remoteUpdatedAts: Record<string, number> = {}
 let pushTimer: ReturnType<typeof setTimeout> | undefined
 
 const listeners = new Set<() => void>()
@@ -79,14 +88,36 @@ async function adoptRemoteProject(remoteProject: Project, config: SyncConfig) {
   const project = migrateProject(remoteProject)
   await saveProject(project)
   cancelPendingSave()
-  const remoteClipIds = await listRemoteClips(config)
+  const remoteClipIds = await listRemoteClips(config, project.id)
   for (const moveId of remoteClipIds) {
-    if (await loadClip(moveId)) continue
-    const blob = await pullClip(config, moveId)
-    if (blob) await saveClip(moveId, blob)
+    if (await loadClipFor(project.id, moveId)) continue
+    const blob = await pullClip(config, project.id, moveId)
+    if (blob) await saveClipFor(project.id, moveId, blob)
   }
   // Undoing past a document that arrived from the other device is incoherent.
   replaceProject(project, { selection: null }, false)
+}
+
+/** Same shape as adoptRemoteProject but for a project that isn't the open one:
+ * write straight to IndexedDB, never touch which project is active or in memory. */
+async function saveRemoteProjectToDb(remoteProject: Project, config: SyncConfig) {
+  const project = migrateProject(remoteProject)
+  await saveProjectRecord(project)
+  const remoteClipIds = await listRemoteClips(config, project.id)
+  for (const moveId of remoteClipIds) {
+    if (await loadClipFor(project.id, moveId)) continue
+    const blob = await pullClip(config, project.id, moveId)
+    if (blob) await saveClipFor(project.id, moveId, blob)
+  }
+}
+
+/** No-op once migrated: pulls the pre-library root project.json, if any, re-saves it
+ * under its own projects/<id>.json, then deletes the root file. */
+async function migrateLegacyProject(config: SyncConfig): Promise<void> {
+  const legacy = await pullLegacyProject(config)
+  if (!legacy) return
+  await pushProjectById(config, legacy.project, null)
+  await deleteLegacyProject(config, legacy.sha)
 }
 
 export async function pullNow(): Promise<void> {
@@ -94,18 +125,33 @@ export async function pullNow(): Promise<void> {
   if (!config || syncing) return
   syncing = true
   emit()
+  const failedIds: string[] = []
   try {
-    const remote = await pullProject(config)
-    if (!remote) {
-      setLastSyncedAt(Date.now())
-      return
+    try {
+      await migrateLegacyProject(config)
+    } catch {
+      failedIds.push('legacy')
     }
-    remoteSha = remote.sha
-    remoteUpdatedAt = remote.project.updatedAt
-    const local = getState().project
-    if (!local || remote.project.updatedAt > local.updatedAt) await adoptRemoteProject(remote.project, config)
+    const remoteIds = await listRemoteProjects(config)
+    const activeId = getActiveProjectId()
+    for (const id of remoteIds) {
+      try {
+        const remote = await pullProjectById(config, id)
+        if (!remote) continue
+        remoteShas[id] = remote.sha
+        remoteUpdatedAts[id] = remote.project.updatedAt
+        const local = id === activeId ? getState().project : await loadProjectById(id)
+        if (!local || remote.project.updatedAt > local.updatedAt) {
+          if (id === activeId) await adoptRemoteProject(remote.project, config)
+          else await saveRemoteProjectToDb(remote.project, config)
+        }
+      } catch {
+        failedIds.push(id)
+      }
+    }
     setLastSyncedAt(Date.now())
-    lastError = null
+    lastError = failedIds.length ? `Pull failed for ${failedIds.length} project(s)` : null
+    if (failedIds.length) flash('Sync pull failed for some projects')
   } catch (e) {
     lastError = e instanceof Error ? e.message : 'Pull failed'
     flash('Sync pull failed')
@@ -118,10 +164,10 @@ export async function pullNow(): Promise<void> {
 async function pushChangedClips(config: SyncConfig, project: Project) {
   for (const move of project.moves) {
     if (!move.hasClip) continue
-    const blob = await loadClip(move.id)
-    if (!blob || !(await clipChanged(move.id, blob))) continue
-    await pushClip(config, move.id, blob)
-    await markClipPushed(move.id, blob)
+    const blob = await loadClipFor(project.id, move.id)
+    if (!blob || !(await clipChanged(project.id, move.id, blob))) continue
+    await pushClip(config, project.id, move.id, blob)
+    await markClipPushed(project.id, move.id, blob)
   }
 }
 
@@ -133,16 +179,16 @@ export async function pushNow(): Promise<void> {
   conflict = null
   emit()
   try {
-    remoteSha = await pushProject(config, project, remoteSha)
-    remoteUpdatedAt = project.updatedAt
+    remoteShas[project.id] = await pushProjectById(config, project, remoteShas[project.id] ?? null)
+    remoteUpdatedAts[project.id] = project.updatedAt
     await pushChangedClips(config, project)
     setLastSyncedAt(Date.now())
     lastError = null
   } catch (e) {
     if (e instanceof SyncConflictError) {
-      const remote = await pullProject(config).catch(() => null)
+      const remote = await pullProjectById(config, project.id).catch(() => null)
       if (remote) {
-        remoteSha = remote.sha
+        remoteShas[project.id] = remote.sha
         conflict = { local: project, remote: remote.project }
       }
       flash('Sync conflict: the remote copy changed since your last sync')
@@ -156,10 +202,53 @@ export async function pushNow(): Promise<void> {
   }
 }
 
+/** Pushes every project in the local library, not just the open one. A conflict on one
+ * project is collected, not fatal: the loop keeps going so the rest still sync. */
+export async function pushAllProjects(): Promise<SyncAllResult> {
+  const config = getConfig()
+  if (!config || syncing) return { pushed: 0, failed: [] }
+  syncing = true
+  conflict = null
+  emit()
+  const activeId = getActiveProjectId()
+  const activeProject = getState().project
+  const failed: { id: string; name: string }[] = []
+  let pushed = 0
+  try {
+    const dbProjects = await listProjects()
+    for (const dbProject of dbProjects) {
+      // The active project's freshest state is in memory, not necessarily flushed to IndexedDB yet.
+      const project = dbProject.id === activeId && activeProject ? activeProject : dbProject
+      try {
+        remoteShas[project.id] = await pushProjectById(config, project, remoteShas[project.id] ?? null)
+        remoteUpdatedAts[project.id] = project.updatedAt
+        await pushChangedClips(config, project)
+        pushed++
+      } catch (e) {
+        if (e instanceof SyncConflictError) {
+          const remote = await pullProjectById(config, project.id).catch(() => null)
+          if (remote) {
+            remoteShas[project.id] = remote.sha
+            if (project.id === activeId) conflict = { local: project, remote: remote.project }
+          }
+        }
+        failed.push({ id: project.id, name: project.name })
+      }
+    }
+    setLastSyncedAt(Date.now())
+    lastError = failed.length ? `${failed.length} project${failed.length === 1 ? '' : 's'} failed to sync` : null
+  } finally {
+    syncing = false
+    emit()
+  }
+  return { pushed, failed }
+}
+
 /** Called whenever the in-memory project changes; debounces the next push. */
 export function scheduleSync(project: Project) {
   if (!isConfigured()) return
-  if (remoteUpdatedAt !== null && project.updatedAt <= remoteUpdatedAt) return
+  const remoteUpdatedAt = remoteUpdatedAts[project.id]
+  if (remoteUpdatedAt !== undefined && project.updatedAt <= remoteUpdatedAt) return
   clearTimeout(pushTimer)
   pushTimer = setTimeout(() => void pushNow(), PUSH_DEBOUNCE)
 }
@@ -180,7 +269,7 @@ export async function resolveConflictTakeRemote(): Promise<void> {
   const remote = conflict.remote
   conflict = null
   await adoptRemoteProject(remote, config)
-  remoteUpdatedAt = remote.updatedAt
+  remoteUpdatedAts[remote.id] = remote.updatedAt
   setLastSyncedAt(Date.now())
   emit()
 }
