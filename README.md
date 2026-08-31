@@ -22,20 +22,21 @@ and timing is editable, and a per-song offset re-aligns lyrics that were timed a
 release rather than your cut.
 
 **Moves.** Around 40 built in, from step-touch to the Macarena, each with a beat length and an energy
-level. Add your own, record a clip straight from the webcam or upload one, and rename or retime
-anything.
+level. Add your own, link a video that shows how one goes, and rename or retime anything.
 
 **Arranging.** Drag across counts to select, then click a move to fill the selection with repeats: a
-2-beat move across two bars becomes four repeats. Shift-click a second move to alternate A B A B.
-Blocks drag, stretch and delete.
+2-beat move across two bars becomes four repeats, or drag a move straight onto a count. Shift-click a
+second move to alternate A B A B. Blocks drag, stretch and delete, and each placed block can carry
+its own note, so the second of four can say "turn".
 
 **Rehearsing.** Full-screen mode shows the current move large, the lyric above it, an 8-count pulse
 and what comes next. Loop a section, turn on the click, slow to 60% without the pitch dropping.
 
-**Your data.** Everything stays in the browser: nothing is uploaded. Storage is marked persistent so
-the browser will not evict it, a version history is kept automatically, and the whole project
-including move clips exports to a single file. The song is not in that file, so the same panel can
-swap in an audio file without disturbing a single count.
+**Your data.** Everything lives in the browser by default. Storage is marked persistent so the
+browser will not evict it, a version history is kept automatically, and the whole project exports to
+a single file. Sign in with Google and your choreographies follow you between devices. The song
+itself never leaves the machine it is on, so every device picks the audio file once; the same panel
+swaps it in without disturbing a single count.
 
 ## On a phone
 
