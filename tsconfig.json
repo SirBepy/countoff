@@ -6,6 +6,9 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
+    // firebase/firestore's optional grpc-js dep drags @types/node into node_modules;
+    // left implicit, TS auto-includes it and Node's Timeout shadows DOM's number.
+    "types": ["react", "react-dom"],
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

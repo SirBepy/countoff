@@ -11,9 +11,9 @@ import {
 } from '../lib/backup'
 import { audio } from '../lib/audio'
 import { deleteProject, saveAudio } from '../lib/db'
+import { signInWithGoogle, signOutUser } from '../lib/firebase'
 import { cancelPendingSave, flash, replaceProject, updateProject } from '../lib/store'
-import { clearConfig, DEFAULT_REPO, getConfig, testConnection, setConfig as setSyncConfig } from '../lib/sync'
-import { pullNow, pushAllProjects, pushNow, refreshStatus, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
+import { pushAllProjects, pushNow, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -22,8 +22,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [persisted, setPersisted] = useState<boolean | null>(null)
   const [usage, setUsage] = useState({ used: 0, quota: 0 })
-  const [tokenInput, setTokenInput] = useState('')
-  const [connecting, setConnecting] = useState(false)
+  const [signingIn, setSigningIn] = useState(false)
   const [syncingAll, setSyncingAll] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
@@ -82,21 +81,16 @@ export default function BackupModal({ project, onClose }: { project: Project; on
     }
   }
 
-  async function connect() {
-    const token = tokenInput.trim()
-    if (!token) return
-    setConnecting(true)
-    const result = await testConnection({ token, repo: DEFAULT_REPO })
-    setConnecting(false)
-    if (!result.ok) {
-      flash(result.message)
-      return
+  async function connectGoogle() {
+    setSigningIn(true)
+    try {
+      await signInWithGoogle()
+      flash('Signed in. Syncing...')
+    } catch {
+      flash('Google sign-in failed')
+    } finally {
+      setSigningIn(false)
     }
-    setSyncConfig(token)
-    setTokenInput('')
-    refreshStatus()
-    flash('Connected. Syncing...')
-    await pullNow()
   }
 
   async function syncAll() {
@@ -111,10 +105,9 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   }
 
   function disconnect() {
-    if (!confirm('Disconnect sync and forget the stored token on this device?')) return
-    clearConfig()
-    refreshStatus()
-    flash('Disconnected')
+    if (!confirm('Sign out on this device?')) return
+    void signOutUser()
+    flash('Signed out')
   }
 
   return (
@@ -234,7 +227,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                 <div className="result" style={{ cursor: 'default' }}>
                   <i className="ph ph-cloud-check i" style={{ color: 'var(--e1)', fontSize: 20 }} />
                   <div style={{ flex: 1 }}>
-                    <div className="move-name">Connected to {getConfig()?.repo}</div>
+                    <div className="move-name">Signed in as {syncStatus.email}</div>
                     <div className="move-note">
                       {syncStatus.syncing
                         ? 'Syncing...'
@@ -248,36 +241,27 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                   </button>
                 </div>
                 <span className="faint" style={{ fontSize: 11 }}>
-                  Pushes the choreography and any new or changed move clips to the private repo, and pulls in
-                  whatever changed elsewhere. The song itself never leaves this device.
+                  Pushes the choreography to your Google account and pulls in whatever changed elsewhere. Move
+                  clips and the song itself stay on this device only.
                 </span>
                 <div className="row">
                   <button onClick={() => void syncAll()} disabled={syncStatus.syncing || syncingAll}>
                     <i className="ph ph-cloud-arrow-up i" /> {syncingAll ? 'Syncing all...' : 'Sync all projects'}
                   </button>
                   <button className="ghost" onClick={disconnect}>
-                    Disconnect
+                    Sign out
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <p className="muted" style={{ margin: 0 }}>
-                  Connect a private GitHub repo to carry this choreography between devices. Paste a fine-grained
-                  personal access token scoped to that one repo, with read and write access to Contents.
+                  Sign in with Google to carry this choreography between devices. No token to copy, no repo to set
+                  up.
                 </p>
-                <div className="row">
-                  <input
-                    type="password"
-                    placeholder="GitHub token"
-                    value={tokenInput}
-                    onChange={(e) => setTokenInput(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button className="primary" disabled={!tokenInput.trim() || connecting} onClick={connect}>
-                    {connecting ? 'Connecting...' : 'Connect'}
-                  </button>
-                </div>
+                <button className="primary" disabled={signingIn} onClick={() => void connectGoogle()}>
+                  <i className="ph ph-google-logo i" /> {signingIn ? 'Signing in...' : 'Sign in with Google'}
+                </button>
               </>
             )}
           </div>
@@ -286,7 +270,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
             <div className="field">
               <label>Sync conflict</label>
               <p className="muted" style={{ margin: 0 }}>
-                This device saved at {new Date(syncStatus.conflict.local.updatedAt).toLocaleString()}. GitHub has a
+                This device saved at {new Date(syncStatus.conflict.local.updatedAt).toLocaleString()}. The cloud has a
                 version saved at {new Date(syncStatus.conflict.remote.updatedAt).toLocaleString()}, the{' '}
                 {syncStatus.conflict.remote.updatedAt > syncStatus.conflict.local.updatedAt ? 'newer' : 'older'} one.
               </p>
@@ -294,7 +278,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                 <button className="primary" onClick={() => void resolveConflictKeepMine()}>
                   Keep this device's version
                 </button>
-                <button onClick={() => void resolveConflictTakeRemote()}>Take the GitHub version</button>
+                <button onClick={() => void resolveConflictTakeRemote()}>Take the cloud version</button>
               </div>
             </div>
           )}
