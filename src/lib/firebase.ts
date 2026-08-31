@@ -18,7 +18,7 @@ import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 // Chrome then fails sign-in with "missing initial state".
 const firebaseConfig = {
   apiKey: 'AIzaSyCMxWyGRJScXgsl1qa_nNbUdIs5o86w83Y',
-  authDomain: 'countoff.web.app',
+  authDomain: 'generic-sirbepy-project.firebaseapp.com',
   projectId: 'generic-sirbepy-project',
   messagingSenderId: '639863367604',
   appId: '1:639863367604:web:1e18472a22556ba919f4e1',

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "countoff",
+    "site": "generic-sirbepy-project",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [{ "source": "**", "destination": "/index.html" }],
