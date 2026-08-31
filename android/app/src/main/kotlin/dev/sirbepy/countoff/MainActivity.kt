@@ -3,7 +3,6 @@ package dev.sirbepy.countoff
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.JavascriptInterface
@@ -89,6 +88,11 @@ class MainActivity : ComponentActivity() {
             mediaPlaybackRequiresUserGesture = false
         }
 
+        // Must be registered before the first load: the interface is bound when a page's
+        // JS context is created, so adding it from onPageStarted leaves window.AndroidAuth
+        // undefined on the very page that needs it. The bridge re-checks the origin itself.
+        webView.addJavascriptInterface(AndroidAuthBridge(), "AndroidAuth")
+
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (request.url.host == SITE_HOST) return false
@@ -98,15 +102,6 @@ class MainActivity : ComponentActivity() {
                 return true
             }
 
-            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                // addJavascriptInterface exposes AndroidAuth to whatever origin is loaded;
-                // only the site's own origin may ever see it.
-                if (Uri.parse(url).host == SITE_HOST) {
-                    view.addJavascriptInterface(AndroidAuthBridge(), "AndroidAuth")
-                } else {
-                    view.removeJavascriptInterface("AndroidAuth")
-                }
-            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -175,6 +170,12 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun signIn() {
             lifecycleScope.launch {
+                // The interface is bound for the WebView's lifetime, so the origin check
+                // has to happen here rather than per navigation.
+                if (Uri.parse(webView.url ?: "").host != SITE_HOST) {
+                    respondToPage("window.__androidAuthReject(\"wrong_origin\")")
+                    return@launch
+                }
                 try {
                     val idToken = fetchGoogleIdToken()
                     respondToPage("window.__androidAuthResolve(${JSONObject.quote(idToken)})")
