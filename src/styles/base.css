@@ -228,9 +228,6 @@ kbd {
   .only-narrow {
     display: none !important;
   }
-  button:disabled {
-    opacity: 0.4;
-  }
   .toast {
     bottom: 110px;
   }

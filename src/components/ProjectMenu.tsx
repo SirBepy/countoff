@@ -28,10 +28,14 @@ export default function ProjectMenu({ project, onClose, onProjects, onBackup }: 
         </header>
 
         <div className="content">
-          <label className="field">
-            <span>Name</span>
-            <input value={project.name} onChange={(e) => updateProject({ name: e.target.value }, 'project-name')} />
-          </label>
+          <div className="field">
+            <label htmlFor="project-name">Name</label>
+            <input
+              id="project-name"
+              value={project.name}
+              onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
+            />
+          </div>
 
           <button className="menu-item" onClick={go(() => set({ view: 'setup' }, false))}>
             <i className="ph ph-sliders-horizontal" />
