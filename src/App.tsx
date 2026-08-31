@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react'
 import BackupModal from './components/BackupModal'
+import BottomBar from './components/BottomBar'
 import DropAudio from './components/DropAudio'
 import LyricsModal from './components/LyricsModal'
 import MarkerModal from './components/MarkerModal'
 import MoveLibrary from './components/MoveLibrary'
 import MoveModal from './components/MoveModal'
+import ProjectMenu from './components/ProjectMenu'
 import ProjectsModal from './components/ProjectsModal'
 import Rehearse from './components/Rehearse'
-import SelectionBar from './components/SelectionBar'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
 import SongSetup from './components/SongSetup'
-import Transport from './components/Transport'
+import SongStrip from './components/SongStrip'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
 import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace } from './lib/db'
 import { segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { getCurrentUser } from './lib/firebase'
+import { useIsDesktop } from './lib/media'
 import { flushSave, getState, hasPendingSave, redo, removeBlocks, set, undo, updateProject, useStore } from './lib/store'
 import { pullNow, scheduleSync } from './lib/syncEngine'
 
@@ -37,7 +39,9 @@ export default function App() {
   const [markerFor, setMarkerFor] = useState<string | null>(null)
   const [showBackup, setShowBackup] = useState(false)
   const [showProjects, setShowProjects] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [creating, setCreating] = useState(false)
+  const isDesktop = useIsDesktop()
 
   useEffect(() => {
     void (async () => {
@@ -153,12 +157,16 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="topbar">
-        <div className="brand">
+      <div className="appbar">
+        <div className="brand only-wide">
           <span className="dot" /> Countoff
         </div>
+        <button className="app-title only-narrow" onClick={() => setShowMenu(true)} title="Project name, setup, projects and backups">
+          <span className="name">{project.name}</span>
+          <i className="ph ph-caret-down" />
+        </button>
         <input
-          className="project-name"
+          className="project-name only-wide"
           value={project.name}
           onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
         />
@@ -172,13 +180,13 @@ export default function App() {
         <span className="faint only-wide" style={{ fontSize: 11 }}>
           <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
         </span>
-        <button className="ghost icon" onClick={() => set({ view: 'setup' }, false)} title="Song setup: cuts, transitions, downbeats, tempo">
+        <button className="ghost icon only-wide" onClick={() => set({ view: 'setup' }, false)} title="Song setup: cuts, transitions, downbeats, tempo">
           <i className="ph ph-sliders-horizontal i" />
         </button>
-        <button className="ghost icon" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
+        <button className="ghost icon only-wide" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
           <i className="ph ph-folders i" />
         </button>
-        <button className="ghost icon" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
+        <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
           <i className="ph ph-shield-check i" />
         </button>
         <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
@@ -189,6 +197,8 @@ export default function App() {
         </button>
       </div>
 
+      {!isDesktop && <SongStrip project={project} />}
+
       <div className="body">
         {libraryOpen && <div className="rail-scrim" onPointerDown={() => set({ libraryOpen: false }, false)} />}
         <aside className={`rail${libraryOpen ? ' open' : ''}`}>
@@ -196,12 +206,14 @@ export default function App() {
         </aside>
 
         <main className="main">
-          <SongMap
-            project={project}
-            selectedSegmentId={segmentId}
-            onSelectSegment={setSegmentId}
-            onEditMarker={setMarkerFor}
-          />
+          {isDesktop && (
+            <SongMap
+              project={project}
+              selectedSegmentId={segmentId}
+              onSelectSegment={setSegmentId}
+              onEditMarker={setMarkerFor}
+            />
+          )}
           <div className="scroll">
             <Sheet
               project={project}
@@ -214,13 +226,20 @@ export default function App() {
         </main>
       </div>
 
-      <SelectionBar project={project} />
-      <Transport project={project} />
+      <BottomBar project={project} onNewSegment={setSegmentId} />
 
       {lyricSegment && <LyricsModal project={project} segment={lyricSegment} onClose={() => setLyricsFor(null)} />}
       {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
       {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
       {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}
+      {showMenu && (
+        <ProjectMenu
+          project={project}
+          onClose={() => setShowMenu(false)}
+          onProjects={() => setShowProjects(true)}
+          onBackup={() => setShowBackup(true)}
+        />
+      )}
       {showProjects && (
         <ProjectsModal
           activeProjectId={project.id}

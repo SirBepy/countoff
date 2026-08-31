@@ -1,0 +1,160 @@
+/* Move library contents, shown in the phone's bottom sheet and the desktop rail. */
+
+.move-list {
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.move-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--bg-2);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.move-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-sm);
+  height: var(--tap);
+  color: var(--text-dim);
+  cursor: grab;
+  touch-action: none;
+}
+.move-card:hover {
+  border-color: var(--line);
+  background: var(--bg-3);
+}
+.move-card.sel {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+/* The move whose length matches the selection exactly, sorted to the top. */
+.move-card.fits {
+  border-color: var(--accent);
+}
+.move-card.used {
+  opacity: 0.55;
+}
+.move-card.used .move-name {
+  color: var(--text-dim);
+}
+.use-count {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.move-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  transform: translate(-50%, -130%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.move-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: var(--bg);
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  font-size: 20px;
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.move-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.move-name {
+  font-weight: 650;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.move-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.beat-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0b0d12;
+}
+.beat-badge.e1 {
+  background: var(--e1);
+}
+.beat-badge.e2 {
+  background: var(--e2);
+}
+.beat-badge.e3 {
+  background: var(--e3);
+}
+
+@media (min-width: 900px) {
+  .move-list {
+    padding: 6px;
+    gap: 4px;
+  }
+  .move-card {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    border-radius: var(--radius);
+  }
+  .move-thumb {
+    width: 44px;
+    height: 38px;
+    border-radius: 5px;
+    font-size: 17px;
+  }
+  .move-name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .move-note {
+    font-size: 11px;
+  }
+  .beat-badge {
+    width: auto;
+    height: auto;
+    border-radius: 5px;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .move-grip {
+    height: auto;
+    width: auto;
+    padding: 2px;
+  }
+}

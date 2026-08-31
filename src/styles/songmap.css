@@ -1,0 +1,175 @@
+/* Desktop only. On a phone the song map is replaced by .songstrip and its editing
+   jobs (cuts, downbeats, tempo) live in the setup view, so these rules carry the
+   former 900px values directly rather than a mobile base plus an override. */
+
+.songmap {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+}
+
+.map-track {
+  position: relative;
+  height: 44px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.map-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid var(--line);
+  padding: 4px 6px;
+  overflow: hidden;
+  font-size: 11px;
+}
+.map-seg.sel {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+/* Every song but the first has a cut at its left edge, and that cut's delete
+   button sits at the top, so the name indents past the 20px button. */
+.map-seg + .map-seg {
+  padding-left: 28px;
+}
+.map-seg-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-markers {
+  position: relative;
+  height: 26px;
+  margin-top: 4px;
+}
+.marker-pin {
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 5px;
+  font-size: 10px;
+  white-space: nowrap;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 2;
+  touch-action: none;
+}
+.marker-pin.flip {
+  transform: translateX(-100%);
+}
+.marker-pin:hover {
+  z-index: 6;
+  background: var(--bg-3);
+}
+.marker-pin .pin-label {
+  display: inline;
+}
+.marker-empty {
+  font-size: 11px;
+  line-height: 26px;
+}
+
+.map-lyrics {
+  position: relative;
+  height: 26px;
+  margin-top: 4px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.lyric-tick {
+  position: absolute;
+  top: 15px;
+  bottom: 3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--line);
+}
+.lyric-tick.now {
+  background: var(--accent);
+  top: 12px;
+  box-shadow: 0 0 6px var(--accent);
+}
+.ribbon-text {
+  position: absolute;
+  inset: 2px 8px auto;
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ribbon-text strong {
+  color: var(--text);
+}
+.ribbon-empty {
+  font-size: 11px;
+  line-height: 26px;
+  padding-left: 8px;
+}
+
+.map-cut {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin-left: -5px;
+  cursor: ew-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.map-cut::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--text);
+}
+.map-cut:hover::before {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+.map-cut.flip .cut-x {
+  left: auto;
+  right: 11px;
+}
+.cut-x {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  font-size: 11px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+  z-index: 4;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}

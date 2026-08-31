@@ -1,0 +1,366 @@
+/* The sheet is the work surface: on a phone it is everything between the song
+   strip and the bottom bar, so every rule here is fighting for vertical space. */
+
+.sheet {
+  padding: 2px 10px 28px;
+}
+
+.seg-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 0 6px;
+  margin-top: 10px;
+  background: var(--bg);
+  box-shadow: 0 6px 10px -6px var(--bg);
+}
+.seg-title {
+  font-size: 15px;
+  font-weight: 700;
+  width: auto;
+  flex: 1;
+  min-width: 110px;
+  background: transparent;
+  border: 1px solid transparent;
+  min-height: 32px;
+  padding: 2px 4px;
+}
+.seg-time {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.chip input {
+  min-height: 26px;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+}
+.seg-anchor {
+  position: relative;
+}
+.seg-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+  max-width: calc(100vw - 24px);
+}
+.seg-bpm-pop {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.seg-menu-item {
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  width: 100%;
+  min-height: var(--tap);
+}
+.seg-menu-transition {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 0 8px;
+}
+
+.sheet-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line-soft);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.sheet-row.active {
+  background: rgba(124, 92, 255, 0.07);
+}
+/* Lyric text and its inline edit input opt back into selection despite the
+   row-wide none above. A touch drag still scrolls: Chrome and Safari both need a
+   long-press before selectable text takes a drag. */
+.sheet-row .row-lyric {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Selects the whole row. It is 30px wide because a 44px column would cost 11% of
+   a 393px screen, and its neighbour is the counts grid, not another control. */
+.row-no {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  text-align: right;
+  align-self: stretch;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding: 0 2px 22px 0;
+  min-height: 0;
+  border-radius: 6px;
+  background: transparent;
+  border-color: transparent;
+}
+.row-no:hover:not(:disabled) {
+  background: var(--bg-1);
+  border-color: transparent;
+}
+.row-no.sel {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.row-lyric {
+  min-height: 16px;
+  font-size: 12.5px;
+  color: #cfd6e8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.row-lyric span {
+  cursor: text;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.row-lyric .none {
+  color: var(--text-faint);
+  font-style: italic;
+  opacity: 0.5;
+}
+/* An "+ Add lyric" ghost on every row costs 19px a row, which on a phone is most
+   of the sheet. Lyrics are added there through the song menu's lyrics editor. */
+.row-lyric.addable {
+  display: none;
+  cursor: pointer;
+}
+.row-lyric.addable:hover .none {
+  opacity: 1;
+  color: var(--e1);
+}
+
+.counts {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  height: 56px;
+  border-radius: 9px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+  /* The grid is most of the phone screen, so a vertical swipe has to reach the
+     scroller. Selection commits only once a gesture is clearly horizontal. */
+  touch-action: pan-y;
+  user-select: none;
+}
+.counts.selecting {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.count-cell {
+  border-right: 1px solid var(--line-soft);
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 2px 0 0 4px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.count-cell:nth-child(4n + 1) {
+  border-left: 1px solid var(--line);
+}
+.count-cell.sel {
+  background: rgba(124, 92, 255, 0.24);
+  color: #cdbcff;
+}
+.count-cell.beat {
+  background: rgba(255, 255, 255, 0.07);
+}
+.count-cell.drop {
+  background: rgba(124, 92, 255, 0.2);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.count-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  z-index: 3;
+}
+.count-marker button {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  min-height: 0;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: none;
+  border-radius: 0 0 3px 0;
+  color: #0b0d12;
+}
+/* Past three quarters across, the label would run off the row. */
+.count-marker.flip button {
+  left: auto;
+  right: 2px;
+  border-radius: 0 0 0 3px;
+}
+
+.block {
+  position: absolute;
+  top: 18px;
+  bottom: 4px;
+  border-radius: 7px;
+  padding: 0 7px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: grab;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  color: #0b0d12;
+  /* Same rule as the grid: a swipe down a wide block scrolls, sideways moves it. */
+  touch-action: pan-y;
+}
+.block.e1 {
+  background: var(--e1);
+}
+.block.e2 {
+  background: var(--e2);
+}
+.block.e3 {
+  background: var(--e3);
+}
+.block.now {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+.block .grip {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  cursor: ew-resize;
+  background: rgba(0, 0, 0, 0.22);
+  touch-action: none;
+}
+.block-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.block-note {
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  opacity: 0.65;
+}
+.block-note-dot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+/* Overflow must open up so the note editor isn't clipped by the block's own hidden bounds. */
+.block.editing-note {
+  overflow: visible;
+  z-index: 5;
+}
+.block-note-input {
+  width: 160px;
+  max-width: 50vw;
+}
+
+@media (min-width: 620px) {
+  .sheet {
+    padding: 2px 14px 40px;
+  }
+  .sheet-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .row-lyric {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 900px) {
+  .counts {
+    height: 46px;
+  }
+  .count-cell {
+    font-size: 10px;
+    padding: 1px 0 0 3px;
+  }
+  .count-marker button {
+    height: 14px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
+  .block {
+    top: 14px;
+    bottom: 3px;
+    font-size: 11px;
+  }
+  .block .grip {
+    width: 14px;
+  }
+  .row-lyric.addable {
+    display: flex;
+  }
+  .seg-head {
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .seg-title {
+    flex: none;
+    width: 180px;
+  }
+  .chip input {
+    min-height: 22px;
+  }
+  .seg-popover {
+    min-width: 160px;
+  }
+}

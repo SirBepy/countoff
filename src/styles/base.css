@@ -1,0 +1,237 @@
+/* Tokens, element resets and the utilities every surface shares. Mobile first:
+   base rules target a phone, and each file's own min-width block adds desktop back. */
+
+:root {
+  --bg: #0d0f14;
+  --bg-1: #141821;
+  --bg-2: #1c2130;
+  --bg-3: #262c3d;
+  --line: #2e3547;
+  --line-soft: #232939;
+  --text: #eef1f8;
+  --text-dim: #98a1b8;
+  --text-faint: #626b82;
+  --accent: #7c5cff;
+  --accent-soft: #2a2350;
+  --e1: #3fb8b0;
+  --e2: #f0a63c;
+  --e3: #ff5d8f;
+  --danger: #ff6b6b;
+  --radius: 8px;
+  --rail: 0px;
+  /* Coarse-pointer floors. A thumb needs 44px; --tap-sm is for controls that sit
+     inside dense rows and would break the layout at full size. */
+  --tap: 44px;
+  --tap-sm: 36px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  min-height: var(--tap);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+button:hover:not(:disabled) {
+  background: var(--bg-3);
+  border-color: #3b435a;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: #8f73ff;
+  border-color: #8f73ff;
+}
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+}
+button.ghost:hover:not(:disabled) {
+  background: var(--bg-2);
+  color: var(--text);
+}
+button.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: #cdbcff;
+}
+button.icon {
+  padding: 0;
+  width: var(--tap);
+  height: var(--tap);
+}
+button.sm {
+  min-height: var(--tap-sm);
+  padding: 0 10px;
+  font-size: 12px;
+}
+button.sm.icon {
+  width: var(--tap-sm);
+  height: var(--tap-sm);
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  width: 100%;
+  min-height: var(--tap);
+}
+/* Anything under 16px makes iOS Safari zoom the page on focus. */
+input,
+textarea {
+  font-size: 16px;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+input[type='range'] {
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--accent);
+  min-height: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.i {
+  font-size: 16px;
+  line-height: 1;
+}
+.muted {
+  color: var(--text-dim);
+}
+.faint {
+  color: var(--text-faint);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wrap {
+  flex-wrap: wrap;
+}
+.spacer {
+  flex: 1;
+}
+.mono {
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+/* Utilities have to beat component rules like .chip that also set display,
+   and those come later in the cascade, so specificity alone will not do it. */
+.only-wide {
+  display: none !important;
+}
+.only-narrow {
+  display: inline-flex !important;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(104px + var(--safe-b));
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  text-align: center;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 18px;
+  z-index: 80;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+kbd {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  font: 11px ui-monospace, monospace;
+}
+
+@media (min-width: 900px) {
+  :root {
+    --rail: 300px;
+    --tap: 34px;
+    --tap-sm: 28px;
+  }
+  .only-wide {
+    display: inline-flex !important;
+  }
+  .only-narrow {
+    display: none !important;
+  }
+  button:disabled {
+    opacity: 0.4;
+  }
+  .toast {
+    bottom: 110px;
+  }
+}

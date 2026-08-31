@@ -1,0 +1,160 @@
+/* One bar at the bottom, two shapes. It used to be two stacked bars, and on a
+   phone the selection one collapsed behind the transport, which is what made
+   "Fill with a move" unreachable. There is now only ever one, so it cannot. */
+
+.bar {
+  flex: none;
+  border-top: 1px solid var(--line);
+  background: var(--bg-1);
+  padding-bottom: var(--safe-b);
+  min-width: 0;
+}
+.bar.selecting {
+  background: linear-gradient(180deg, #241f45, #1a1631);
+  border-top-color: var(--accent);
+}
+.bar-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  min-width: 0;
+}
+.bar-more {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+.bar-more.open {
+  display: flex;
+}
+
+.bar-play {
+  width: 56px;
+  height: 56px;
+  min-height: 0;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 24px;
+  flex: none;
+  box-shadow: 0 6px 20px rgba(124, 92, 255, 0.4);
+}
+.bar-btn {
+  width: 48px;
+  height: 48px;
+  min-height: 0;
+  padding: 0;
+  font-size: 20px;
+  flex: none;
+}
+.bar-fill {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(124, 92, 255, 0.35);
+}
+.bar.selecting .bar-now {
+  display: none;
+}
+
+.bar-now {
+  flex: 1;
+  min-width: 0;
+}
+.bar-now .label {
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar-now .value {
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar-now .value.faint {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pulse {
+  display: flex;
+  gap: 4px;
+  flex: none;
+  margin-bottom: 4px;
+}
+.pulse i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  display: block;
+}
+.pulse i.on {
+  background: var(--accent);
+  box-shadow: 0 0 9px var(--accent);
+}
+.pulse i.one.on {
+  background: #fff;
+  box-shadow: 0 0 9px #fff;
+}
+
+@media (min-width: 900px) {
+  .bar-main {
+    padding: 0 14px;
+    height: 68px;
+    gap: 12px;
+  }
+  .bar-more {
+    display: flex;
+    padding: 0 14px 8px;
+  }
+  .bar-play {
+    width: var(--tap);
+    height: var(--tap);
+    border-radius: var(--radius);
+    font-size: 19px;
+    box-shadow: none;
+  }
+  .bar-btn {
+    width: var(--tap);
+    height: var(--tap);
+    font-size: 17px;
+  }
+  .bar-fill {
+    flex: none;
+    height: var(--tap);
+    border-radius: var(--radius);
+    font-size: 14px;
+    box-shadow: none;
+  }
+  .bar.selecting {
+    background: var(--bg-1);
+    border-top-color: var(--accent);
+  }
+  .bar.selecting .bar-now {
+    display: block;
+  }
+  .bar-now {
+    flex: none;
+    width: 170px;
+  }
+  .pulse {
+    margin-bottom: 0;
+  }
+  .pulse i {
+    width: 9px;
+    height: 9px;
+  }
+}

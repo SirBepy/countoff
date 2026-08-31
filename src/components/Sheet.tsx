@@ -3,9 +3,14 @@ import { audio, useAudio } from '../lib/audio'
 import { beatDuration, beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { MARKER_COLOUR } from '../lib/markers'
+import { beatAtPoint, beatInRow, rowRects } from '../lib/sheetHit'
 import { beginGesture, endGesture, removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
 import type { Block, Project, Segment } from '../lib/types'
 import SegmentHeader from './SegmentHeader'
+
+/** Sideways travel, in px, before a gesture on the sheet counts as a drag rather
+ * than the start of a scroll. Matches MoveLibrary's own pick-up threshold. */
+const DRAG_SLOP = 8
 
 /**
  * Preview of where a move-card drag from the rail would land, set by MoveLibrary.
@@ -100,6 +105,7 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
   )
   const active = nowBeat !== null && nowBeat >= rowStart && nowBeat < rowEnd
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
+  const rowSelected = !!selection && selection.startBeat < rowEnd && selection.startBeat + selection.beats > rowStart
   const el = useRef<HTMLDivElement>(null)
   const follow = useStore((s) => s.follow)
   const editingLyricId = useStore((s) => s.editingLyricId)
@@ -111,81 +117,99 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
     if (active && follow && !audio.el.paused) el.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [active, follow])
 
-  function beatFromEvent(e: React.PointerEvent<HTMLDivElement> | PointerEvent, container: HTMLElement) {
-    const rect = container.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
-    // Clamp to the counts that actually exist, so a truncated final row can't be
-    // clicked past the cut into cells that were never rendered.
-    return rowStart + Math.max(0, Math.min(visibleCount - 1, Math.floor(ratio * perRow)))
+  function selectRange(startBeat: number, beats: number, seekTo = startBeat) {
+    set({ selection: { segmentId: segment.id, startBeat, beats } })
+    audio.seek(beatToTime(segment, seekTo))
   }
 
-  /** Row rects for this segment only, captured once per drag - filtering by segment
-   * id here is what stops a selection from crossing into another song's rows. */
-  function rowsInSegment() {
-    return Array.from(document.querySelectorAll<HTMLElement>('.counts'))
-      .filter((el) => el.dataset.segmentId === segment.id)
-      .map((el) => ({ row: Number(el.dataset.row), rect: el.getBoundingClientRect() }))
-      .sort((a, b) => a.row - b.row)
-  }
-
-  function beatFromPoint(rows: { row: number; rect: DOMRect }[], clientX: number, clientY: number) {
-    // Rows stack top to bottom, so the last row whose top is at or above the
-    // pointer owns it; above the first row's top, that default is the first row.
-    let g = rows[0]
-    for (const r of rows) if (clientY >= r.rect.top) g = r
-    const ratio = (clientX - g.rect.left) / g.rect.width
-    const visible = countsInRow(segment, g.row, end)
-    return g.row * perRow + Math.max(0, Math.min(visible - 1, Math.floor(ratio * perRow)))
+  /** True while a gesture still looks like the start of a vertical scroll. */
+  function isScrollish(dx: number, dy: number) {
+    return Math.abs(dx) < DRAG_SLOP || Math.abs(dx) <= Math.abs(dy)
   }
 
   function startSelect(e: React.PointerEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest('.block')) return
-    const rows = rowsInSegment()
-    const anchor = rows.length ? beatFromPoint(rows, e.clientX, e.clientY) : beatFromEvent(e, e.currentTarget)
-    set({ selection: { segmentId: segment.id, startBeat: anchor, beats: 1 } })
-    audio.seek(beatToTime(segment, anchor))
+    const rows = rowRects(segment.id)
+    if (!rows.length) return
+    const anchor = beatAtPoint(segment, end, rows, e.clientX, e.clientY)
+    const originX = e.clientX
+    const originY = e.clientY
+    // A finger on this grid is usually scrolling, and selecting on pointerdown is
+    // what made that impossible. Touch commits only on a sideways drag or a lift.
+    const touch = e.pointerType !== 'mouse'
+    let committed = false
 
-    const move = (ev: PointerEvent) => {
-      const beat = rows.length ? beatFromPoint(rows, ev.clientX, ev.clientY) : beatFromEvent(ev, e.currentTarget)
-      const startBeat = Math.min(anchor, beat)
-      set({ selection: { segmentId: segment.id, startBeat, beats: Math.abs(beat - anchor) + 1 } })
+    const commit = (startBeat: number, beats: number) => {
+      if (committed) return set({ selection: { segmentId: segment.id, startBeat, beats } })
+      committed = true
+      selectRange(startBeat, beats, anchor)
     }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
+    if (!touch) commit(anchor, 1)
+
+    const onMove = (ev: PointerEvent) => {
+      if (!committed && isScrollish(ev.clientX - originX, ev.clientY - originY)) return
+      const beat = beatAtPoint(segment, end, rows, ev.clientX, ev.clientY)
+      commit(Math.min(anchor, beat), Math.abs(beat - anchor) + 1)
     }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
+    // The browser fires pointercancel the moment it claims the gesture for a
+    // scroll, which is the cleanest possible signal to stand down.
+    const stop = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', stop)
+    }
+    const onUp = (ev: PointerEvent) => {
+      stop()
+      if (!committed && Math.hypot(ev.clientX - originX, ev.clientY - originY) < DRAG_SLOP) commit(anchor, 1)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', stop)
   }
 
   function dragBlock(block: Block, e: React.PointerEvent, mode: 'move' | 'resize') {
     e.stopPropagation()
-    e.preventDefault()
     const container = (e.currentTarget as HTMLElement).closest('.counts') as HTMLElement
-    const rect = container.getBoundingClientRect()
-    const beatWidth = rect.width / perRow
+    const beatWidth = container.getBoundingClientRect().width / perRow
     const originX = e.clientX
+    const originY = e.clientY
     const { startBeat, beats } = block
     const gestureKey = `block-${mode}-${block.id}`
+    // The grip is touch-action:none and always drags; the block body is pan-y, so
+    // a swipe down a wide block scrolls the sheet instead of dragging the block.
+    const held = mode === 'resize' || e.pointerType === 'mouse'
+    let started = held
     let moved = false
-    beginGesture(gestureKey)
+    if (held) {
+      e.preventDefault()
+      beginGesture(gestureKey)
+    }
 
     const onMove = (ev: PointerEvent) => {
-      if (Math.abs(ev.clientX - originX) > 4) moved = true
-      const delta = Math.round((ev.clientX - originX) / beatWidth)
+      const dx = ev.clientX - originX
+      if (!started) {
+        if (isScrollish(dx, ev.clientY - originY)) return
+        started = true
+        beginGesture(gestureKey)
+      }
+      if (Math.abs(dx) > 4) moved = true
+      const delta = Math.round(dx / beatWidth)
       if (mode === 'move') updateBlock(block.id, { startBeat: Math.max(0, startBeat + delta) }, gestureKey)
       else updateBlock(block.id, { beats: Math.max(1, beats + delta) }, gestureKey)
     }
-    const up = () => {
+    const stop = () => {
       window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-      endGesture()
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', stop)
+      if (started) endGesture()
+    }
+    const onUp = () => {
+      stop()
       if (!moved && mode === 'move') set({ editingBlockNoteId: block.id }, false)
     }
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', stop)
   }
 
   function retimeLyric(index: number) {
@@ -197,18 +221,32 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
     updateSegment(segment.id, { lyrics: segment.lyrics.map((l) => (l === line ? { ...l, text } : l)) })
   }
 
+  /** Desktop only: the phone hides this ghost line and adds lyrics from the song menu. */
   function addLyricHere(e: React.PointerEvent<HTMLDivElement>) {
     if (lines.length) return
     // Mounting the new input's autoFocus mid-gesture races the browser's own
     // mousedown focus resolution, which would otherwise blur it right back out.
     e.preventDefault()
-    const id = addLyricAt(beatToTime(segment, beatFromEvent(e, e.currentTarget)))
+    const rect = e.currentTarget.getBoundingClientRect()
+    const beat = beatInRow(segment, end, { segmentId: segment.id, row, rect }, e.clientX)
+    const id = addLyricAt(beatToTime(segment, beat))
     if (id) set({ editingLyricId: id }, false)
   }
 
   return (
     <div ref={el} className={`sheet-row${active ? ' active' : ''}`}>
-      <div className="row-no mono">{row + 1}</div>
+      <button
+        className={`row-no${rowSelected ? ' sel' : ''}`}
+        title="Select this whole count"
+        disabled={!visibleCount}
+        // Chrome swallows the click of the first tap inside a scroller it has just
+        // flung, so this acts on pointerup like the grid beside it. Re-running on
+        // the click that sometimes follows picks the same row, so it is harmless.
+        onPointerUp={(e) => e.pointerType !== 'mouse' && selectRange(rowStart, visibleCount)}
+        onClick={() => selectRange(rowStart, visibleCount)}
+      >
+        {row + 1}
+      </button>
       <div>
         <div className={`row-lyric${lines.length ? '' : ' addable'}`} onPointerDown={addLyricHere}>
           {lines.length ? (
@@ -246,7 +284,7 @@ function SheetRow({ project, segment, row, end, nowBeat, onEditMarker, selection
         </div>
 
         <div
-          className="counts"
+          className={`counts${rowSelected ? ' selecting' : ''}`}
           data-segment-id={segment.id}
           data-row={row}
           style={{ gridTemplateColumns: `repeat(${perRow}, 1fr)` }}
