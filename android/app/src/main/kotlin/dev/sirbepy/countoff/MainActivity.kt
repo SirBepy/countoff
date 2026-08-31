@@ -3,8 +3,10 @@ package dev.sirbepy.countoff
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -17,11 +19,23 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.lifecycle.lifecycleScope
 import androidx.webkit.ServiceWorkerControllerCompat
 import androidx.webkit.WebViewFeature
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
-private const val SITE_URL = "https://sirbepy.github.io/countoff/"
-private const val SITE_HOST = "sirbepy.github.io"
+private const val SITE_URL = "https://generic-sirbepy-project.firebaseapp.com/"
+private const val SITE_HOST = "generic-sirbepy-project.firebaseapp.com"
+
+// Web OAuth client, not an Android one: Credential Manager requires the web client id
+// to mint a verifiable ID token, per Google's Sign-In documentation.
+private const val WEB_CLIENT_ID = "639863367604-r7kv9ibju85fao7chbjlpm421aa6iqtb.apps.googleusercontent.com"
 
 class MainActivity : ComponentActivity() {
 
@@ -83,6 +97,16 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(Intent.ACTION_VIEW, request.url))
                 return true
             }
+
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                // addJavascriptInterface exposes AndroidAuth to whatever origin is loaded;
+                // only the site's own origin may ever see it.
+                if (Uri.parse(url).host == SITE_HOST) {
+                    view.addJavascriptInterface(AndroidAuthBridge(), "AndroidAuth")
+                } else {
+                    view.removeJavascriptInterface("AndroidAuth")
+                }
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -143,5 +167,43 @@ class MainActivity : ComponentActivity() {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_CACHE_MODE)) {
             settings.cacheMode = WebSettings.LOAD_DEFAULT
         }
+    }
+
+    // Bridged as window.AndroidAuth; the page holds a Promise that this resolves or
+    // rejects by name, since a @JavascriptInterface method cannot return one directly.
+    private inner class AndroidAuthBridge {
+        @JavascriptInterface
+        fun signIn() {
+            lifecycleScope.launch {
+                try {
+                    val idToken = fetchGoogleIdToken()
+                    respondToPage("window.__androidAuthResolve(${JSONObject.quote(idToken)})")
+                } catch (e: Exception) {
+                    val reason = e.message ?: "sign_in_failed"
+                    respondToPage("window.__androidAuthReject(${JSONObject.quote(reason)})")
+                }
+            }
+        }
+    }
+
+    // Suspends without blocking the caller; Credential Manager shows its own account
+    // picker UI and does the network round trip off this thread internally.
+    private suspend fun fetchGoogleIdToken(): String {
+        val option = GetGoogleIdOption.Builder()
+            .setServerClientId(WEB_CLIENT_ID)
+            .setFilterByAuthorizedAccounts(false)
+            .build()
+        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        val credential = CredentialManager.create(this).getCredential(this, request).credential
+        if (credential !is CustomCredential ||
+            credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            throw IllegalStateException("unexpected_credential_type")
+        }
+        return GoogleIdTokenCredential.createFrom(credential.data).idToken
+    }
+
+    private fun respondToPage(script: String) {
+        webView.post { webView.evaluateJavascript(script, null) }
     }
 }

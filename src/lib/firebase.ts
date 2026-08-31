@@ -5,12 +5,28 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
 } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+
+// Set by the Android shell's WebViewClient, only on the site's own origin. Its signIn()
+// resolves or rejects window.__androidAuth{Resolve,Reject}, since a @JavascriptInterface
+// method cannot return a Promise directly.
+interface AndroidAuthBridge {
+  signIn: () => void
+}
+
+declare global {
+  interface Window {
+    AndroidAuth?: AndroidAuthBridge
+    __androidAuthResolve?: (idToken: string) => void
+    __androidAuthReject?: (reason: string) => void
+  }
+}
 
 // Public by design: a web config is not a secret; the Firestore rules and the signed-in
 // account are what guard the data. authDomain must match the origin the app is served
@@ -41,7 +57,35 @@ if (useEmulator) {
   })
 }
 
-export const signInWithGoogle = () => signInWithPopup(auth, new GoogleAuthProvider())
+// signInWithPopup needs window.open, which the Android WebView never provides, and Google
+// blocks OAuth from embedded WebView user agents anyway. The bridge sidesteps both by doing
+// the account picker natively and handing back a plain ID token.
+function getAndroidIdToken(bridge: AndroidAuthBridge): Promise<string> {
+  return new Promise((resolve, reject) => {
+    window.__androidAuthResolve = (idToken) => {
+      delete window.__androidAuthResolve
+      delete window.__androidAuthReject
+      resolve(idToken)
+    }
+    window.__androidAuthReject = (reason) => {
+      delete window.__androidAuthResolve
+      delete window.__androidAuthReject
+      reject(new Error(reason))
+    }
+    bridge.signIn()
+  })
+}
+
+export const signInWithGoogle = () => {
+  const bridge = window.AndroidAuth
+  if (bridge) {
+    return getAndroidIdToken(bridge).then((idToken) =>
+      signInWithCredential(auth, GoogleAuthProvider.credential(idToken)),
+    )
+  }
+  return signInWithPopup(auth, new GoogleAuthProvider())
+}
+
 export const signOutUser = () => signOut(auth)
 export const getCurrentUser = (): User | null => auth.currentUser
 
