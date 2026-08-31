@@ -825,6 +825,12 @@ input[type='number']::-webkit-inner-spin-button {
   place-items: center;
   color: var(--text-faint);
   border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.move-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .move-name {
   font-weight: 600;
@@ -978,7 +984,7 @@ input[type='number']::-webkit-inner-spin-button {
   font-size: clamp(13px, 3.4vw, 22px);
   color: var(--text-faint);
 }
-.rehearse-clip {
+.rehearse-thumb {
   max-height: 30dvh;
   max-width: 100%;
   border-radius: 12px;

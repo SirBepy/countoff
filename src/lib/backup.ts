@@ -1,4 +1,4 @@
-import { loadClip, loadProject, migrateProject, saveClip, saveProject } from './db'
+import { loadProject, migrateProject, saveProject } from './db'
 import { uid } from './store'
 import type { Project } from './types'
 
@@ -60,40 +60,25 @@ export async function restoreSnapshot(snap: Snapshot): Promise<Project> {
   return project
 }
 
-const blobToDataUrl = (blob: Blob) =>
-  new Promise<string>((resolve) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.readAsDataURL(blob)
-  })
-
 /**
- * Choreography plus every move clip in one file. The audio is left out: re-picking
- * it is cheap, and embedding it would outgrow what a browser will hand over.
+ * Choreography in one file. The audio is left out: re-picking it is cheap, and
+ * embedding it would outgrow what a browser will hand over.
  */
 export async function exportBackup(): Promise<Blob> {
   const project = await loadProject()
   if (!project) throw new Error('nothing to export')
-  const clips: Record<string, string> = {}
-  for (const move of project.moves) {
-    if (!move.hasClip) continue
-    const blob = await loadClip(move.id)
-    if (blob) clips[move.id] = await blobToDataUrl(blob)
-  }
-  return new Blob([JSON.stringify({ format: FORMAT, exportedAt: Date.now(), project, clips })], {
+  return new Blob([JSON.stringify({ format: FORMAT, exportedAt: Date.now(), project })], {
     type: 'application/json',
   })
 }
 
-/** Imports as a new library entry rather than overwriting whatever is currently open. */
+/** Imports as a new library entry rather than overwriting whatever is currently open.
+ * An older backup's `clips` field, if present, is simply not read. */
 export async function importBackup(file: File): Promise<Project> {
   const data = JSON.parse(await file.text())
   if (data.format !== FORMAT || !data.project) throw new Error('Not a Countoff backup')
   const project = migrateProject({ ...(data.project as Project), id: uid(), updatedAt: Date.now() })
   await saveProject(project)
-  for (const [moveId, dataUrl] of Object.entries((data.clips ?? {}) as Record<string, string>)) {
-    await saveClip(moveId, await (await fetch(dataUrl)).blob())
-  }
   return project
 }
 

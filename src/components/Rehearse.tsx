@@ -1,14 +1,14 @@
 import { audio, useAudio } from '../lib/audio'
-import { useClip } from '../lib/clips'
 import { formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
 import { set } from '../lib/store'
 import type { Project } from '../lib/types'
+import { youtubeThumb } from './MoveLibrary'
 
 export default function Rehearse({ project }: { project: Project }) {
   const { time, playing, metronome, rate } = useAudio()
   const now = nowState(project, time)
-  const clip = useClip(now.move?.id ?? null, now.move?.hasClip)
+  const thumb = youtubeThumb(now.move?.videoUrl)
 
   return (
     <div className="rehearse">
@@ -29,7 +29,7 @@ export default function Rehearse({ project }: { project: Project }) {
 
       <div className="rehearse-main">
         <div className="rehearse-lyric">{now.lyric ?? ' '}</div>
-        {clip && <video className="rehearse-clip" src={clip} autoPlay muted loop playsInline />}
+        {thumb && <img className="rehearse-thumb" src={thumb} alt="" />}
         <div className="rehearse-move">{now.move?.name ?? 'Waiting'}</div>
         {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
         <div className="pulse">

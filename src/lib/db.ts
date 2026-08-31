@@ -19,6 +19,16 @@ function migrateMarker(m: Marker & { kind?: string }): Marker {
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
+const CLIPS_PURGED_KEY = 'countoff.clipsPurged'
+
+/** One-time cleanup for the recorded-clip feature that got dropped in favor of
+ * video links. Guarded by a flag so a repeat boot is a no-op, not a rescan. */
+function purgeClips(db: IDBDatabase) {
+  if (localStorage.getItem(CLIPS_PURGED_KEY)) return
+  if (db.objectStoreNames.contains('clips')) db.transaction('clips', 'readwrite').objectStore('clips').clear()
+  localStorage.setItem(CLIPS_PURGED_KEY, '1')
+}
+
 function open(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise
   dbPromise = new Promise((resolve, reject) => {
@@ -28,7 +38,10 @@ function open(): Promise<IDBDatabase> {
         if (!req.result.objectStoreNames.contains(store)) req.result.createObjectStore(store)
       }
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      purgeClips(req.result)
+      resolve(req.result)
+    }
     req.onerror = () => reject(req.error)
   })
   return dbPromise
@@ -102,36 +115,14 @@ export function loadAudio(id?: string): Promise<Blob | undefined> {
   return key ? tx<Blob | undefined>('audio', 'readonly', (s) => s.get(key)) : Promise.resolve(undefined)
 }
 
-// Clips are keyed `${projectId}:${moveId}` because starter moves share ids (e.g. 'bounce')
-// across every project; a bare moveId key would let two projects overwrite one clip.
-const clipKeyFor = (projectId: string, moveId: string) => `${projectId}:${moveId}`
-const clipKey = (moveId: string) => clipKeyFor(getActiveProjectId() ?? '', moveId)
-
-export const saveClip = (moveId: string, blob: Blob) => tx('clips', 'readwrite', (s) => s.put(blob, clipKey(moveId)))
-export const loadClip = (moveId: string) => tx<Blob | undefined>('clips', 'readonly', (s) => s.get(clipKey(moveId)))
-export const deleteClip = (moveId: string) => tx('clips', 'readwrite', (s) => s.delete(clipKey(moveId)))
-
-/** Same as saveClip/loadClip but for a project that isn't necessarily the active one, e.g. a sync pull. */
-export const saveClipFor = (projectId: string, moveId: string, blob: Blob) =>
-  tx('clips', 'readwrite', (s) => s.put(blob, clipKeyFor(projectId, moveId)))
-export const loadClipFor = (projectId: string, moveId: string) =>
-  tx<Blob | undefined>('clips', 'readonly', (s) => s.get(clipKeyFor(projectId, moveId)))
-
 export async function listProjects(): Promise<Project[]> {
   const all = await tx<Project[]>('project', 'readonly', (s) => s.getAll())
   return all.filter((p) => p && p.id).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-async function clipKeysFor(id: string): Promise<string[]> {
-  const keys = await tx<IDBValidKey[]>('clips', 'readonly', (s) => s.getAllKeys())
-  const prefix = `${id}:`
-  return keys.filter((k): k is string => typeof k === 'string' && k.startsWith(prefix))
-}
-
 export async function deleteProject(id: string): Promise<void> {
   await tx('project', 'readwrite', (s) => s.delete(id))
   await tx('audio', 'readwrite', (s) => s.delete(id))
-  for (const key of await clipKeysFor(id)) await tx('clips', 'readwrite', (s) => s.delete(key))
 }
 
 export async function duplicateProject(id: string): Promise<Project> {
@@ -143,12 +134,6 @@ export async function duplicateProject(id: string): Promise<Project> {
 
   const audioBlob = await tx<Blob | undefined>('audio', 'readonly', (s) => s.get(id))
   if (audioBlob) await tx('audio', 'readwrite', (s) => s.put(audioBlob, newId))
-
-  for (const key of await clipKeysFor(id)) {
-    const moveId = key.slice(`${id}:`.length)
-    const blob = await tx<Blob | undefined>('clips', 'readonly', (s) => s.get(key))
-    if (blob) await tx('clips', 'readwrite', (s) => s.put(blob, `${newId}:${moveId}`))
-  }
   return copy
 }
 
@@ -171,15 +156,6 @@ export async function migrateKeySpace(): Promise<void> {
   if (legacyAudio) {
     await tx('audio', 'readwrite', (s) => s.put(legacyAudio, id))
     await tx('audio', 'readwrite', (s) => s.delete('current'))
-  }
-
-  const clipKeys = await tx<IDBValidKey[]>('clips', 'readonly', (s) => s.getAllKeys())
-  for (const key of clipKeys) {
-    if (typeof key !== 'string' || key.includes(':')) continue
-    const blob = await tx<Blob | undefined>('clips', 'readonly', (s) => s.get(key))
-    if (!blob) continue
-    await tx('clips', 'readwrite', (s) => s.put(blob, `${id}:${key}`))
-    await tx('clips', 'readwrite', (s) => s.delete(key))
   }
 
   // Same move, same key format backup.ts already uses: carry the rolling history over too.

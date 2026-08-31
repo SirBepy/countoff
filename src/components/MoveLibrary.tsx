@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
 import { alternateSelection, fillSelection } from '../lib/arrange'
-import { useClip } from '../lib/clips'
 import { countsInRow, segmentEnd } from '../lib/grid'
 import { flash, set, uid, updateProject, useStore } from '../lib/store'
 import type { Move, Project } from '../lib/types'
@@ -22,6 +21,20 @@ function sortMoves(moves: Move[], usedIds: Set<string>) {
     if (b.order == null) return -1
     return a.order - b.order
   })
+}
+
+/** Extracts a YouTube video id from a watch or short link so the card can show its
+ * thumbnail; null for any other URL or a malformed one, never throws. */
+export function youtubeThumb(url: string | undefined): string | null {
+  if (!url) return null
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    const id = host === 'youtu.be' ? u.pathname.slice(1) : host.endsWith('youtube.com') ? u.searchParams.get('v') : null
+    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
+  } catch {
+    return null
+  }
 }
 
 /** Resolves a client point to a sheet drop target, mirroring Sheet.tsx's own beatFromPoint math. */
@@ -237,7 +250,7 @@ function MoveCard({
   onStartDrag: (e: React.PointerEvent<HTMLElement>, fromHandle: boolean) => void
   onEdit: () => void
 }) {
-  const clip = useClip(move.id, move.hasClip)
+  const thumb = youtubeThumb(move.videoUrl)
 
   return (
     <div
@@ -246,16 +259,14 @@ function MoveCard({
       onPointerDown={(e) => onStartDrag(e, false)}
       title={move.note ?? move.name}
     >
-      {clip ? (
-        <video
-          className="move-thumb"
-          src={clip}
-          muted
-          loop
-          playsInline
-          onMouseEnter={(e) => void e.currentTarget.play()}
-          onMouseLeave={(e) => e.currentTarget.pause()}
-        />
+      {thumb ? (
+        <a className="move-thumb" href={move.videoUrl} target="_blank" rel="noopener noreferrer" onPointerDown={(e) => e.stopPropagation()}>
+          <img src={thumb} alt="" />
+        </a>
+      ) : move.videoUrl ? (
+        <a className="move-thumb" href={move.videoUrl} target="_blank" rel="noopener noreferrer" onPointerDown={(e) => e.stopPropagation()}>
+          <i className="ph ph-link" />
+        </a>
       ) : (
         <div className="move-thumb">
           <i className="ph ph-person-simple-tai-chi" />
@@ -277,7 +288,7 @@ function MoveCard({
         <span className={`beat-badge e${move.energy}`}>{move.beats}</span>
         <button
           className="ghost sm icon"
-          title="Edit move, record a clip"
+          title="Edit move, add a video link"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()

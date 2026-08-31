@@ -125,8 +125,8 @@ export default function BackupModal({ project, onClose }: { project: Project; on
           <div className="field">
             <label>Where it lives</label>
             <p className="muted" style={{ margin: 0 }}>
-              The choreography, your move clips and the audio are stored in this browser on this machine. Nothing is
-              uploaded anywhere. Clearing site data, or using a different browser, means starting over.
+              The choreography and the audio are stored in this browser on this machine. Sign in below to copy the
+              choreography to your Google account; the audio never leaves this device.
             </p>
           </div>
 
@@ -187,8 +187,8 @@ export default function BackupModal({ project, onClose }: { project: Project; on
               </button>
             </div>
             <span className="faint" style={{ fontSize: 11 }}>
-              Contains the choreography, moves, lyrics, markers and every move clip. The song itself is not included, so
-              pick the same audio file again after restoring.
+              Contains the choreography, moves, lyrics and markers. The song itself is not included, so pick the same
+              audio file again after restoring.
             </span>
             <input
               ref={fileInput}
@@ -241,8 +241,8 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                   </button>
                 </div>
                 <span className="faint" style={{ fontSize: 11 }}>
-                  Pushes the choreography to your Google account and pulls in whatever changed elsewhere. Move
-                  clips and the song itself stay on this device only.
+                  Pushes the choreography to your Google account and pulls in whatever changed elsewhere. The song
+                  itself stays on this device only.
                 </span>
                 <div className="row">
                   <button onClick={() => void syncAll()} disabled={syncStatus.syncing || syncingAll}>
