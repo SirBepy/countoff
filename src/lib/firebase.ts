@@ -12,11 +12,13 @@ import {
 } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 
-// Public by design: a Firebase web config is not a secret. Access is controlled by
-// the Firestore rules (users can only touch their own uid) plus who is signed in.
+// Public by design: a web config is not a secret; the Firestore rules and the signed-in
+// account are what guard the data. authDomain must match the origin the app is served
+// from: cross-origin puts /__/auth/handler in a partitioned storage bucket, and mobile
+// Chrome then fails sign-in with "missing initial state".
 const firebaseConfig = {
   apiKey: 'AIzaSyCMxWyGRJScXgsl1qa_nNbUdIs5o86w83Y',
-  authDomain: 'generic-sirbepy-project.firebaseapp.com',
+  authDomain: 'countoff.web.app',
   projectId: 'generic-sirbepy-project',
   messagingSenderId: '639863367604',
   appId: '1:639863367604:web:1e18472a22556ba919f4e1',
