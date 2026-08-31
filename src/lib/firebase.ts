@@ -40,6 +40,13 @@ const firebaseConfig = {
   appId: '1:639863367604:web:1e18472a22556ba919f4e1',
 }
 
+// Firebase Hosting answers on both <project>.web.app and <project>.firebaseapp.com, but
+// only the authDomain one has a registered OAuth redirect. Landing on the other fails
+// sign-in with "missing initial state", so send the browser to the canonical host first.
+if (location.hostname.endsWith('.web.app') && location.hostname !== firebaseConfig.authDomain) {
+  location.replace(`https://${firebaseConfig.authDomain}${location.pathname}${location.search}${location.hash}`)
+}
+
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)

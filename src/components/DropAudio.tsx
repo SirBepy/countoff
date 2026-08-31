@@ -4,11 +4,14 @@ import { saveAudio, saveProject } from '../lib/db'
 import { DEFAULT_COUNTS_PER_ROW } from '../lib/grid'
 import { STARTER_MOVES } from '../lib/moves'
 import { flash, replaceProject, uid } from '../lib/store'
+import { signInWithGoogle } from '../lib/firebase'
+import { pullNow } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
 import { audio } from '../lib/audio'
 
 export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) {
   const [over, setOver] = useState(false)
+  const [signingIn, setSigningIn] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -60,6 +63,19 @@ export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) 
         : `Could not detect a tempo (track too short). Set it by hand.`,
     )
     setBusy(null)
+  }
+
+  // A fresh device has no audio yet, but it may have a whole library waiting in the
+  // cloud, so signing in has to be reachable before any file is chosen.
+  async function signIn() {
+    setSigningIn(true)
+    try {
+      await signInWithGoogle()
+      await pullNow()
+    } catch {
+      flash('Could not sign in')
+    }
+    setSigningIn(false)
   }
 
   return (
@@ -116,8 +132,14 @@ export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) 
             if (file) void accept(file)
           }}
         />
+        <div className="drop-signin">
+          <span className="faint">or</span>
+          <button disabled={!!busy || signingIn} onClick={signIn}>
+            <i className="ph ph-google-logo i" /> {signingIn ? 'Signing in...' : 'Sign in and pull my choreographies'}
+          </button>
+        </div>
         <p className="faint" style={{ marginTop: 22, marginBottom: 0, fontSize: 12 }}>
-          Everything stays on this machine. Nothing is uploaded.
+          The audio stays on this device. Signing in carries the choreography, not the song.
         </p>
       </div>
     </div>

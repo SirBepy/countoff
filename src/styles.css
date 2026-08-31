@@ -1318,3 +1318,12 @@ kbd {
     bottom: 110px;
   }
 }
+
+.drop-signin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
