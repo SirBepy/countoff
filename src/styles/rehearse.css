@@ -280,13 +280,10 @@
   }
   /* Wide enough to put the floor beside the move name instead of above it. The
      name column is 1fr so a short move name cannot shift the floor sideways. */
-  .rehearse-main.with-floor {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 54px;
-  }
+  /* Stacked and centred, same as the phone. Joe, 2026-09-03, on the side-by-side
+     version: "i dont like that its kinda side by side... i would wish it was centered". */
   .rehearse .stage {
-    width: 396px;
+    width: 340px;
   }
   .rehearse .puck .disc {
     width: 34px;

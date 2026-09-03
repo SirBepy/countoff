@@ -30,7 +30,7 @@ export default function Rehearse({ project }: { project: Project }) {
         </button>
       </div>
 
-      <div className={`rehearse-main${formation ? ' with-floor' : ''}`}>
+      <div className="rehearse-main">
         {formation && (
           <div className="rehearse-floor">
             <div className="rehearse-floor-name">{formation.name}</div>
