@@ -130,6 +130,7 @@
   border-radius: 12px;
   background: var(--bg-1);
   overflow: hidden;
+  user-select: none;
   /* A drag on the floor is never a scroll, so the browser must not claim it. */
   touch-action: none;
 }
@@ -317,6 +318,7 @@
 
 .mv {
   --who: 150px;
+  user-select: none;
   --lane-h: 38px;
   --ruler-h: 26px;
   position: relative;
@@ -554,6 +556,7 @@
 }
 .mv-menu {
   position: fixed;
+  user-select: text;
   z-index: 41;
   min-width: 210px;
   background: var(--bg-2);

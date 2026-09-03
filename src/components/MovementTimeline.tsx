@@ -61,6 +61,9 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
 
   function scrub(e: React.PointerEvent) {
     if (e.button === 2) return
+    // Without this the pointerdown also starts a text selection, and the whole
+    // timeline highlights blue as soon as the drag crosses a label.
+    e.preventDefault()
     setMenu(null)
     audio.seek(timeAt(e.clientX))
     const move = (ev: PointerEvent) => audio.seek(timeAt(ev.clientX))
@@ -78,6 +81,7 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
    */
   function dragBlock(movement: Movement, arrive: number, e: React.PointerEvent) {
     if (e.button === 2) return
+    e.preventDefault()
     e.stopPropagation()
     setMenu(null)
     onSelect(movement.personId)

@@ -63,6 +63,8 @@ export default function Runway({ project, segment, time }: { project: Project; s
   function scrub(e: React.PointerEvent) {
     const el = root.current
     if (e.button === 2 || !el) return
+    // Or the lyric line under the pointer gets selected instead of the strip dragged.
+    e.preventDefault()
     const ppb = parseFloat(getComputedStyle(el).getPropertyValue('--ppb')) || 30
     const resume = !audio.el.paused
     if (resume) audio.pause()

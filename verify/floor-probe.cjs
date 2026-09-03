@@ -209,6 +209,10 @@ async function main() {
       JSON.stringify(anaNow),
     )
     check(
+      'dragging a puck does not select the names it drags over',
+      (await page.evaluate(() => window.getSelection().toString())) === '',
+    )
+    check(
       'the whole drag is one movement, not one per cell it crossed',
       (await readProject(page)).movements.filter((m) => m.personId === 'p-ana' && m.beat === BEAT).length === 1,
     )
@@ -304,6 +308,10 @@ async function main() {
       'dragging the rehearse runway left moves forward through the song',
       after - before > 1,
       `before=${before} after=${after}`,
+    )
+    check(
+      'dragging the runway does not select the lyrics it drags over',
+      (await page.evaluate(() => window.getSelection().toString())) === '',
     )
     await page.screenshot({ path: path.join(SHOTS, 'floor-7-rehearse.png') })
     await page.click('.rehearse button:has-text("Exit")')
