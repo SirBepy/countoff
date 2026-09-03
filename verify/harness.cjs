@@ -138,23 +138,6 @@ function silentWav(seconds, sampleRate = 44100) {
   return Buffer.concat([wavHeader(data.length, sampleRate), data])
 }
 
-/** A decaying click at every beat of a known BPM, for assertions where tempo matters. */
-function clickTrack({ bpm, seconds }, sampleRate = 44100) {
-  const numSamples = Math.round(seconds * sampleRate)
-  const data = Buffer.alloc(numSamples * 2)
-  const beatInterval = 60 / bpm
-  const clickLen = Math.round(0.01 * sampleRate)
-  for (let beatTime = 0; beatTime < seconds; beatTime += beatInterval) {
-    const start = Math.round(beatTime * sampleRate)
-    for (let i = 0; i < clickLen && start + i < numSamples; i++) {
-      const t = i / sampleRate
-      const sample = Math.round(Math.sin(2 * Math.PI * 1000 * t) * Math.exp(-t * 200) * 32000)
-      data.writeInt16LE(sample, (start + i) * 2)
-    }
-  }
-  return Buffer.concat([wavHeader(data.length, sampleRate), data])
-}
-
 /** A point inside `sel` that actually hit-tests to it, so a probe can never
  *  report an app bug when it really tapped a sticky header or a block. */
 function hitPoint(page, sel, n = 0) {
@@ -199,16 +182,6 @@ async function tap(page, selector, { nth = 0, hold = 90, settle = 350 } = {}) {
   return point
 }
 
-/** Settles the sheet scroller before the next click. Chrome eats the click of
- *  the first tap inside a scroller it has just flung, at any delay. */
-async function settleScroll(page) {
-  await page.evaluate(() => {
-    const scroll = document.querySelector('.main .scroll')
-    if (scroll) scroll.scrollTop = scroll.scrollTop
-  })
-  await page.waitForTimeout(700)
-}
-
 function screenshotDir(label) {
   const dir = path.join(__dirname, '..', '.for_bepy', 'screenshots', `verify-${label}`)
   fs.mkdirSync(dir, { recursive: true })
@@ -236,10 +209,8 @@ module.exports = {
   seedProject,
   readProject,
   silentWav,
-  clickTrack,
   hitPoint,
   tap,
-  settleScroll,
   screenshotDir,
   createChecklist,
 }

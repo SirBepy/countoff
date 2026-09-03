@@ -18,8 +18,8 @@ node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
 ```
 
 `verify/harness.cjs` is the shared module (`withBrowser`, `seedProject`, `readProject`,
-`clickTrack`/`silentWav`, `phoneContext`/`desktopContext`, `hitPoint`, `tap`, `settleScroll`,
-`screenshotDir`, `createChecklist`). `verify/fixtures.cjs` holds the shared seed project used by
+`silentWav`, `phoneContext`/`desktopContext`, `hitPoint`, `tap`, `screenshotDir`,
+`createChecklist`). `verify/fixtures.cjs` holds the shared seed project used by
 the mobile/desktop pair. Write a new probe against the harness rather than re-deriving any of the
 below.
 
@@ -43,6 +43,7 @@ below.
    empty cell it meant. `hitPoint`/`tap` already do this.
 7. `document.querySelector('.scroll')` is the move rail, not the sheet, because the rail renders
    first. Use `.main .scroll`.
-8. Chrome eats the click of the first tap inside a scroller it has just flung, at any delay. Call
-   `settleScroll(page)` before the next click-driven assertion after a scroll or fling.
+8. Chrome eats the click of the first tap inside a scroller it has just flung, at any delay. Only
+   `mobile-probe.cjs` flings, and its `reset()` already settles the scroller (it zeroes `scrollTop`
+   and waits 700ms) before every gesture that follows.
 9. The dev server binds IPv6, so `127.0.0.1` refuses and `localhost` works.

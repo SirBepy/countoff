@@ -8,6 +8,7 @@ const {
   seedProject,
   silentWav,
   hitPoint,
+  tap,
   screenshotDir,
   createChecklist,
 } = require('./harness.cjs')
@@ -95,12 +96,6 @@ async function phone(browser) {
 
   const cdp = await ctx.newCDPSession(page)
   const finger = (x, y) => [{ x, y, id: 1, radiusX: 12, radiusY: 12, force: 1 }]
-  const press = async (x, y, ms) => {
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: finger(x, y) })
-    await page.waitForTimeout(ms)
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-    await page.waitForTimeout(350)
-  }
   async function drag(x, y, dx, dy, hold) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: finger(x, y) })
     await page.waitForTimeout(hold)
@@ -113,8 +108,7 @@ async function phone(browser) {
   }
 
   // Row 3 is empty of blocks, so a hold there can only be the bare-counts menu.
-  const bare = await hitPoint(page, '.counts', 2)
-  await press(bare.x, bare.y, 700)
+  await tap(page, '.counts', { nth: 2, hold: 700 })
   let items = await menuItems(page)
   check('phone: hold on bare counts opens the menu', items.includes('Add a comment'), items.join(' | '))
   await page.screenshot({ path: path.join(SHOTS, 'phone-1-counts-menu.png') })
@@ -131,8 +125,7 @@ async function phone(browser) {
   await page.screenshot({ path: path.join(SHOTS, 'phone-2-comment-placed.png') })
 
   // A tap on a block is the menu; the hold below is the drag.
-  const onBlock = await hitPoint(page, '.block', 0)
-  await press(onBlock.x, onBlock.y, 90)
+  await tap(page, '.block', { nth: 0, hold: 90 })
   items = await menuItems(page)
   check('phone: tap on a block opens Duplicate / Delete', items.includes('Duplicate') && items.includes('Delete'), items.join(' | '))
   await page.screenshot({ path: path.join(SHOTS, 'phone-3-block-menu.png') })

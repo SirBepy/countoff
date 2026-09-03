@@ -62,22 +62,6 @@ async function main() {
         blockLefts: [...document.querySelectorAll('.block')].map((b) => b.style.left),
       }))
 
-    /** A point inside `sel` that actually hit-tests to it, so a probe can never
-     *  report an app bug when it really tapped a sticky header or a block. */
-    const hitPoint = (sel, n = 0) =>
-      page.evaluate(
-        ({ sel, n }) => {
-          const e = document.querySelectorAll(sel)[n]
-          if (!e) return null
-          const b = e.getBoundingClientRect()
-          const x = Math.round(b.left + b.width / 2)
-          const y = Math.round(b.top + b.height / 2)
-          const hit = document.elementFromPoint(x, y)
-          return hit && e.contains(hit) ? { x, y } : null
-        },
-        { sel, n },
-      )
-
     const centre = (sel, n = 0) =>
       page.evaluate(
         ({ sel, n }) => {
