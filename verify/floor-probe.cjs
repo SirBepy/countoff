@@ -128,6 +128,25 @@ async function main() {
     check('everyone standing at the playhead is on the floor', (await page.locator('.stage .puck').count()) === 3)
     await page.screenshot({ path: path.join(SHOTS, 'floor-1-migrated.png') })
 
+    // Arrow keys nudge the playhead a count at a time, from any view.
+    await page.locator('.stage').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.waitForTimeout(150)
+    const nudged = await page.evaluate(() => document.querySelector('audio').currentTime)
+    check(
+      'the right arrow moves the playhead on by one count',
+      Math.abs(nudged - (AT + 2 * (60 / 120))) < 0.02,
+      `currentTime=${nudged} expected=${AT + 2 * (60 / 120)}`,
+    )
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    await page.waitForTimeout(150)
+    check(
+      'the left arrow takes it back again',
+      Math.abs((await page.evaluate(() => document.querySelector('audio').currentTime)) - AT) < 0.02,
+    )
+
     // A new face, added from the rail rather than a modal.
     await page.fill('.rail-add input', 'Marko Juric')
     await page.press('.rail-add input', 'Enter')

@@ -17,7 +17,7 @@ import SongStrip from './components/SongStrip'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
 import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace } from './lib/db'
-import { segmentAt, timeToBeat } from './lib/grid'
+import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
@@ -125,6 +125,14 @@ export default function App() {
       } else if (e.code === 'Space') {
         e.preventDefault()
         audio.toggle()
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        const segment = project && segmentAt(project.segments, audio.el.currentTime)
+        if (!segment) return
+        // Rounded first, so a playhead sitting between counts snaps onto the grid
+        // instead of carrying its offset through every press.
+        const beat = Math.round(timeToBeat(segment, audio.el.currentTime))
+        audio.seek(beatToTime(segment, beat + (e.key === 'ArrowRight' ? 1 : -1)))
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (!selection || !project) return
         const doomed = project.blocks.filter(
