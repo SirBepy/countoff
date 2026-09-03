@@ -49,6 +49,9 @@ export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) 
       blocks: [],
       markers: [],
       moves: STARTER_MOVES,
+      people: [],
+      formations: [],
+      focus: { kind: 'audience' },
       updatedAt: Date.now(),
     }
 

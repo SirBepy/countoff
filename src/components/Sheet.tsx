@@ -153,6 +153,9 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
   const blocks = project.blocks.filter(
     (b) => b.segmentId === segment.id && b.startBeat < rowEnd && b.startBeat + b.beats > rowStart,
   )
+  const formations = project.formations.filter(
+    (f) => f.segmentId === segment.id && f.startBeat >= rowStart && f.startBeat < rowEnd,
+  )
   const active = nowBeat !== null && nowBeat >= rowStart && nowBeat < rowEnd
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
   const rowSelected = !!selection && selection.startBeat < rowEnd && selection.startBeat + selection.beats > rowStart
@@ -507,6 +510,23 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
             )
           })}
         </div>
+
+        {formations.length > 0 && (
+          <div className="row-formations">
+            {formations.map((formation) => (
+              <button
+                key={formation.id}
+                className="formation-tag"
+                title={`${formation.name}: ${formation.spots.length} on the floor. Open the floor view.`}
+                onClick={() => set({ floorFormationId: formation.id, view: 'floor' }, false)}
+              >
+                <i className="ph ph-users-three" />
+                {formation.name}
+                <span className="count">on {formation.startBeat - rowStart + 1}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

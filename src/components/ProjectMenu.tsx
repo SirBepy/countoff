@@ -44,6 +44,13 @@ export default function ProjectMenu({ project, onClose, onProjects, onBackup }: 
               <div className="sub">Cuts, transitions, downbeats, tempo</div>
             </span>
           </button>
+          <button className="menu-item" onClick={go(() => set({ view: 'floor' }, false))}>
+            <i className="ph ph-users-three" />
+            <span>
+              Floor
+              <div className="sub">Who dances when, and where they stand</div>
+            </span>
+          </button>
           <button className="menu-item" onClick={go(onProjects)}>
             <i className="ph ph-folders" />
             <span>

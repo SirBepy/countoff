@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import BackupModal from './components/BackupModal'
 import BottomBar from './components/BottomBar'
 import DropAudio from './components/DropAudio'
+import Floor from './components/Floor'
 import LyricsModal from './components/LyricsModal'
 import MarkerModal from './components/MarkerModal'
 import MoveLibrary from './components/MoveLibrary'
@@ -152,6 +153,7 @@ export default function App() {
   if (!project || creating) return <DropAudio onCancel={project ? () => setCreating(false) : undefined} />
   if (view === 'rehearse') return <Rehearse project={project} />
   if (view === 'setup') return <SongSetup project={project} />
+  if (view === 'floor') return <Floor project={project} />
 
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
   const marker = project.markers.find((m) => m.id === markerFor)
@@ -183,6 +185,9 @@ export default function App() {
         </span>
         <button className="ghost icon only-wide" onClick={() => set({ view: 'setup' }, false)} title="Song setup: cuts, transitions, downbeats, tempo">
           <i className="ph ph-sliders-horizontal i" />
+        </button>
+        <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
+          <i className="ph ph-users-three i" />
         </button>
         <button className="ghost icon only-wide" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
           <i className="ph ph-folders i" />

@@ -69,6 +69,37 @@ export interface Block {
 /** A block with no move is a comment; its `note` is the text on the sheet. */
 export const isComment = (block: Block) => !block.moveId
 
+/** Someone dancing. Colour and initials are what identify them on the floor at a glance. */
+export interface Person {
+  id: string
+  name: string
+  /** Up to two characters on the puck, seeded from the name but editable for two Anas. */
+  initials: string
+  colour: string
+}
+
+/** One person standing on one cell of the floor grid. */
+export interface Spot {
+  personId: string
+  col: number
+  row: number
+}
+
+/** Who is on the floor and where, holding until the next formation. Anyone with no
+ *  spot here is offstage, which is what makes an entrance a formation change. */
+export interface Formation {
+  id: string
+  segmentId: string
+  /** Beat index relative to the segment's anchor, like `Block.startBeat`. */
+  startBeat: number
+  name: string
+  spots: Spot[]
+  note?: string
+}
+
+/** What the dancers face: a crowd along the front edge, or one seated person. */
+export type Focus = { kind: 'audience' } | { kind: 'person'; name: string; col: number; row: number }
+
 export interface Project {
   id: string
   name: string
@@ -78,5 +109,8 @@ export interface Project {
   blocks: Block[]
   moves: Move[]
   markers: Marker[]
+  people: Person[]
+  formations: Formation[]
+  focus: Focus
   updatedAt: number
 }

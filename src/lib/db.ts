@@ -74,6 +74,10 @@ export function migrateProject(p: Project): Project {
     ...p,
     markers: (p.markers ?? []).map(migrateMarker),
     blocks: p.blocks ?? [],
+    // Pre-floor shape: a project saved before the floor view carries none of these.
+    people: p.people ?? [],
+    formations: (p.formations ?? []).map((f) => ({ ...f, spots: f.spots ?? [] })),
+    focus: p.focus ?? { kind: 'audience' },
     // Pre-transition shape: retired 2026-08-27 when count length and transitions went per-song.
     segments: (p.segments ?? []).map((raw) => {
       const { beatsPerBar, lyricOffset, ...s } = raw as Segment & { beatsPerBar?: number; lyricOffset?: number }
