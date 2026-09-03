@@ -32,7 +32,7 @@ export const GENERIC_MOVES: Move[] = [
   m('running-man', 'Running man', 4, 3),
   m('arm-wave', 'Arms up wave', 4, 2),
   m('march', 'March in place', 4, 1),
-  m('travel-4', 'Travel 4 steps', 4, 2, 'Forward, back, or into formation'),
+  m('travel-4', 'Travel 4 steps', 4, 2, 'Forward, back, or into place'),
 ]
 
 /** Instantly recognisable, which is most of what makes a flashmob land. */

@@ -35,6 +35,7 @@
 .rehearse .stage {
   width: 288px;
   max-width: none;
+  max-height: none;
   margin: 0;
 }
 .rehearse .puck .disc {

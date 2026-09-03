@@ -3,9 +3,10 @@ import {
   isComment,
   type Block,
   type Focus,
-  type Formation,
+  type FloorSize,
   type Marker,
   type Move,
+  type Movement,
   type Person,
   type Project,
   type Segment,
@@ -35,8 +36,6 @@ export interface UiState {
   audioUrl: string | null
   selection: Selection | null
   view: 'sheet' | 'rehearse' | 'setup' | 'floor'
-  /** Which formation the floor view is editing; the sheet lane sets it on the way in. */
-  floorFormationId: string | null
   activeMoveId: string | null
   status: string | null
   /** Scroll the sheet to keep the playing 8-count on screen. */
@@ -61,7 +60,6 @@ let state: UiState = {
   audioUrl: null,
   selection: null,
   view: 'sheet',
-  floorFormationId: null,
   activeMoveId: null,
   status: null,
   follow: true,
@@ -331,52 +329,60 @@ export const addPerson = (person: Person) => withProject((p) => ({ ...p, people:
 export const updatePerson = (id: string, patch: Partial<Person>, coalesceKey?: string) =>
   withProject((p) => ({ ...p, people: p.people.map((x) => (x.id === id ? { ...x, ...patch } : x)) }), coalesceKey)
 
-/** Removing someone takes them off every floor too, or they linger as an unnamed puck. */
+/** Removing someone takes their whole path with them, or it lingers as an unnamed puck. */
 export const removePerson = (id: string) =>
   withProject((p) => ({
     ...p,
     people: p.people.filter((x) => x.id !== id),
-    formations: p.formations.map((f) => ({ ...f, spots: f.spots.filter((s) => s.personId !== id) })),
+    movements: p.movements.filter((m) => m.personId !== id),
   }))
 
-export const addFormation = (formation: Formation) =>
-  withProject((p) => ({ ...p, formations: [...p.formations, formation] }))
+export const addMovement = (movement: Movement) =>
+  withProject((p) => ({ ...p, movements: [...p.movements, movement] }))
 
-export const updateFormation = (id: string, patch: Partial<Formation>, coalesceKey?: string) =>
-  withProject((p) => ({ ...p, formations: p.formations.map((f) => (f.id === id ? { ...f, ...patch } : f)) }), coalesceKey)
+export const updateMovement = (id: string, patch: Partial<Movement>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, movements: p.movements.map((m) => (m.id === id ? { ...m, ...patch } : m)) }), coalesceKey)
 
-export const removeFormation = (id: string) =>
-  withProject((p) => ({ ...p, formations: p.formations.filter((f) => f.id !== id) }))
+export const removeMovement = (id: string) =>
+  withProject((p) => ({ ...p, movements: p.movements.filter((m) => m.id !== id) }))
 
 /**
- * Moves someone onto a cell. One person per cell, so landing on an occupied one
- * swaps the two: dragging into a line rearranges it instead of silently stacking.
+ * Sets where someone must be on a count, keyed by that count: dragging a puck across
+ * ten cells retimes one movement rather than leaving ten behind it.
  */
-export const setSpot = (formationId: string, personId: string, col: number, row: number, coalesceKey?: string) =>
+export const placeMovement = (
+  personId: string,
+  segmentId: string,
+  beat: number,
+  to: { col: number; row: number } | null,
+  coalesceKey?: string,
+) =>
   withProject((p) => {
-    const formation = p.formations.find((f) => f.id === formationId)
-    if (!formation) return p
-    // The chair is a cell too. Standing on it hides it, and nobody dances in a lap.
-    if (p.focus.kind === 'person' && p.focus.col === col && p.focus.row === row) return p
-    const from = formation.spots.find((s) => s.personId === personId)
-    const occupant = formation.spots.find((s) => s.col === col && s.row === row && s.personId !== personId)
-    // Someone walking on has no cell to trade back, so an occupied target just refuses.
-    if (occupant && !from) return p
-    const spots = formation.spots
-      .filter((s) => s.personId !== personId)
-      .map((s) => (s.personId === occupant?.personId ? { ...s, col: from!.col, row: from!.row } : s))
-      .concat({ personId, col, row })
-    return { ...p, formations: p.formations.map((f) => (f.id === formationId ? { ...f, spots } : f)) }
+    const existing = p.movements.find((m) => m.personId === personId && m.segmentId === segmentId && m.beat === beat)
+    if (existing) {
+      return { ...p, movements: p.movements.map((m) => (m.id === existing.id ? { ...m, to } : m)) }
+    }
+    // A walk cannot start before the song does, so an early count shortens rather than refuses.
+    const travel = Math.min(p.walkCounts, beat)
+    return { ...p, movements: [...p.movements, { id: uid(), personId, segmentId, beat, travel, to }] }
   }, coalesceKey)
 
-/** Takes someone off the floor from this formation on, which is how an exit is recorded. */
-export const clearSpot = (formationId: string, personId: string) =>
-  withProject((p) => ({
-    ...p,
-    formations: p.formations.map((f) =>
-      f.id === formationId ? { ...f, spots: f.spots.filter((s) => s.personId !== personId) } : f,
-    ),
-  }))
+/** Resizing pulls anyone standing past the new edge back onto the floor, chair included. */
+export const setFloorSize = (floor: FloorSize) =>
+  withProject((p) => {
+    const fit = (cell: { col: number; row: number }) => ({
+      col: Math.min(cell.col, floor.cols - 1),
+      row: Math.min(cell.row, floor.rows - 1),
+    })
+    return {
+      ...p,
+      floor,
+      movements: p.movements.map((m) => (m.to ? { ...m, to: fit(m.to) } : m)),
+      focus: p.focus.kind === 'person' ? { ...p.focus, ...fit(p.focus) } : p.focus,
+    }
+  })
+
+export const setWalkCounts = (walkCounts: number) => updateProject({ walkCounts })
 
 export const setFocus = (focus: Focus, coalesceKey?: string) => updateProject({ focus }, coalesceKey)
 

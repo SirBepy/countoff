@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { beatDuration, beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
+import { movementLabel } from '../lib/floor'
 import { MARKER_COLOUR } from '../lib/markers'
 import { beatAtPoint, beatInRow, rowRects } from '../lib/sheetHit'
 import { beginGesture, endGesture, removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
@@ -153,8 +154,8 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
   const blocks = project.blocks.filter(
     (b) => b.segmentId === segment.id && b.startBeat < rowEnd && b.startBeat + b.beats > rowStart,
   )
-  const formations = project.formations.filter(
-    (f) => f.segmentId === segment.id && f.startBeat >= rowStart && f.startBeat < rowEnd,
+  const cues = project.movements.filter(
+    (m) => m.segmentId === segment.id && m.beat >= rowStart && m.beat < rowEnd,
   )
   const active = nowBeat !== null && nowBeat >= rowStart && nowBeat < rowEnd
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
@@ -511,20 +512,28 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
           })}
         </div>
 
-        {formations.length > 0 && (
-          <div className="row-formations">
-            {formations.map((formation) => (
-              <button
-                key={formation.id}
-                className="formation-tag"
-                title={`${formation.name}: ${formation.spots.length} on the floor. Open the floor view.`}
-                onClick={() => set({ floorFormationId: formation.id, view: 'floor' }, false)}
-              >
-                <i className="ph ph-users-three" />
-                {formation.name}
-                <span className="count">on {formation.startBeat - rowStart + 1}</span>
-              </button>
-            ))}
+        {cues.length > 0 && (
+          <div className="row-cues">
+            {cues.map((cue) => {
+              const person = project.people.find((p) => p.id === cue.personId)
+              if (!person) return null
+              return (
+                <button
+                  key={cue.id}
+                  className="cue-tag"
+                  title={`${person.name} is at ${movementLabel(cue)} on this count. Open the floor.`}
+                  onClick={() => {
+                    audio.seek(beatToTime(segment, cue.beat))
+                    set({ view: 'floor' }, false)
+                  }}
+                >
+                  <span className="d" style={{ background: person.colour }}>
+                    {person.initials}
+                  </span>
+                  <span className="count">on {cue.beat - rowStart + 1}</span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

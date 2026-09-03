@@ -29,6 +29,13 @@ level. Add your own, link a video that shows how one goes, and rename or retime 
 second move to alternate A B A B. Blocks drag, stretch and delete, and each placed block can carry
 its own note, so the second of four can say "turn".
 
+**Floor.** Add the cast, scrub to a count, and drag someone to where they have to be on it. That
+count is the arrival, not the departure: the walk is fitted into the bar in front of it, so a cue
+reads "on the drop, Ana is front centre". Every walk is a block on that person's own lane in the
+timeline under the floor; right-click one to make it instant, half a bar, two bars or any count you
+name, or to walk them off there. The floor is as big as you say it is, and playback animates the
+crosses rather than snapping everyone into place on the beat.
+
 **Rehearsing.** Full-screen mode shows the current move large, the lyric above it, an 8-count pulse
 and what comes next. Loop a section, turn on the click, slow to 60% without the pitch dropping.
 

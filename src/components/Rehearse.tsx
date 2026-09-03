@@ -1,5 +1,5 @@
 import { audio, useAudio } from '../lib/audio'
-import { formationAtTime } from '../lib/floor'
+import { standingAt } from '../lib/floor'
 import { formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
 import { set } from '../lib/store'
@@ -11,7 +11,10 @@ export default function Rehearse({ project }: { project: Project }) {
   const { time, playing, metronome, rate } = useAudio()
   const now = nowState(project, time)
   // No cast means an empty grid, which would take the centre of the screen and say nothing.
-  const formation = project.people.length ? formationAtTime(project, time) : null
+  const walking = project.people.filter((p) => {
+    const at = standingAt(project, p.id, time)
+    return at && at.progress < 1
+  })
 
   return (
     <div className="rehearse">
@@ -31,10 +34,12 @@ export default function Rehearse({ project }: { project: Project }) {
       </div>
 
       <div className="rehearse-main">
-        {formation && (
+        {project.people.length > 0 && (
           <div className="rehearse-floor">
-            <div className="rehearse-floor-name">{formation.name}</div>
-            <FloorStage project={project} formation={formation} editable={false} />
+            {walking.length > 0 && (
+              <div className="rehearse-floor-name">{walking.map((p) => p.name).join(', ')} moving</div>
+            )}
+            <FloorStage project={project} time={time} editable={false} />
           </div>
         )}
         <div className="rehearse-centre">

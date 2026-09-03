@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { decodeAudioBlob, detectTempo } from '../lib/bpm'
 import { saveAudio, saveProject } from '../lib/db'
+import { DEFAULT_FLOOR, DEFAULT_WALK_COUNTS } from '../lib/floor'
 import { DEFAULT_COUNTS_PER_ROW } from '../lib/grid'
 import { STARTER_MOVES } from '../lib/moves'
 import { flash, replaceProject, uid } from '../lib/store'
@@ -50,7 +51,9 @@ export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) 
       markers: [],
       moves: STARTER_MOVES,
       people: [],
-      formations: [],
+      movements: [],
+      floor: DEFAULT_FLOOR,
+      walkCounts: DEFAULT_WALK_COUNTS,
       focus: { kind: 'audience' },
       updatedAt: Date.now(),
     }

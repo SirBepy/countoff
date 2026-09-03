@@ -1,3 +1,4 @@
+import { DEFAULT_FLOOR, DEFAULT_WALK_COUNTS, movementsFromFormations } from './floor'
 import { DEFAULT_COUNTS_PER_ROW } from './grid'
 import { uid } from './store'
 import type { Marker, Project, Segment } from './types'
@@ -67,20 +68,27 @@ export async function saveProject(p: Project): Promise<void> {
   setActiveProjectId(p.id)
 }
 
+type LegacyProject = Project & { formations?: Parameters<typeof movementsFromFormations>[0] }
+
 /** Fills in fields added after a project was last saved. Exported so backup import
  * and sync pull, which skip loadProject, apply the same backfill. */
-export function migrateProject(p: Project): Project {
+export function migrateProject(raw: Project): Project {
+  // Dropped rather than spread through, or a retired field rides along in every backup.
+  const { formations, ...p } = raw as LegacyProject
   return {
     ...p,
     markers: (p.markers ?? []).map(migrateMarker),
     blocks: p.blocks ?? [],
     // Pre-floor shape: a project saved before the floor view carries none of these.
     people: p.people ?? [],
-    formations: (p.formations ?? []).map((f) => ({ ...f, spots: f.spots ?? [] })),
     focus: p.focus ?? { kind: 'audience' },
+    floor: p.floor ?? DEFAULT_FLOOR,
+    walkCounts: p.walkCounts ?? DEFAULT_WALK_COUNTS,
+    // Pre-movement shape: retired 2026-09-03 when whole-cast formations became per-person walks.
+    movements: p.movements ?? movementsFromFormations(formations ?? [], p.segments ?? [], uid),
     // Pre-transition shape: retired 2026-08-27 when count length and transitions went per-song.
-    segments: (p.segments ?? []).map((raw) => {
-      const { beatsPerBar, lyricOffset, ...s } = raw as Segment & { beatsPerBar?: number; lyricOffset?: number }
+    segments: (p.segments ?? []).map((rawSegment) => {
+      const { beatsPerBar, lyricOffset, ...s } = rawSegment as Segment & { beatsPerBar?: number; lyricOffset?: number }
       return {
         ...s,
         lyrics: (s.lyrics ?? []).map((l) => (l.id ? l : { ...l, id: uid() })),

@@ -78,23 +78,22 @@ export interface Person {
   colour: string
 }
 
-/** One person standing on one cell of the floor grid. */
-export interface Spot {
-  personId: string
-  col: number
-  row: number
-}
-
-/** Who is on the floor and where, holding until the next formation. Anyone with no
- *  spot here is offstage, which is what makes an entrance a formation change. */
-export interface Formation {
+/** One person getting somewhere. `beat` is the arrival, not the departure: the walk
+ *  is fitted into the `travel` counts in front of it. A null `to` walks them off. */
+export interface Movement {
   id: string
+  personId: string
   segmentId: string
   /** Beat index relative to the segment's anchor, like `Block.startBeat`. */
-  startBeat: number
-  name: string
-  spots: Spot[]
+  beat: number
+  travel: number
+  to: { col: number; row: number } | null
   note?: string
+}
+
+export interface FloorSize {
+  cols: number
+  rows: number
 }
 
 /** What the dancers face: a crowd along the front edge, or one seated person. */
@@ -110,7 +109,10 @@ export interface Project {
   moves: Move[]
   markers: Marker[]
   people: Person[]
-  formations: Formation[]
+  movements: Movement[]
+  floor: FloorSize
+  /** Counts a new movement's walk takes, until that one is retimed. */
+  walkCounts: number
   focus: Focus
   updatedAt: number
 }
