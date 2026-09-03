@@ -3,7 +3,7 @@
   inset: 0;
   background: var(--bg);
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
   z-index: 40;
   padding-top: var(--safe-t);
   padding-bottom: var(--safe-b);
@@ -24,26 +24,210 @@
   letter-spacing: -0.03em;
   line-height: 1;
 }
-.rehearse-lyric {
-  font-size: clamp(15px, 4vw, 30px);
-  color: var(--text-dim);
-}
 .rehearse-note {
   font-size: clamp(18px, 5vw, 40px);
   font-weight: 700;
   color: var(--accent);
 }
-.rehearse-next {
-  font-size: clamp(13px, 3.4vw, 22px);
+.rehearse .pulse i {
+  width: 14px;
+  height: 14px;
+}
+.rehearse .pulse {
+  gap: 7px;
+}
+
+/* The runway. --ppb is pixels per count and --head is where NOW sits, and every
+   position below is derived from them plus the per-frame --beat, so widening the
+   lookahead on a desktop window is a two-value change and nothing else moves. */
+.runway {
+  --ppb: 30px;
+  --head: 60px;
+  --beat: 0;
+  position: relative;
+  border-top: 1px solid var(--line-soft);
+  background: var(--bg-1);
+}
+.rw-scroll {
+  position: absolute;
+  inset: 0;
+  transform: translate3d(calc(var(--head) - var(--beat) * var(--ppb)), 0, 0);
+}
+
+.rw-ruler {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
+}
+.rw-num {
+  position: absolute;
+  top: 2px;
+  left: calc(var(--tb) * var(--ppb));
+  padding-left: 4px;
+  border-left: 1px solid var(--line-soft);
+  font: 600 10px/1 ui-monospace, 'Cascadia Mono', Menlo, monospace;
   color: var(--text-faint);
 }
-.rehearse-thumb {
-  max-height: 30dvh;
-  max-width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+.rw-num.one {
+  border-left-color: var(--line);
+  color: var(--text-dim);
+  font-size: 11px;
 }
-.rehearse .pulse i {
-  width: 16px;
-  height: 16px;
+
+.rw-lane {
+  position: relative;
+  height: 58px;
+  overflow: hidden;
+}
+.rw-bar {
+  --lw: 0;
+  position: absolute;
+  left: calc(var(--sb) * var(--ppb));
+  width: calc(var(--nb) * var(--ppb) - 4px);
+  top: 5px;
+  bottom: 5px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  color: #0b0d12;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  white-space: nowrap;
+  /* Keeps the active bar's name beside the playhead as the bar slides out from under
+     it. The cap right-aligns the name against the bar's own padding rather than
+     stopping short, which is what keeps a short bar's name clear of the playhead. */
+  padding-left: clamp(
+    9px,
+    (var(--beat) - var(--sb)) * var(--ppb) + 6px,
+    max(9px, var(--nb) * var(--ppb) - var(--lw) * 1px - 13px)
+  );
+  padding-right: 9px;
+}
+.rw-bar.e1 {
+  background: var(--e1);
+}
+.rw-bar.e2 {
+  background: var(--e2);
+}
+.rw-bar.e3 {
+  background: var(--e3);
+}
+/* Same dashed treatment the sheet gives a comment, so it reads as a note pinned
+   over the counts rather than a fourth energy colour. */
+.rw-bar.comment {
+  background: rgba(124, 92, 255, 0.16);
+  border: 1px dashed rgba(167, 148, 255, 0.8);
+  color: #ddd6ff;
+  font-weight: 600;
+  font-style: italic;
+  font-size: 13px;
+}
+/* Counts already danced drain out of the bar, so "how much is left" needs no counting. */
+.rw-spent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: clamp(0px, (var(--beat) - var(--sb)) * var(--ppb), var(--nb) * var(--ppb));
+  background: rgba(0, 0, 0, 0.28);
+}
+/* align-self keeps these shrink-wrapped, so scrollWidth measures the text and not
+   the stretched bar, which is what --lw above depends on. */
+.rw-name,
+.rw-sub {
+  position: relative;
+  align-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rw-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  opacity: 0.62;
+}
+
+.rw-lyrics {
+  position: relative;
+  height: 26px;
+  overflow: hidden;
+  border-top: 1px solid var(--line-soft);
+}
+.rw-lyric {
+  position: absolute;
+  left: calc(var(--sb) * var(--ppb));
+  width: calc(var(--nb) * var(--ppb) - 6px);
+  top: 4px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-left: 2px solid var(--line);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Behind the playhead is history, so it dims; ahead fades out so the lane reads as
+   endless rather than as a list that stops. */
+.rw-lane::before,
+.rw-lyrics::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: var(--head);
+  background: linear-gradient(90deg, rgba(13, 15, 20, 0.62), rgba(13, 15, 20, 0.14));
+  pointer-events: none;
+}
+.rw-lane::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 40px;
+  background: linear-gradient(90deg, rgba(20, 24, 33, 0), var(--bg-1));
+  pointer-events: none;
+}
+/* A dark rim rather than a halo, so the line stays crisp over e2 and e3. */
+.rw-head {
+  position: absolute;
+  left: var(--head);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  z-index: 3;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+.rw-head::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid #fff;
+}
+
+@media (min-width: 900px) {
+  .runway {
+    --ppb: 42px;
+    --head: 96px;
+  }
+  .rehearse .pulse i {
+    width: 11px;
+    height: 11px;
+  }
 }

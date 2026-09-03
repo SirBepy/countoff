@@ -3,12 +3,11 @@ import { formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
 import { set } from '../lib/store'
 import type { Project } from '../lib/types'
-import { youtubeThumb } from './MoveLibrary'
+import Runway from './Runway'
 
 export default function Rehearse({ project }: { project: Project }) {
   const { time, playing, metronome, rate } = useAudio()
   const now = nowState(project, time)
-  const thumb = youtubeThumb(now.move?.videoUrl)
 
   return (
     <div className="rehearse">
@@ -28,8 +27,6 @@ export default function Rehearse({ project }: { project: Project }) {
       </div>
 
       <div className="rehearse-main">
-        <div className="rehearse-lyric">{now.lyric ?? ' '}</div>
-        {thumb && <img className="rehearse-thumb" src={thumb} alt="" />}
         <div className="rehearse-move">{now.move?.name ?? (now.block ? 'Note' : 'Waiting')}</div>
         {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
         <div className="pulse">
@@ -37,10 +34,9 @@ export default function Rehearse({ project }: { project: Project }) {
             <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
           ))}
         </div>
-        <div className="rehearse-next">
-          {now.next ? `Next: ${now.next.name}${now.beatsUntilNext ? ` in ${now.beatsUntilNext}` : ''}` : 'Last move'}
-        </div>
       </div>
+
+      {now.segment && <Runway project={project} segment={now.segment} time={time} />}
 
       <div className="row" style={{ justifyContent: 'center', gap: 10, padding: 14, borderTop: '1px solid var(--line)' }}>
         <button className="icon" onClick={() => audio.nudge(-10)}>
