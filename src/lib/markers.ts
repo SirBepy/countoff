@@ -1,6 +1,6 @@
 import { measureStoredTempo } from './bpm'
 import { DEFAULT_COUNTS_PER_ROW } from './grid'
-import { addMarker, addSegment, flash, getState, set, uid } from './store'
+import { addMarker, addSegment, flash, getState, set, uid, updateSegment } from './store'
 
 export const MARKER_ICON = 'ph-flag'
 export const MARKER_COLOUR = '#f0a63c'
@@ -8,6 +8,10 @@ export const MARKER_COLOUR = '#f0a63c'
 // Reserved synchronously so a second cut fired at the same spot while the first is
 // still decoding is rejected instead of racing it into two segments.
 const pendingCuts = new Set<number>()
+
+// Segment id -> bpm from its last open-ended reading. In-memory only, so a reload
+// forgets it and nothing gets auto-re-measured - the safe, under-correct-only direction.
+const openEndedBpm = new Map<string, number>()
 
 /**
  * Starts a new song at `time`, detecting its own tempo over [time, nextStart) rather
@@ -32,9 +36,20 @@ export async function splitSongAt(time: number): Promise<string | null> {
     const end = next ? next.start : project.duration
     const previous = [...sorted].reverse().find((s) => s.start <= time) ?? sorted[0]
 
+    // This cut gives `previous` a real end for the first time; re-measure it only if it
+    // still holds the open-ended reading unchanged, so a hand-corrected bpm is never overwritten.
+    const recordedBpm = previous ? openEndedBpm.get(previous.id) : undefined
+    const rescorePrevious =
+      previous !== undefined && previous.start < time && recordedBpm !== undefined && previous.bpm === recordedBpm
+
     let bpm = previous?.bpm ?? 120
     let anchor = time
-    const estimate = await measureStoredTempo(time, end, time).catch(() => null)
+    const [estimate, previousEstimate] = await Promise.all([
+      measureStoredTempo(time, end, time).catch(() => null),
+      rescorePrevious
+        ? measureStoredTempo(previous.start, time, previous.start).catch(() => null)
+        : Promise.resolve(null),
+    ])
     // A cut near the end of the file, or right before the next one, can leave less
     // than the measurable floor - fall back to the previous song's tempo rather than
     // claim a reading that was never taken.
@@ -52,6 +67,16 @@ export async function splitSongAt(time: number): Promise<string | null> {
       return null
     }
 
+    if (rescorePrevious && previous) {
+      openEndedBpm.delete(previous.id)
+      const live = fresh.segments.find((s) => s.id === previous.id)
+      const rescored =
+        previousEstimate && previousEstimate.measurable && previousEstimate.confidence > 0 ? previousEstimate : null
+      if (live && live.bpm === recordedBpm && rescored) {
+        updateSegment(previous.id, { bpm: rescored.bpm, anchor: rescored.phase })
+      }
+    }
+
     const id = uid()
     addSegment({
       id,
@@ -64,6 +89,9 @@ export async function splitSongAt(time: number): Promise<string | null> {
       lyrics: [],
       fit: { offset: 0, scale: 1 },
     })
+    // No `next` yet means this window ran to project.duration - open-ended, so a
+    // later cut should close and re-measure it unless the dev retunes it first.
+    if (!next) openEndedBpm.set(id, bpm)
     flash(
       measured
         ? `Song start at ${time.toFixed(2)}s, detected ${bpm} BPM. Check the "1".`
