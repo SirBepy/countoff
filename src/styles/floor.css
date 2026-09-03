@@ -298,6 +298,22 @@
   color: var(--text-dim);
   margin-left: 4px;
 }
+.tl-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.tl-field .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+}
+.tl-field .unit {
+  font-size: 11px;
+  color: var(--text-faint);
+}
 
 .mv {
   --who: 150px;
@@ -307,32 +323,48 @@
   flex-direction: column;
   min-height: 0;
 }
+/* Zooming widens the inner block past the scroller, so the lanes scroll sideways
+   while the name column and the ruler stay pinned to their own edges. */
+.mv-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.mv-inner {
+  position: relative;
+  min-width: 100%;
+}
 .mv-lane {
   display: grid;
   grid-template-columns: var(--who) 1fr;
   height: 38px;
-  flex: none;
   border-bottom: 1px solid var(--line-soft);
 }
 .mv-lane.on .mv-who {
   background: var(--accent-soft);
 }
 .mv-ruler {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   height: 26px;
+  background: var(--bg-1);
   border-bottom: 1px solid var(--line);
 }
-.mv-body {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-}
 .mv-who {
+  position: sticky;
+  left: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 0 10px;
+  background: var(--bg-1);
   border-right: 1px solid var(--line-soft);
   min-width: 0;
+}
+.mv-ruler .mv-who {
+  z-index: 6;
 }
 .mv-who .nm {
   font-size: 12px;
@@ -402,6 +434,11 @@
   overflow: hidden;
   touch-action: none;
 }
+/* The walk a drag on the floor would edit right now: the count is under the playhead. */
+.mv-walk.live {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
 /* The arrival edge is the count that was actually chosen, so it is the marked one. */
 .mv-walk::after {
   content: '';
@@ -435,7 +472,7 @@
   background: var(--text);
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
   pointer-events: none;
-  z-index: 4;
+  z-index: 2;
 }
 
 .mv-menu-back {

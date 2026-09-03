@@ -120,7 +120,7 @@ async function main() {
     await page.waitForSelector('.floor-view', { timeout: 5000 })
     check('the topbar Floor button opens the floor view', true)
     check('the cast rail lists everyone without opening a modal', (await page.locator('.rail-person').count()) === 3)
-    check('the timeline draws one lane per person', (await page.locator('.mv-body .mv-lane').count()) === 3)
+    check('the timeline draws one lane per person', (await page.locator('.mv-lane:not(.mv-ruler)').count()) === 3)
 
     // Past the first snapshot, so the migrated positions are the ones on screen.
     await seek(page, AT)
@@ -172,8 +172,38 @@ async function main() {
     )
     await page.screenshot({ path: path.join(SHOTS, 'floor-2-dragged.png') })
 
+    // A click that never drags is how you get back to where a walk lands, which is
+    // the only count from which its destination can be edited.
+    const walkBlock = page.locator('.mv-lane:not(.mv-ruler)').first().locator('.mv-walk').last()
+    await seek(page, 5)
+    await page.waitForTimeout(150)
+    await walkBlock.click()
+    await page.waitForTimeout(200)
+    const landedAt = await page.evaluate(() => document.querySelector('audio').currentTime)
+    check(
+      'clicking a walk seeks to the count it lands on, not the count it starts from',
+      Math.abs(landedAt - AT) < 0.05,
+      `currentTime=${landedAt} expected=${AT}`,
+    )
+    check(
+      'the walk under the playhead is flagged as the one a floor drag would edit',
+      (await page.locator('.mv-walk.live').count()) >= 1,
+    )
+
+    // Zooming has to widen the lanes past the scroller, or there is nothing to scroll.
+    const scrollWidth = () => page.evaluate(() => document.querySelector('.mv-scroll').scrollWidth)
+    const fitted = await scrollWidth()
+    for (let i = 0; i < 3; i++) await page.click('.tl-field button:has(.ph-magnifying-glass-plus)')
+    await page.waitForTimeout(250)
+    const zoomed = await scrollWidth()
+    check('zooming in widens the lanes past the scroller', zoomed > fitted * 2, `fit=${fitted} zoomed=${zoomed}`)
+    check('the name column stays pinned while the lanes scroll', await page.locator('.mv-who').first().isVisible())
+    await page.screenshot({ path: path.join(SHOTS, 'floor-6-zoomed.png') })
+    for (let i = 0; i < 3; i++) await page.click('.tl-field button:has(.ph-magnifying-glass-minus)')
+    await page.waitForTimeout(250)
+
     // Right-click that walk and make it instant.
-    const walk = page.locator('.mv-body .mv-lane').first().locator('.mv-walk').last()
+    const walk = page.locator('.mv-lane:not(.mv-ruler)').first().locator('.mv-walk').last()
     await walk.click({ button: 'right' })
     await page.waitForSelector('.mv-menu')
     check('right-clicking a walk opens its length menu', await page.locator('.mv-menu .mi:has-text("One bar")').isVisible())

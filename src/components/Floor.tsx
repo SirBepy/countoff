@@ -3,7 +3,6 @@ import { audio, useAudio } from '../lib/audio'
 import { formatTime } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import {
-  DEFAULT_WALK_COUNTS,
   FLOOR_MAX,
   FLOOR_MIN,
   WALK_MAX,
@@ -32,6 +31,9 @@ import MovementTimeline from './MovementTimeline'
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
 
+/** 1 fits the whole medley; the top end puts a couple of bars across the screen. */
+const ZOOM_MAX = 60
+
 function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
     <span className="step">
@@ -53,6 +55,7 @@ export default function Floor({ project }: { project: Project }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [menu, setMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
+  const [zoom, setZoom] = useState(1)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.personId)
 
   const here = beatAt(project, time)
@@ -194,10 +197,42 @@ export default function Floor({ project }: { project: Project }) {
             </button>
             <span className="clock">{formatTime(time)}</span>
           </div>
+
+          <span className="tl-field" title="How long a new walk takes, until that one is retimed">
+            <span className="lbl">Walk</span>
+            <Stepper value={project.walkCounts} min={0} max={WALK_MAX} onChange={setWalkCounts} />
+            <span className="unit">counts</span>
+          </span>
+
+          <span className="tl-field" title="Zoom the timeline. Ctrl or Cmd and scroll does it too">
+            <span className="lbl">Zoom</span>
+            <span className="step">
+              <button className="ghost icon" onClick={() => setZoom(clamp(zoom / 1.6, 1, ZOOM_MAX))} disabled={zoom <= 1}>
+                <i className="ph ph-magnifying-glass-minus" />
+              </button>
+              <b>{zoom < 1.05 ? 'fit' : `${Math.round(zoom)}×`}</b>
+              <button
+                className="ghost icon"
+                onClick={() => setZoom(clamp(zoom * 1.6, 1, ZOOM_MAX))}
+                disabled={zoom >= ZOOM_MAX}
+              >
+                <i className="ph ph-magnifying-glass-plus" />
+              </button>
+            </span>
+          </span>
+
           <div className="spacer" />
-          <span className="hint">Scrub here, then drag someone on the floor to say where they land. Right-click a walk to time it.</span>
+          <span className="hint only-wide">Click a walk to jump to where it lands, then drag them on the floor.</span>
         </div>
-        <MovementTimeline project={project} time={time} selectedId={selected} onSelect={setSelected} />
+        <MovementTimeline
+          project={project}
+          time={time}
+          playing={playing}
+          zoom={zoom}
+          onZoom={(z) => setZoom(clamp(z, 1, ZOOM_MAX))}
+          selectedId={selected}
+          onSelect={setSelected}
+        />
       </div>
 
       {menu && menuPerson && (
@@ -259,24 +294,6 @@ export default function Floor({ project }: { project: Project }) {
                     onChange={(rows) => setFloorSize({ ...floor, rows })}
                   />
                   <span className="faint">deep</span>
-                </div>
-              </div>
-
-              <div className="field">
-                <label>How long a walk takes, unless one is retimed</label>
-                <div className="row">
-                  <Stepper
-                    value={project.walkCounts}
-                    min={0}
-                    max={WALK_MAX}
-                    onChange={setWalkCounts}
-                  />
-                  <span className="faint">counts</span>
-                  {project.walkCounts !== DEFAULT_WALK_COUNTS && (
-                    <button className="ghost" onClick={() => setWalkCounts(DEFAULT_WALK_COUNTS)}>
-                      Back to one bar
-                    </button>
-                  )}
                 </div>
               </div>
 

@@ -32,8 +32,9 @@ its own note, so the second of four can say "turn".
 **Floor.** Add the cast, scrub to a count, and drag someone to where they have to be on it. That
 count is the arrival, not the departure: the walk is fitted into the bar in front of it, so a cue
 reads "on the drop, Ana is front centre". Every walk is a block on that person's own lane in the
-timeline under the floor; right-click one to make it instant, half a bar, two bars or any count you
-name, or to walk them off there. The floor is as big as you say it is, and playback animates the
+timeline under the floor; click one to jump to where it lands, right-click it to make it instant,
+half a bar, two bars or any count you name, or to walk them off there. The timeline zooms, so a
+four-minute medley and a single 8-count are both readable. The floor is as big as you say it is, and playback animates the
 crosses rather than snapping everyone into place on the beat.
 
 **Rehearsing.** Full-screen mode shows the current move large, the lyric above it, an 8-count pulse
