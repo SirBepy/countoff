@@ -15,6 +15,14 @@ node verify/menu-probe.cjs [port]      # sheet menu, comments, drag, lanes - def
 node verify/mobile-probe.cjs [port]    # phone touch/scroll/layout findings - defaults to 42001
 node verify/desktop-check.cjs [port]   # 1440px layout regression - defaults to 42001
 node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
+node verify/floor-probe.cjs [port]     # cast, movements, the walk menu, the sheet cue lane
+```
+
+On the Mac, chromium comes from a playwright install kept outside this repo, so the harness
+default (a Windows path) has to be overridden:
+
+```
+COUNTOFF_CHROMIUM_RESOLVER=~/.playwright-host/playwright-resolve.cjs node verify/floor-probe.cjs 5173
 ```
 
 `verify/harness.cjs` is the shared module (`withBrowser`, `seedProject`, `readProject`,

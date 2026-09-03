@@ -1,9 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
+import { useMenuFit } from '../lib/menuFit'
 import { addComment, duplicateBlock, removeBlocks, restackBlock, set, uid, useStore } from '../lib/store'
 import { isComment, type Project } from '../lib/types'
-
-/** Keeps the card off the screen edge it was opened against. */
-const EDGE = 8
 
 interface Props {
   project: Project
@@ -12,21 +10,8 @@ interface Props {
 
 export default function SheetMenu({ project, onEditMove }: Props) {
   const menu = useStore((s) => s.sheetMenu)
-  const el = useRef<HTMLDivElement>(null)
-  const [offset, setOffset] = useState({ dx: 0, dy: 0 })
+  const { ref: el, offset } = useMenuFit<HTMLDivElement>(menu)
   const close = () => set({ sheetMenu: null }, false)
-
-  // Measured rather than guessed: the item list changes height between the block
-  // and bare-counts menus, and a phone has no room to spare below the fold.
-  useLayoutEffect(() => {
-    setOffset({ dx: 0, dy: 0 })
-    if (!menu || !el.current) return
-    const rect = el.current.getBoundingClientRect()
-    setOffset({
-      dx: Math.min(0, window.innerWidth - EDGE - rect.right),
-      dy: Math.min(0, window.innerHeight - EDGE - rect.bottom),
-    })
-  }, [menu])
 
   useEffect(() => {
     if (!menu) return

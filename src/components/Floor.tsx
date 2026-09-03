@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { formatTime } from '../lib/grid'
+import { useMenuFit } from '../lib/menuFit'
 import {
   DEFAULT_WALK_COUNTS,
   FLOOR_MAX,
@@ -52,6 +53,7 @@ export default function Floor({ project }: { project: Project }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [menu, setMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
+  const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.personId)
 
   const here = beatAt(project, time)
   const floor = project.floor
@@ -201,7 +203,7 @@ export default function Floor({ project }: { project: Project }) {
       {menu && menuPerson && (
         <>
           <div className="mv-menu-back" onPointerDown={() => setMenu(null)} />
-          <div className="mv-menu" style={{ left: menu.x, top: menu.y }}>
+          <div className="mv-menu" ref={menuEl} style={{ left: menu.x + offset.dx, top: menu.y + offset.dy }}>
             <div className="mh">{menuPerson.name}</div>
             <button
               className="mi"

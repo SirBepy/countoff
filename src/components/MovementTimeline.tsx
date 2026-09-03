@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { audio } from '../lib/audio'
 import { beatAt, movementLabel, orderedMovements, stints } from '../lib/floor'
 import { beatDuration, formatTime, segmentEnd } from '../lib/grid'
+import { useMenuFit } from '../lib/menuFit'
 import { beginGesture, endGesture, removeMovement, updateMovement } from '../lib/store'
 import type { Movement, Project } from '../lib/types'
 
@@ -25,6 +26,7 @@ export default function MovementTimeline({ project, time, selectedId, onSelect }
   const duration = project.duration || 1
   const lanes = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<MenuAt | null>(null)
+  const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.movement.id)
   const pct = (t: number) => `${(t / duration) * 100}%`
 
   /** Time under a client x, measured against the track column rather than the whole lane. */
@@ -160,7 +162,7 @@ export default function MovementTimeline({ project, time, selectedId, onSelect }
       {menu && menuPerson && (
         <>
           <div className="mv-menu-back" onPointerDown={() => setMenu(null)} onContextMenu={() => setMenu(null)} />
-          <div className="mv-menu" style={{ left: menu.x, top: menu.y }}>
+          <div className="mv-menu" ref={menuEl} style={{ left: menu.x + offset.dx, top: menu.y + offset.dy }}>
             <div className="mh">{menuPerson.name} · walk into place</div>
             {presets.map((preset) => (
               <button

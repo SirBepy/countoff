@@ -69,6 +69,11 @@ const cell = (box, cols, rows, col, row) => ({
 
 const seek = (page, to) => page.evaluate((t) => (document.querySelector('audio').currentTime = t), to)
 
+/* Everything below is edited at this one playhead position. Both songs run at 120 BPM,
+   so a count is half a second and the seek lands on a whole count rather than between two. */
+const AT = 20
+const BEAT = AT / (60 / 120)
+
 const forPerson = (project, personId) => project.movements.filter((m) => m.personId === personId)
 
 async function main() {
@@ -118,7 +123,7 @@ async function main() {
     check('the timeline draws one lane per person', (await page.locator('.mv-body .mv-lane').count()) === 3)
 
     // Past the first snapshot, so the migrated positions are the ones on screen.
-    await seek(page, 20)
+    await seek(page, AT)
     await page.waitForTimeout(200)
     check('everyone standing at the playhead is on the floor', (await page.locator('.stage .puck').count()) === 3)
     await page.screenshot({ path: path.join(SHOTS, 'floor-1-migrated.png') })
@@ -136,7 +141,7 @@ async function main() {
     const walkedOn = forPerson(await readProject(page), cast[3].id)
     check(
       'bringing someone on writes one movement on the count at the playhead',
-      walkedOn.length === 1 && walkedOn[0].to !== null && walkedOn[0].beat === 20,
+      walkedOn.length === 1 && walkedOn[0].to !== null && walkedOn[0].beat === BEAT,
       JSON.stringify(walkedOn),
     )
     check(
@@ -158,12 +163,12 @@ async function main() {
     const anaNow = forPerson(await readProject(page), 'p-ana')
     check(
       'dragging a puck writes where that person must be on the count under the playhead',
-      anaNow.length === 2 && anaNow[1].beat === 20 && anaNow[1].to.col === 1 && anaNow[1].to.row === 1,
+      anaNow.length === 2 && anaNow[1].beat === BEAT && anaNow[1].to.col === 1 && anaNow[1].to.row === 1,
       JSON.stringify(anaNow),
     )
     check(
       'the whole drag is one movement, not one per cell it crossed',
-      (await readProject(page)).movements.filter((m) => m.personId === 'p-ana' && m.beat === 20).length === 1,
+      (await readProject(page)).movements.filter((m) => m.personId === 'p-ana' && m.beat === BEAT).length === 1,
     )
     await page.screenshot({ path: path.join(SHOTS, 'floor-2-dragged.png') })
 
@@ -178,14 +183,14 @@ async function main() {
     check(
       'picking a length retimes that one walk and leaves the arrival alone',
       forPerson(await readProject(page), 'p-ana')[1].travel === 0 &&
-        forPerson(await readProject(page), 'p-ana')[1].beat === 20,
+        forPerson(await readProject(page), 'p-ana')[1].beat === BEAT,
       JSON.stringify(forPerson(await readProject(page), 'p-ana')[1]),
     )
 
     // Walking off is a movement to nowhere, so a lane can end.
     await page.click('.rail-person:not(.off) button[title^="Walk off"]')
     await page.waitForTimeout(250)
-    const exits = (await readProject(page)).movements.filter((m) => m.to === null && m.beat === 20)
+    const exits = (await readProject(page)).movements.filter((m) => m.to === null && m.beat === BEAT)
     check('walking someone off writes a movement with nowhere to go', exits.length === 1, JSON.stringify(exits))
 
     // Resizing has to pull anyone standing past the new edge back on.
