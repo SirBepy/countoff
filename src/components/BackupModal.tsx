@@ -299,7 +299,10 @@ export default function BackupModal({ project, onClose }: { project: Project; on
                     onClick={async () => {
                       if (!confirm('Replace the current choreography with this version?')) return
                       const restored = await restoreSnapshot(snap)
-                      replaceProject(restored)
+                      // restoreSnapshot already wrote storage, so drop the queued write before
+                      // adopting it or the unload flush puts the pre-restore project back on top.
+                      cancelPendingSave()
+                      replaceProject(restored, { selection: null }, false)
                       flash('Restored')
                       onClose()
                     }}
