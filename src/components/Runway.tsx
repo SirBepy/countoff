@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { audio } from '../lib/audio'
-import { beatDuration, segmentEnd, timeToBeat } from '../lib/grid'
+import { beatDuration, beatToTime, segmentEnd, timeToBeat } from '../lib/grid'
 import type { Project, Segment } from '../lib/types'
 import { isComment } from '../lib/types'
 
@@ -18,33 +18,58 @@ export default function Runway({ project, segment, time }: { project: Project; s
   const index = project.segments.indexOf(segment)
   const end = segmentEnd(project.segments, index, project.duration)
   const totalBeats = Math.max(0, Math.ceil((end - segment.anchor) / beatDuration(segment.bpm)))
+  const nextSegment = project.segments[index + 1] ?? null
 
-  const blocks = useMemo(
-    () =>
-      project.blocks
-        .filter((b) => b.segmentId === segment.id)
-        .sort((a, b) => a.startBeat - b.startBeat)
-        .map((b) => ({ block: b, move: project.moves.find((m) => m.id === b.moveId) ?? null })),
-    [project.blocks, project.moves, segment.id],
-  )
+  // A lookahead block is placed by absolute time, since the next song's tempo makes its
+  // own startBeat a different physical distance. 30 is the narrow breakpoint's --ppb,
+  // so the horizon overshoots on a wide desktop instead of clipping a block early.
+  const horizonTime = end + ((window.innerWidth * 1.5) / 30) * beatDuration(segment.bpm)
 
-  const lyrics = useMemo(
-    () =>
-      segment.lyrics
-        .filter((l) => l.time >= 0)
-        .map((l, i, all) => {
-          const from = timeToBeat(segment, l.time)
-          const next = all[i + 1]
-          return { id: l.id, text: l.text, from, to: next ? timeToBeat(segment, next.time) : totalBeats }
-        })
-        .filter((l) => l.to > l.from),
-    [segment, totalBeats],
-  )
+  const blocks = useMemo(() => {
+    const own = project.blocks
+      .filter((b) => b.segmentId === segment.id)
+      .map((b) => ({ block: b, move: project.moves.find((m) => m.id === b.moveId) ?? null, sb: b.startBeat, nb: b.beats }))
+    const ahead = nextSegment
+      ? project.blocks
+          .filter((b) => b.segmentId === nextSegment.id && beatToTime(nextSegment, b.startBeat) < horizonTime)
+          .map((b) => {
+            const sb = timeToBeat(segment, beatToTime(nextSegment, b.startBeat))
+            const nb = timeToBeat(segment, beatToTime(nextSegment, b.startBeat + b.beats)) - sb
+            return { block: b, move: project.moves.find((m) => m.id === b.moveId) ?? null, sb, nb }
+          })
+      : []
+    return [...own, ...ahead].sort((a, b) => a.sb - b.sb)
+  }, [project.blocks, project.moves, segment, nextSegment, horizonTime])
 
-  const ticks = useMemo(
-    () => Array.from({ length: totalBeats }, (_, i) => ({ beat: i, count: (i % segment.countsPerRow) + 1 })),
-    [totalBeats, segment.countsPerRow],
-  )
+  const lyrics = useMemo(() => {
+    // A lyric's `time` is already absolute audio time, so a next-song line needs only
+    // timeToBeat into this runway's space, no beatToTime step like blocks require.
+    const lines = [
+      ...segment.lyrics.filter((l) => l.time >= 0),
+      ...(nextSegment ? nextSegment.lyrics.filter((l) => l.time >= 0 && l.time < horizonTime) : []),
+    ]
+    const fallback = nextSegment ? timeToBeat(segment, horizonTime) : totalBeats
+    return lines
+      .map((l, i) => ({
+        id: l.id,
+        text: l.text,
+        from: timeToBeat(segment, l.time),
+        to: lines[i + 1] ? timeToBeat(segment, lines[i + 1].time) : fallback,
+      }))
+      .filter((l) => l.to > l.from)
+  }, [segment, nextSegment, totalBeats, horizonTime])
+
+  const ticks = useMemo(() => {
+    const own = Array.from({ length: totalBeats }, (_, i) => ({ beat: i, count: (i % segment.countsPerRow) + 1 }))
+    if (!nextSegment) return own
+    // Counts past the cut come from the next song's own downbeat and countsPerRow, so
+    // the numbers reset to 1 exactly where its own ruler would start.
+    const ahead: typeof own = []
+    for (let i = 0; beatToTime(nextSegment, i) < horizonTime; i++) {
+      ahead.push({ beat: timeToBeat(segment, beatToTime(nextSegment, i)), count: (i % nextSegment.countsPerRow) + 1 })
+    }
+    return [...own, ...ahead]
+  }, [totalBeats, segment, nextSegment, horizonTime])
 
   useLayoutEffect(() => {
     // The pin keeps the active bar's name beside the playhead, but the name must stay
@@ -90,9 +115,9 @@ export default function Runway({ project, segment, time }: { project: Project; s
     <div className="runway" ref={root} onPointerDown={scrub} title="Drag to move through the song">
       <div className="rw-ruler">
         <div className="rw-scroll">
-          {ticks.map((t) => (
+          {ticks.map((t, i) => (
             <span
-              key={t.beat}
+              key={i}
               className={`rw-num${t.count === 1 ? ' one' : ''}`}
               style={{ '--tb': t.beat } as React.CSSProperties}
             >
@@ -104,11 +129,11 @@ export default function Runway({ project, segment, time }: { project: Project; s
 
       <div className="rw-lane">
         <div className="rw-scroll">
-          {blocks.map(({ block, move }) => (
+          {blocks.map(({ block, move, sb, nb }) => (
             <div
               key={block.id}
               className={`rw-bar ${isComment(block) ? 'comment' : `e${move?.energy ?? 1}`}`}
-              style={{ '--sb': block.startBeat, '--nb': block.beats } as React.CSSProperties}
+              style={{ '--sb': sb, '--nb': nb } as React.CSSProperties}
             >
               <span className="rw-spent" />
               <span className="rw-name">{isComment(block) ? block.note : (move?.name ?? '?')}</span>
