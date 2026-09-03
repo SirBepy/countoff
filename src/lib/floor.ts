@@ -128,13 +128,6 @@ export function standingAt(project: Project, personId: string, time: number): St
   }
 }
 
-/** People visible at `time`, in the project's own cast order. Someone mid walk-off still counts. */
-export const onFloorAt = (project: Project, time: number) =>
-  project.people.filter((p) => standingAt(project, p.id, time))
-
-export const waitingOffAt = (project: Project, time: number) =>
-  project.people.filter((p) => !standingAt(project, p.id, time))
-
 /** Who is standing on a cell at `time`, so a drop cannot land two people on one square. */
 export function occupantAt(project: Project, time: number, cell: Cell, exclude?: string) {
   return project.people.find((p) => {
@@ -145,9 +138,8 @@ export function occupantAt(project: Project, time: number, cell: Cell, exclude?:
 }
 
 /**
- * A free cell for someone walking on: back centre first, working forward. Dancers
- * come on from behind and then travel toward whoever they are dancing to, so the
- * far row from the focus is where an entrance belongs.
+ * A free cell for someone walking on: the far row from whoever they face, centre
+ * first, because dancers come on from behind and then travel toward the focus.
  */
 export function freeCell(project: Project, time: number, personId?: string): Cell {
   const { floor, focus } = project

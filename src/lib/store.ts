@@ -337,9 +337,6 @@ export const removePerson = (id: string) =>
     movements: p.movements.filter((m) => m.personId !== id),
   }))
 
-export const addMovement = (movement: Movement) =>
-  withProject((p) => ({ ...p, movements: [...p.movements, movement] }))
-
 export const updateMovement = (id: string, patch: Partial<Movement>, coalesceKey?: string) =>
   withProject((p) => ({ ...p, movements: p.movements.map((m) => (m.id === id ? { ...m, ...patch } : m)) }), coalesceKey)
 
