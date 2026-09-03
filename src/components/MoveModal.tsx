@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { flash, removeMove, upsertMove } from '../lib/store'
+import { useEffect, useState } from 'react'
+import { fillSelection } from '../lib/arrange'
+import { flash, getState, removeMove, set, upsertMove } from '../lib/store'
 import type { Move, Project } from '../lib/types'
 
 const BEAT_OPTIONS = [1, 2, 4, 8, 16]
@@ -18,12 +19,18 @@ export default function MoveModal({ project, moveId, onClose }: Props) {
 
   const patch = (p: Partial<Move>) => setDraft((d) => ({ ...d, ...p }))
 
+  // Abandoning the modal must not leave the counts armed for the next move saved.
+  useEffect(() => () => set({ pendingPlacement: null }, false), [])
+
   function save() {
     if (!draft.name.trim()) {
       flash('Give the move a name')
       return
     }
-    upsertMove({ ...draft, name: draft.name.trim(), builtin: existing?.builtin }, `move-${draft.id}`)
+    const move = { ...draft, name: draft.name.trim(), builtin: existing?.builtin }
+    upsertMove(move, `move-${move.id}`)
+    const at = getState().pendingPlacement
+    if (at) fillSelection({ ...at, beats: move.beats }, move.id)
     onClose()
   }
 

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { alternateSelection, fillSelection } from '../lib/arrange'
 import { countAtPoint } from '../lib/sheetHit'
 import { flash, set, uid, updateProject, useStore } from '../lib/store'
-import type { Move, Project } from '../lib/types'
+import { isComment, type Move, type Project } from '../lib/types'
 import { setDropTarget } from './Sheet'
 
 interface Props {
@@ -47,12 +47,14 @@ export default function MoveLibrary({ project, onEditMove }: Props) {
   const activeMoveId = useStore((s) => s.activeMoveId)
   const railRef = useRef<HTMLDivElement>(null)
 
-  const usedIds = useMemo(() => new Set(project.blocks.map((b) => b.moveId)), [project.blocks])
+  // Comment blocks carry no move, so they count towards nothing in the rail.
+  const placed = useMemo(() => project.blocks.filter((b) => !isComment(b)), [project.blocks])
+  const usedIds = useMemo(() => new Set(placed.map((b) => b.moveId!)), [placed])
   const useCounts = useMemo(() => {
     const m = new Map<string, number>()
-    for (const b of project.blocks) m.set(b.moveId, (m.get(b.moveId) ?? 0) + 1)
+    for (const b of placed) m.set(b.moveId!, (m.get(b.moveId!) ?? 0) + 1)
     return m
-  }, [project.blocks])
+  }, [placed])
 
   const sorted = useMemo(() => sortMoves(project.moves, usedIds, selection?.beats), [project.moves, usedIds, selection?.beats])
   const moves = useMemo(() => {

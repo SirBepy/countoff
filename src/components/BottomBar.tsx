@@ -68,7 +68,7 @@ export default function BottomBar({ project, onNewSegment }: { project: Project;
             Now{now.next ? ` · next: ${now.next.name}${now.beatsUntilNext ? ` in ${now.beatsUntilNext}` : ''}` : ''}
           </div>
           <div className="value">
-            {now.move?.name ?? '-'}
+            {now.move?.name ?? (now.block ? 'Note' : '-')}
             {now.block?.note && <span className="faint"> {now.block.note}</span>}
           </div>
         </div>

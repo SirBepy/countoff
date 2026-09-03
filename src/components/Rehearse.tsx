@@ -30,7 +30,7 @@ export default function Rehearse({ project }: { project: Project }) {
       <div className="rehearse-main">
         <div className="rehearse-lyric">{now.lyric ?? ' '}</div>
         {thumb && <img className="rehearse-thumb" src={thumb} alt="" />}
-        <div className="rehearse-move">{now.move?.name ?? 'Waiting'}</div>
+        <div className="rehearse-move">{now.move?.name ?? (now.block ? 'Note' : 'Waiting')}</div>
         {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
         <div className="pulse">
           {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (

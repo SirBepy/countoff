@@ -140,6 +140,7 @@ export default function App() {
       } else if (e.key === 'r') {
         set({ view: getState().view === 'sheet' ? 'rehearse' : 'sheet' }, false)
       } else if (e.key === 'Escape') {
+        if (getState().sheetMenu) return set({ sheetMenu: null }, false)
         set({ view: 'sheet', selection: null, libraryOpen: false }, false)
       }
     }
@@ -221,6 +222,7 @@ export default function App() {
               onSelectSegment={setSegmentId}
               onEditLyrics={setLyricsFor}
               onEditMarker={setMarkerFor}
+              onEditMove={setMoveFor}
             />
           </div>
         </main>

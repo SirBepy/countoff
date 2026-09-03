@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Block, Marker, Move, Project, Segment } from './types'
+import { isComment, type Block, type Marker, type Move, type Project, type Segment } from './types'
 import { saveProject } from './db'
 import { snapshot } from './backup'
 
@@ -7,6 +7,17 @@ export interface Selection {
   segmentId: string
   startBeat: number
   beats: number
+}
+
+/** An open sheet context menu. `blockId` absent means it opened on bare counts. */
+export interface SheetMenu {
+  x: number
+  y: number
+  segmentId: string
+  startBeat: number
+  blockId?: string
+  /** Span a comment or a picked move should cover; only set for the bare-counts menu. */
+  defaultBeats?: number
 }
 
 export interface UiState {
@@ -22,8 +33,12 @@ export interface UiState {
   libraryOpen: boolean
   /** Which lyric line's inline editor is open, so a hand-placed line can land in edit mode immediately. */
   editingLyricId: string | null
-  /** Which block's note editor is open; opened by a tap that stays under the drag threshold. */
+  /** Which block's note editor is open; opened from the sheet menu's Edit item. */
   editingBlockNoteId: string | null
+  /** The open right-click / long-press menu on the sheet, positioned in viewport coords. */
+  sheetMenu: SheetMenu | null
+  /** Counts a move created from the sheet menu should land on once it is saved. */
+  pendingPlacement: { segmentId: string; startBeat: number } | null
   /** Mirrors the undo/redo stacks so buttons can grey out without reaching into store internals. */
   canUndo: boolean
   canRedo: boolean
@@ -40,6 +55,8 @@ let state: UiState = {
   libraryOpen: false,
   editingLyricId: null,
   editingBlockNoteId: null,
+  sheetMenu: null,
+  pendingPlacement: null,
   canUndo: false,
   canRedo: false,
 }
@@ -222,6 +239,51 @@ export const updateBlock = (id: string, patch: Partial<Block>, coalesceKey?: str
 export const removeBlocks = (ids: string[]) =>
   withProject((p) => ({ ...p, blocks: p.blocks.filter((b) => !ids.includes(b.id)) }))
 
+/** Adds a comment spanning counts and opens its editor, so the text is typed in one go. */
+export function addComment(segmentId: string, startBeat: number, beats: number) {
+  const id = uid()
+  withProject((p) => ({ ...p, blocks: [...p.blocks, { id, segmentId, startBeat, beats }] }))
+  set({ editingBlockNoteId: id, sheetMenu: null }, false)
+}
+
+/**
+ * Drops a copy immediately after the original. A move overwrites the moves it lands
+ * on, matching a fill; a comment overlays instead, since annotating is not occupying.
+ */
+export function duplicateBlock(id: string) {
+  const source = state.project?.blocks.find((b) => b.id === id)
+  if (!source) return
+  const copy = { ...source, id: uid(), startBeat: source.startBeat + source.beats }
+  withProject((p) => ({
+    ...p,
+    blocks: [
+      ...(isComment(copy)
+        ? p.blocks
+        : p.blocks.filter(
+            (b) =>
+              isComment(b) ||
+              b.segmentId !== copy.segmentId ||
+              b.startBeat + b.beats <= copy.startBeat ||
+              b.startBeat >= copy.startBeat + copy.beats,
+          )),
+      copy,
+    ],
+  }))
+  return copy.id
+}
+
+/**
+ * Paint order is array order, so a block hidden under another is rescued by moving it
+ * last. Lane stacking keeps most overlaps visible; this covers the ones it cannot.
+ */
+export const restackBlock = (id: string, to: 'front' | 'back') =>
+  withProject((p) => {
+    const block = p.blocks.find((b) => b.id === id)
+    if (!block) return p
+    const rest = p.blocks.filter((b) => b.id !== id)
+    return { ...p, blocks: to === 'front' ? [...rest, block] : [block, ...rest] }
+  })
+
 export const upsertMove = (move: Move, coalesceKey?: string) =>
   withProject(
     (p) => ({
@@ -235,14 +297,19 @@ export const removeMove = (id: string) =>
   withProject((p) => ({ ...p, moves: p.moves.filter((m) => m.id !== id), blocks: p.blocks.filter((b) => b.moveId !== id) }))
 
 /**
- * Clears anything overlapping [startBeat, startBeat+beats) in the segment, so
- * dropping onto occupied counts replaces rather than stacks.
+ * Clears the moves overlapping [startBeat, startBeat+beats) in the segment, so
+ * dropping onto occupied counts replaces rather than stacks. Comments survive:
+ * they annotate the counts rather than occupying them, and lane stacking shows both.
  */
 export function clearRange(segmentId: string, startBeat: number, beats: number) {
   withProject((p) => ({
     ...p,
     blocks: p.blocks.filter(
-      (b) => b.segmentId !== segmentId || b.startBeat + b.beats <= startBeat || b.startBeat >= startBeat + beats,
+      (b) =>
+        isComment(b) ||
+        b.segmentId !== segmentId ||
+        b.startBeat + b.beats <= startBeat ||
+        b.startBeat >= startBeat + beats,
     ),
   }))
 }

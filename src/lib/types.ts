@@ -56,13 +56,18 @@ export interface Marker {
 export interface Block {
   id: string
   segmentId: string
-  moveId: MoveId
+  /** Absent on a comment: a block that spans counts carrying only its `note`. */
+  moveId?: MoveId
   /** Beat index relative to the segment's anchor. */
   startBeat: number
   beats: number
-  /** Annotates this one placement, unlike `Move.note` which is shared by every copy. */
+  /** Annotates this one placement, unlike `Move.note` which is shared by every copy.
+   * On a comment block it is the whole content, not an annotation. */
   note?: string
 }
+
+/** A block with no move is a comment; its `note` is the text on the sheet. */
+export const isComment = (block: Block) => !block.moveId
 
 export interface Project {
   id: string

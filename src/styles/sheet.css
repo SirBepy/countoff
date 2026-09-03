@@ -173,7 +173,11 @@
   position: relative;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  height: 56px;
+  /* Overlapping blocks get a lane each instead of hiding behind one another. The
+     band grows less than the lane count so a stacked row stays phone-sized. */
+  --lanes: 1;
+  --band: calc(34px + (var(--lanes) - 1) * 14px);
+  height: calc(22px + var(--band));
   border-radius: 9px;
   background: var(--bg-1);
   border: 1px solid var(--line-soft);
@@ -242,8 +246,8 @@
 
 .block {
   position: absolute;
-  top: 18px;
-  bottom: 4px;
+  top: calc(18px + var(--lane, 0) * var(--band) / var(--lanes));
+  height: calc(var(--band) / var(--lanes) - 2px);
   border-radius: 7px;
   padding: 0 7px;
   display: flex;
@@ -267,9 +271,25 @@
 .block.e3 {
   background: var(--e3);
 }
+/* A comment annotates counts rather than occupying them, so it reads as a note
+   pinned over the grid, never as another energy colour to decode. */
+.block.comment {
+  background: rgba(124, 92, 255, 0.16);
+  border: 1px dashed rgba(167, 148, 255, 0.8);
+  color: #ddd6ff;
+  font-weight: 600;
+  font-style: italic;
+}
 .block.now {
   outline: 2px solid #fff;
   outline-offset: 1px;
+}
+.block.dragging {
+  z-index: 6;
+  opacity: 0.9;
+  cursor: grabbing;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  outline: 2px solid var(--accent);
 }
 .block .grip {
   position: absolute;
@@ -312,6 +332,43 @@
   max-width: 50vw;
 }
 
+.sheet-menu {
+  position: fixed;
+  z-index: 90;
+  min-width: 190px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.sheet-menu-head {
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-menu-item {
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: var(--tap);
+  font-size: 13px;
+  background: transparent;
+  border-color: transparent;
+}
+.sheet-menu-item.danger {
+  color: var(--danger);
+}
+
 @media (min-width: 620px) {
   .sheet {
     padding: 2px 14px 40px;
@@ -327,7 +384,8 @@
 
 @media (min-width: 900px) {
   .counts {
-    height: 46px;
+    --band: calc(29px + (var(--lanes) - 1) * 12px);
+    height: calc(17px + var(--band));
   }
   .count-cell {
     font-size: 10px;
@@ -339,9 +397,11 @@
     font-size: 9px;
   }
   .block {
-    top: 14px;
-    bottom: 3px;
+    top: calc(14px + var(--lane, 0) * var(--band) / var(--lanes));
     font-size: 11px;
+  }
+  .sheet-menu-item {
+    min-height: 32px;
   }
   .block .grip {
     width: 14px;
