@@ -15,6 +15,7 @@ export default function Rehearse({ project }: { project: Project }) {
     const at = standingAt(project, p.id, time)
     return at && at.progress < 1
   })
+  const walkingLabel = walking.length > 0 ? `${walking.map((p) => p.name).join(', ')} moving` : ''
 
   return (
     <div className="rehearse">
@@ -36,15 +37,13 @@ export default function Rehearse({ project }: { project: Project }) {
       <div className="rehearse-main">
         {project.people.length > 0 && (
           <div className="rehearse-floor">
-            {walking.length > 0 && (
-              <div className="rehearse-floor-name">{walking.map((p) => p.name).join(', ')} moving</div>
-            )}
+            <div className={`rehearse-floor-name${walkingLabel ? '' : ' is-empty'}`}>{walkingLabel}</div>
             <FloorStage project={project} time={time} editable={false} />
           </div>
         )}
         <div className="rehearse-centre">
           <div className="rehearse-move">{now.move?.name ?? (now.block ? 'Note' : 'Waiting')}</div>
-          {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
+          <div className={`rehearse-note${now.block?.note ? '' : ' is-empty'}`}>{now.block?.note ?? ''}</div>
           <div className="pulse">
             {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (
               <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
