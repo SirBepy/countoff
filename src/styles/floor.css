@@ -317,6 +317,8 @@
 
 .mv {
   --who: 150px;
+  --lane-h: 38px;
+  --ruler-h: 26px;
   position: relative;
   flex: 1;
   display: flex;
@@ -337,8 +339,15 @@
 .mv-lane {
   display: grid;
   grid-template-columns: var(--who) 1fr;
-  height: 38px;
+  height: var(--lane-h);
   border-bottom: 1px solid var(--line-soft);
+}
+/* Pinned lanes are rendered above the rest, so sticking them to their own row
+   offset holds them under the ruler while everything else scrolls past. */
+.mv-lane.pinned {
+  position: sticky;
+  z-index: 4;
+  background: var(--bg-1);
 }
 .mv-lane.on .mv-who {
   background: var(--accent-soft);
@@ -347,7 +356,7 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  height: 26px;
+  height: var(--ruler-h);
   background: var(--bg-1);
   border-bottom: 1px solid var(--line);
 }
@@ -367,11 +376,41 @@
   z-index: 6;
 }
 .mv-who .nm {
+  flex: 1;
   font-size: 12px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.mv-who .disc-icon {
+  font-size: 17px;
+  color: var(--text-faint);
+  width: 24px;
+  text-align: center;
+  flex: none;
+}
+.mv-who .pin {
+  min-height: 20px;
+  width: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  /* Dim rather than hidden: a pin nobody can see is a pin nobody finds. */
+  opacity: 0.4;
+  flex: none;
+}
+.mv-lane:hover .pin,
+.mv-who .pin.on {
+  opacity: 1;
+}
+.mv-who .pin.on {
+  color: var(--accent);
+}
+.mv-who .pin:hover {
+  background: transparent;
+  color: var(--text);
 }
 .mv-track {
   position: relative;
@@ -406,6 +445,39 @@
   font-size: 9px;
   font-style: normal;
   color: var(--text-faint);
+}
+
+/* Moves read as the sheet does: energy is the colour, so the lane has a shape. */
+.mv-move {
+  position: absolute;
+  top: 6px;
+  height: 26px;
+  min-width: 6px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bg);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+.mv-move.e1 {
+  background: var(--e1);
+}
+.mv-move.e2 {
+  background: var(--e2);
+}
+.mv-move.e3 {
+  background: var(--e3);
+}
+.mv-move.comment {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--text-dim);
+  font-weight: 400;
 }
 
 /* A hold is standing still; the dashed lane showing through is being offstage. */

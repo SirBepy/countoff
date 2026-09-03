@@ -120,13 +120,31 @@ async function main() {
     await page.waitForSelector('.floor-view', { timeout: 5000 })
     check('the topbar Floor button opens the floor view', true)
     check('the cast rail lists everyone without opening a modal', (await page.locator('.rail-person').count()) === 3)
-    check('the timeline draws one lane per person', (await page.locator('.mv-lane:not(.mv-ruler)').count()) === 3)
+    check('the timeline draws one lane per person', (await page.locator('.mv-lane:not(.mv-ruler):not(.moves)').count()) === 3)
 
     // Past the first snapshot, so the migrated positions are the ones on screen.
     await seek(page, AT)
     await page.waitForTimeout(200)
     check('everyone standing at the playhead is on the floor', (await page.locator('.stage .puck').count()) === 3)
     await page.screenshot({ path: path.join(SHOTS, 'floor-1-migrated.png') })
+
+    check(
+      'the sheet moves get a lane of their own above the cast',
+      (await page.locator('.mv-lane.moves .mv-move').first().textContent()) === 'Step touch',
+    )
+
+    // Pinning has to lift a lane above the rest, or it cannot stay in view.
+    await page.locator('.mv-lane:not(.mv-ruler):not(.moves)').nth(2).locator('.pin').click()
+    await page.waitForTimeout(250)
+    const pinnedTo = (await readProject(page)).pinned
+    check('pinning a lane is remembered on the project', pinnedTo.length === 1 && pinnedTo[0] === 'p-iva', JSON.stringify(pinnedTo))
+    check(
+      'a pinned lane is rendered first, which is what lets it stick',
+      (await page.locator('.mv-lane.pinned').first().locator('.nm').textContent()) === 'Iva Novak',
+    )
+    await page.locator('.mv-lane.pinned .pin').first().click()
+    await page.waitForTimeout(250)
+    check('pinning again lets it scroll with the rest', (await readProject(page)).pinned.length === 0)
 
     // Arrow keys nudge the playhead a count at a time, from any view.
     await page.locator('.stage').click({ position: { x: 5, y: 5 } })
@@ -198,7 +216,7 @@ async function main() {
 
     // A click that never drags is how you get back to where a walk lands, which is
     // the only count from which its destination can be edited.
-    const walkBlock = page.locator('.mv-lane:not(.mv-ruler)').first().locator('.mv-walk').last()
+    const walkBlock = page.locator('.mv-lane:not(.mv-ruler):not(.moves)').first().locator('.mv-walk').last()
     await seek(page, 5)
     await page.waitForTimeout(150)
     await walkBlock.click()
@@ -227,7 +245,7 @@ async function main() {
     await page.waitForTimeout(250)
 
     // Right-click that walk and make it instant.
-    const walk = page.locator('.mv-lane:not(.mv-ruler)').first().locator('.mv-walk').last()
+    const walk = page.locator('.mv-lane:not(.mv-ruler):not(.moves)').first().locator('.mv-walk').last()
     await walk.click({ button: 'right' })
     await page.waitForSelector('.mv-menu')
     check('right-clicking a walk opens its length menu', await page.locator('.mv-menu .mi:has-text("One bar")').isVisible())

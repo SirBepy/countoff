@@ -113,6 +113,8 @@ export interface Project {
   floor: FloorSize
   /** Counts a new movement's walk takes, until that one is retimed. */
   walkCounts: number
+  /** Timeline lanes kept in view while the rest scroll. Person ids, plus `moves`. */
+  pinned: string[]
   focus: Focus
   updatedAt: number
 }

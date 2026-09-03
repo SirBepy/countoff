@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
 import { beatAt, movementLabel, orderedMovements, stints } from '../lib/floor'
-import { beatDuration, formatTime, segmentEnd } from '../lib/grid'
+import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
-import { beginGesture, endGesture, removeMovement, updateMovement } from '../lib/store'
-import type { Movement, Project } from '../lib/types'
+import { beginGesture, endGesture, removeMovement, togglePin, updateMovement } from '../lib/store'
+import { isComment, type Movement, type Person, type Project } from '../lib/types'
 
 interface Props {
   project: Project
@@ -22,6 +22,11 @@ interface MenuAt {
   x: number
   y: number
 }
+
+/** The sheet's own moves get a lane too, so a walk can be read against what is danced over it. */
+const MOVES_LANE = 'moves'
+
+type Lane = { id: string; person: Person | null }
 
 /** A drag under this many pixels is a click, so tapping a block seeks instead of retiming it. */
 const DRAG_SLOP = 4
@@ -105,6 +110,39 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
   ]
   const menuPerson = menu && project.people.find((p) => p.id === menu.movement.personId)
 
+  // Pinned lanes render first, because a sticky top offset only keeps a lane on
+  // screen while the lanes below it are the ones scrolling past.
+  const lanes = useMemo<Lane[]>(() => {
+    const all: Lane[] = [
+      { id: MOVES_LANE, person: null },
+      ...project.people.map((person) => ({ id: person.id, person })),
+    ]
+    const isPinned = (lane: Lane) => project.pinned.includes(lane.id)
+    return [...all.filter(isPinned), ...all.filter((lane) => !isPinned(lane))]
+  }, [project.people, project.pinned])
+
+  /** The sheet's blocks as absolute times, so they line up with the walks under them. */
+  const moves = useMemo(() => {
+    const bySegment = new Map(project.segments.map((seg) => [seg.id, seg]))
+    return project.blocks
+      .flatMap((block) => {
+        const segment = bySegment.get(block.segmentId)
+        if (!segment) return []
+        const move = project.moves.find((m) => m.id === block.moveId)
+        const from = beatToTime(segment, block.startBeat)
+        return [
+          {
+            block,
+            name: isComment(block) ? block.note || 'Note' : (move?.name ?? '?'),
+            energy: move?.energy ?? 1,
+            from,
+            to: from + block.beats * beatDuration(segment.bpm),
+          },
+        ]
+      })
+      .sort((a, b) => a.from - b.from)
+  }, [project.blocks, project.moves, project.segments])
+
   return (
     <div
       className="mv"
@@ -142,29 +180,67 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
             </div>
           </div>
 
-          {project.people.map((person) => {
-            const placed = orderedMovements(project, person.id)
+          {lanes.map((lane, i) => {
+            const person = lane.person
+            const pinned = project.pinned.includes(lane.id)
+            const placed = person ? orderedMovements(project, person.id) : []
             return (
               <div
-                key={person.id}
-                className={`mv-lane${person.id === selectedId ? ' on' : ''}`}
-                onPointerDown={() => onSelect(person.id)}
+                key={lane.id}
+                className={`mv-lane${person ? '' : ' moves'}${person && person.id === selectedId ? ' on' : ''}${
+                  pinned ? ' pinned' : ''
+                }`}
+                style={pinned ? { top: `calc(var(--ruler-h) + ${i} * var(--lane-h))` } : undefined}
+                onPointerDown={() => person && onSelect(person.id)}
               >
                 <div className="mv-who">
-                  <span className="disc" style={{ background: person.colour }}>
-                    {person.initials}
-                  </span>
-                  <span className="nm">{person.name}</span>
+                  {person ? (
+                    <>
+                      <span className="disc" style={{ background: person.colour }}>
+                        {person.initials}
+                      </span>
+                      <span className="nm">{person.name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="ph ph-sneaker-move disc-icon" />
+                      <span className="nm">Moves</span>
+                    </>
+                  )}
+                  <button
+                    className={`pin${pinned ? ' on' : ''}`}
+                    title={pinned ? 'Let this lane scroll again' : 'Keep this lane in view'}
+                    onClick={() => togglePin(lane.id)}
+                  >
+                    <i className="ph ph-push-pin" />
+                  </button>
                 </div>
                 <div className="mv-track" onPointerDown={scrub}>
-                  {stints(project, person.id).map((run, i) => (
-                    <span
-                      key={i}
-                      className="mv-hold"
-                      style={{ left: pct(run.from), width: pct(run.to - run.from), background: person.colour }}
-                    />
-                  ))}
-                  {placed.map(({ movement, arrive, depart }) => {
+                  {!person &&
+                    moves.map(({ block, name, energy, from, to }) => (
+                      <span
+                        key={block.id}
+                        className={`mv-move e${energy}${isComment(block) ? ' comment' : ''}`}
+                        style={{ left: pct(from), width: pct(to - from) }}
+                        title={`${name} from ${formatTime(from)}`}
+                        onPointerDown={(e) => {
+                          e.stopPropagation()
+                          audio.seek(from)
+                        }}
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  {person &&
+                    stints(project, person.id).map((run, n) => (
+                      <span
+                        key={n}
+                        className="mv-hold"
+                        style={{ left: pct(run.from), width: pct(run.to - run.from), background: person.colour }}
+                      />
+                    ))}
+                  {person &&
+                    placed.map(({ movement, arrive, depart }) => {
                     // The one a drag on the floor would edit, so it is worth outlining.
                     const live = here?.segment.id === movement.segmentId && here?.beat === movement.beat
                     return (

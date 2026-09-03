@@ -84,6 +84,7 @@ export function migrateProject(raw: Project): Project {
     focus: p.focus ?? { kind: 'audience' },
     floor: p.floor ?? DEFAULT_FLOOR,
     walkCounts: p.walkCounts ?? DEFAULT_WALK_COUNTS,
+    pinned: p.pinned ?? [],
     // Pre-movement shape: retired 2026-09-03 when whole-cast formations became per-person walks.
     movements: p.movements ?? movementsFromFormations(formations ?? [], p.segments ?? [], uid),
     // Pre-transition shape: retired 2026-08-27 when count length and transitions went per-song.

@@ -54,6 +54,7 @@ export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) 
       movements: [],
       floor: DEFAULT_FLOOR,
       walkCounts: DEFAULT_WALK_COUNTS,
+      pinned: [],
       focus: { kind: 'audience' },
       updatedAt: Date.now(),
     }

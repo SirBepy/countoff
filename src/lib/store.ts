@@ -384,6 +384,13 @@ export const setFloorSize = (floor: FloorSize) =>
 
 export const setWalkCounts = (walkCounts: number) => updateProject({ walkCounts })
 
+/** Pins a timeline lane so it stays in view, or unpins it if it already is. */
+export const togglePin = (id: string) =>
+  withProject((p) => ({
+    ...p,
+    pinned: p.pinned.includes(id) ? p.pinned.filter((x) => x !== id) : [...p.pinned, id],
+  }))
+
 export const setFocus = (focus: Focus, coalesceKey?: string) => updateProject({ focus }, coalesceKey)
 
 export function flash(message: string) {
