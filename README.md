@@ -43,7 +43,9 @@ swaps it in without disturbing a single count.
 Built mobile first, and installable. Under 900px the move library becomes a bottom sheet you reach
 from the selection bar, tempo controls fold behind the BPM chip, and the transport collapses to the
 essentials with the rest one tap away. Add it to your home screen and it runs offline, which matters
-at a venue with no signal. Audio keeps playing with the screen locked, with lock-screen controls.
+at a venue with no signal. Added to the home screen, audio keeps playing with the screen locked, with
+lock-screen controls. The Android APK does not: it is a WebView shell with no media session, so
+locking the screen stops playback. Use the home-screen install if you need to rehearse pocketed.
 
 Storage is per browser and per address, so a project built at `localhost` will not appear on the
 hosted URL. Move between them with Export backup and Restore from file, then re-pick the song.
