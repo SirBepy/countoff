@@ -6,11 +6,12 @@ import { DEFAULT_COUNTS_PER_ROW } from '../lib/grid'
 import { STARTER_MOVES } from '../lib/moves'
 import { flash, replaceProject, uid } from '../lib/store'
 import { signInWithGoogle } from '../lib/firebase'
-import { pullNow } from '../lib/syncEngine'
+import { pullNow, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
 import { audio } from '../lib/audio'
 
-export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) {
+export default function DropAudio({ onCancel, onProjects }: { onCancel?: () => void; onProjects?: () => void } = {}) {
+  const syncStatus = useSyncStatus()
   const [over, setOver] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -140,10 +141,23 @@ export default function DropAudio({ onCancel }: { onCancel?: () => void } = {}) 
           }}
         />
         <div className="drop-signin">
-          <span className="faint">or</span>
-          <button disabled={!!busy || signingIn} onClick={signIn}>
-            <i className="ph ph-google-logo i" /> {signingIn ? 'Signing in...' : 'Sign in and pull my choreographies'}
-          </button>
+          {syncStatus.configured ? (
+            <span className="faint">
+              <i className="ph ph-cloud-check i" /> Signed in as {syncStatus.email}
+            </span>
+          ) : (
+            <>
+              <span className="faint">or</span>
+              <button disabled={!!busy || signingIn} onClick={signIn}>
+                <i className="ph ph-google-logo i" /> {signingIn ? 'Signing in...' : 'Sign in and pull my choreographies'}
+              </button>
+            </>
+          )}
+          {onProjects && (
+            <button onClick={onProjects}>
+              <i className="ph ph-folders i" /> Open an existing project
+            </button>
+          )}
         </div>
         <p className="faint" style={{ marginTop: 22, marginBottom: 0, fontSize: 12 }}>
           The audio stays on this device. Signing in carries the choreography, not the song.

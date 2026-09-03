@@ -44,25 +44,39 @@ export default function App() {
   const [creating, setCreating] = useState(false)
   const isDesktop = useIsDesktop()
 
+  async function adoptActiveProject(): Promise<boolean> {
+    const activeId = getActiveProjectId()
+    const [saved, blob] = await Promise.all([loadProject(), activeId ? loadAudio(activeId) : Promise.resolve(undefined)])
+    if (!saved || !blob) return false
+    const prevUrl = getState().audioUrl
+    const url = URL.createObjectURL(blob)
+    audio.load(url, saved.name)
+    // No blocks placed yet means he hasn't started choreographing; land on setup.
+    const view = saved.blocks.length === 0 ? 'setup' : 'sheet'
+    set({ project: saved, audioUrl: url, view }, false)
+    if (prevUrl) URL.revokeObjectURL(prevUrl)
+    setSegmentId(saved.segments[0]?.id ?? null)
+    if (getCurrentUser()) void pullNow()
+    return true
+  }
+
   useEffect(() => {
     void (async () => {
       await migrateKeySpace()
-      const activeId = getActiveProjectId()
-      const [saved, blob] = await Promise.all([loadProject(), activeId ? loadAudio(activeId) : Promise.resolve(undefined)])
-      if (saved && blob) {
-        const url = URL.createObjectURL(blob)
-        audio.load(url, saved.name)
-        // No blocks placed yet means he hasn't started choreographing; land on setup.
-        const view = saved.blocks.length === 0 ? 'setup' : 'sheet'
-        set({ project: saved, audioUrl: url, view }, false)
-        setSegmentId(saved.segments[0]?.id ?? null)
-        if (getCurrentUser()) void pullNow()
-      }
+      await adoptActiveProject()
       setBooted(true)
       // Asking early means the grant is in place before there is work to lose.
       void requestPersistence()
     })()
   }, [])
+
+  // lib/store.ts has no HMR boundary of its own: a hot reload that touches it (or
+  // anything importing it) re-runs the module and resets its state to project: null,
+  // while this component's own booted stays true (Fast Refresh preserves local state).
+  // Refill from IndexedDB rather than leave the empty-state screen up over real work.
+  useEffect(() => {
+    if (booted && !project && !creating) void adoptActiveProject()
+  }, [booted, project, creating])
 
   // Switching or creating a project changes which document is open, so the
   // deliberate "New" screen (opened without a null project) always steps aside.
@@ -158,7 +172,20 @@ export default function App() {
   }, [project])
 
   if (!booted) return null
-  if (!project || creating) return <DropAudio onCancel={project ? () => setCreating(false) : undefined} />
+  if (!project || creating) {
+    return (
+      <>
+        <DropAudio onCancel={project ? () => setCreating(false) : undefined} onProjects={() => setShowProjects(true)} />
+        {showProjects && (
+          <ProjectsModal
+            activeProjectId={project?.id ?? ''}
+            onClose={() => setShowProjects(false)}
+            onCreateNew={() => setShowProjects(false)}
+          />
+        )}
+      </>
+    )
+  }
   if (view === 'rehearse') return <Rehearse project={project} />
   if (view === 'setup') return <SongSetup project={project} />
   if (view === 'floor') return <Floor project={project} />
