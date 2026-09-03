@@ -1,13 +1,17 @@
 import { audio, useAudio } from '../lib/audio'
+import { formationAtTime } from '../lib/floor'
 import { formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
 import { set } from '../lib/store'
 import type { Project } from '../lib/types'
+import FloorStage from './FloorStage'
 import Runway from './Runway'
 
 export default function Rehearse({ project }: { project: Project }) {
   const { time, playing, metronome, rate } = useAudio()
   const now = nowState(project, time)
+  // No cast means an empty grid, which would take the centre of the screen and say nothing.
+  const formation = project.people.length ? formationAtTime(project, time) : null
 
   return (
     <div className="rehearse">
@@ -26,13 +30,21 @@ export default function Rehearse({ project }: { project: Project }) {
         </button>
       </div>
 
-      <div className="rehearse-main">
-        <div className="rehearse-move">{now.move?.name ?? (now.block ? 'Note' : 'Waiting')}</div>
-        {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
-        <div className="pulse">
-          {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (
-            <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
-          ))}
+      <div className={`rehearse-main${formation ? ' with-floor' : ''}`}>
+        {formation && (
+          <div className="rehearse-floor">
+            <div className="rehearse-floor-name">{formation.name}</div>
+            <FloorStage project={project} formation={formation} editable={false} />
+          </div>
+        )}
+        <div className="rehearse-centre">
+          <div className="rehearse-move">{now.move?.name ?? (now.block ? 'Note' : 'Waiting')}</div>
+          {now.block?.note && <div className="rehearse-note">{now.block.note}</div>}
+          <div className="pulse">
+            {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (
+              <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
+            ))}
+          </div>
         </div>
       </div>
 

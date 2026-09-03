@@ -18,11 +18,59 @@
   min-height: 0;
   overflow: hidden;
 }
+.rehearse-centre {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+.rehearse-floor-name {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+/* The floor view sizes itself to fill a page; here it is a glance, so the whole
+   thing including its pucks scales down rather than being re-styled. */
+.rehearse .stage {
+  width: 288px;
+  max-width: none;
+  margin: 0;
+}
+.rehearse .puck .disc {
+  width: 26px;
+  height: 26px;
+  font-size: 9px;
+  border-width: 1px;
+}
+/* At this scale a disc is taller than its cell, so a name hanging below it lands on
+   whoever is in front. Initials already identify a cast this size. */
+.rehearse .puck .nm {
+  display: none;
+}
+/* Icon only. The chair's name would push the card into whoever stands behind it, and
+   mid-dance the question is which way to face, not who is sitting there. */
+.rehearse .stage-focus {
+  padding: 2px 4px;
+  gap: 0;
+}
+.rehearse .stage-focus i {
+  font-size: 15px;
+}
+.rehearse .stage-focus span {
+  display: none;
+}
+.rehearse .stage-audience {
+  height: 16px;
+  font-size: 8px;
+}
+/* line-height 1 crops the box above the font's descender, so a name like Grapevine
+   hangs its p into the count dots below it. 1.1 puts the descender inside the box. */
 .rehearse-move {
-  font-size: clamp(34px, 11vw, 128px);
+  font-size: clamp(38px, 10vw, 84px);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.1;
 }
 .rehearse-note {
   font-size: clamp(18px, 5vw, 40px);
@@ -229,5 +277,26 @@
   .rehearse .pulse i {
     width: 11px;
     height: 11px;
+  }
+  /* Wide enough to put the floor beside the move name instead of above it. The
+     name column is 1fr so a short move name cannot shift the floor sideways. */
+  .rehearse-main.with-floor {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 54px;
+  }
+  .rehearse .stage {
+    width: 396px;
+  }
+  .rehearse .puck .disc {
+    width: 34px;
+    height: 34px;
+    font-size: 11px;
+  }
+  .rehearse .stage-focus i {
+    font-size: 19px;
+  }
+  .rehearse .stage-focus span {
+    font-size: 9px;
   }
 }
