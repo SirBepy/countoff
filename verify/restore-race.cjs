@@ -1,9 +1,6 @@
-/* Regression probe for fcf63bd: the "Automatic history" Restore button adopted
-   a restored project without cancelling a save the 400ms debounce had already
-   queued, so that save could land on top of the restore and silently undo it.
-   This edits (queues a save), then restores INSIDE that 400ms window, then
-   checks the restore survived. A probe that restored only after the debounce
-   had already flushed could never fail and would not be evidence either way.
+/* Regression probe for fcf63bd. Edits (queuing a save), restores INSIDE the 400ms
+   debounce window, checks the restore survived. Check 1 asserts the window was hit:
+   a restore after the debounce flushed could never fail and is not evidence.
    Run: node verify/restore-race.cjs [port] */
 const { withBrowser, desktopContext, seedProject, silentWav, readProject, createChecklist } = require('./harness.cjs')
 const { PROJECT } = require('./fixtures.cjs')
