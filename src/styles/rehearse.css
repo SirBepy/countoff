@@ -96,6 +96,12 @@
   position: relative;
   border-top: 1px solid var(--line-soft);
   background: var(--bg-1);
+  cursor: grab;
+  /* Dragging the strip is never a page scroll, so the browser must not claim it. */
+  touch-action: none;
+}
+.runway.dragging {
+  cursor: grabbing;
 }
 .rw-scroll {
   position: absolute;

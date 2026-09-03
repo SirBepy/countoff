@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
+import { audio } from '../lib/audio'
 import { beatDuration, segmentEnd, timeToBeat } from '../lib/grid'
 import type { Project, Segment } from '../lib/types'
 import { isComment } from '../lib/types'
@@ -9,6 +10,10 @@ import { isComment } from '../lib/types'
 export default function Runway({ project, segment, time }: { project: Project; segment: Segment; time: number }) {
   const root = useRef<HTMLDivElement>(null)
   const beat = timeToBeat(segment, time)
+  // Read per move rather than captured, so a drag across a cut converts pixels to
+  // seconds at the tempo of whichever song is under the head at that moment.
+  const live = useRef(segment)
+  live.current = segment
 
   const index = project.segments.indexOf(segment)
   const end = segmentEnd(project.segments, index, project.duration)
@@ -54,8 +59,33 @@ export default function Runway({ project, segment, time }: { project: Project; s
     root.current?.style.setProperty('--beat', String(beat))
   }, [beat])
 
+  /** Drags the strip under the head, film-reel style: left is forward. */
+  function scrub(e: React.PointerEvent) {
+    const el = root.current
+    if (e.button === 2 || !el) return
+    const ppb = parseFloat(getComputedStyle(el).getPropertyValue('--ppb')) || 30
+    const resume = !audio.el.paused
+    if (resume) audio.pause()
+    el.classList.add('dragging')
+    let lastX = e.clientX
+    const move = (ev: PointerEvent) => {
+      audio.seek(audio.el.currentTime - ((ev.clientX - lastX) / ppb) * beatDuration(live.current.bpm))
+      lastX = ev.clientX
+    }
+    const stop = () => {
+      el.classList.remove('dragging')
+      if (resume) audio.play()
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+  }
+
   return (
-    <div className="runway" ref={root}>
+    <div className="runway" ref={root} onPointerDown={scrub} title="Drag to move through the song">
       <div className="rw-ruler">
         <div className="rw-scroll">
           {ticks.map((t) => (

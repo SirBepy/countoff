@@ -149,6 +149,11 @@ async function main() {
       walkedOn[0].travel === 8,
       JSON.stringify(walkedOn[0]),
     )
+    check(
+      'an entrance spawns at back centre, the far row from whoever they face',
+      walkedOn[0].to.col === 5 && walkedOn[0].to.row === 0,
+      JSON.stringify(walkedOn[0].to),
+    )
     check('they appear on the floor straight away', (await page.locator('.stage .puck').count()) === 4)
 
     // Drag Ana onto an empty cell: the destination is what changes, not the count.
@@ -247,8 +252,26 @@ async function main() {
     await page.waitForSelector('.floor-view', { timeout: 5000 })
     check('clicking a sheet cue seeks to it and opens the floor', await page.locator('.stage').isVisible())
 
-    await page.click('.appbar button[title="Back to the sheet"]')
+    // Rehearse's runway is the only timeline on that screen, so it has to be draggable.
+    await page.click('.appbar button:has-text("Rehearse")')
+    await page.waitForSelector('.runway', { timeout: 5000 })
+    const strip = await page.locator('.runway').boundingBox()
+    const before = await page.evaluate(() => document.querySelector('audio').currentTime)
+    await page.mouse.move(strip.x + strip.width / 2, strip.y + strip.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(strip.x + strip.width / 2 - 200, strip.y + strip.height / 2, { steps: 10 })
+    await page.mouse.up()
+    await page.waitForTimeout(200)
+    const after = await page.evaluate(() => document.querySelector('audio').currentTime)
+    check(
+      'dragging the rehearse runway left moves forward through the song',
+      after - before > 1,
+      `before=${before} after=${after}`,
+    )
+    await page.screenshot({ path: path.join(SHOTS, 'floor-7-rehearse.png') })
+    await page.click('.rehearse button:has-text("Exit")')
     await page.waitForSelector('.sheet')
+
     await page.screenshot({ path: path.join(SHOTS, 'floor-5-sheet-lane.png') })
 
     check('no console or page errors', errors.length === 0, errors.join(' | '))

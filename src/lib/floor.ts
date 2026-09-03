@@ -145,16 +145,21 @@ export function occupantAt(project: Project, time: number, cell: Cell, exclude?:
 }
 
 /**
- * A free cell for someone walking on, searched outward from front centre so an
- * added person lands where a latecomer actually would rather than in a corner.
+ * A free cell for someone walking on: back centre first, working forward. Dancers
+ * come on from behind and then travel toward whoever they are dancing to, so the
+ * far row from the focus is where an entrance belongs.
  */
 export function freeCell(project: Project, time: number, personId?: string): Cell {
   const { floor, focus } = project
   const centre = centreCol(floor)
+  const facing = focus.kind === 'person' ? focus.row : frontRow(floor)
+  const rows = Array.from({ length: floor.rows }, (_, row) => row).sort(
+    (a, b) => Math.abs(b - facing) - Math.abs(a - facing) || a - b,
+  )
   const blocked = (cell: Cell) =>
     (focus.kind === 'person' && focus.col === cell.col && focus.row === cell.row) ||
     !!occupantAt(project, time, cell, personId)
-  for (let row = frontRow(floor); row >= 0; row--) {
+  for (const row of rows) {
     for (let ring = 0; ring <= centre; ring++) {
       for (const col of ring === 0 ? [centre] : [centre - ring, centre + ring]) {
         if (col < 0 || col >= floor.cols) continue
