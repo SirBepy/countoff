@@ -298,8 +298,7 @@ export const removeMove = (id: string) =>
 
 /**
  * Clears the moves overlapping [startBeat, startBeat+beats) in the segment, so
- * dropping onto occupied counts replaces rather than stacks. Comments survive:
- * they annotate the counts rather than occupying them, and lane stacking shows both.
+ * dropping onto occupied counts replaces rather than stacks. Comments survive it.
  */
 export function clearRange(segmentId: string, startBeat: number, beats: number) {
   withProject((p) => ({
