@@ -466,6 +466,18 @@
   overflow: hidden;
   cursor: pointer;
 }
+.mv-move b {
+  flex: 0 0 auto;
+  font-weight: inherit;
+}
+/* The note shrinks first, so a narrow chip keeps the move's name whole. */
+.mv-move .nt {
+  flex: 0 1 auto;
+  margin-left: 5px;
+  opacity: 0.62;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .mv-move.e1 {
   background: var(--e1);
 }

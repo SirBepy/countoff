@@ -138,6 +138,8 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
           {
             block,
             name: isComment(block) ? block.note || 'Note' : (move?.name ?? '?'),
+            // A comment already is its note, so only a move carries a second line of text.
+            note: isComment(block) ? undefined : (block.note ?? move?.note),
             energy: move?.energy ?? 1,
             from,
             to: from + block.beats * beatDuration(segment.bpm),
@@ -221,18 +223,19 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
                 </div>
                 <div className="mv-track" onPointerDown={scrub}>
                   {!person &&
-                    moves.map(({ block, name, energy, from, to }) => (
+                    moves.map(({ block, name, note, energy, from, to }) => (
                       <span
                         key={block.id}
                         className={`mv-move e${energy}${isComment(block) ? ' comment' : ''}`}
                         style={{ left: pct(from), width: pct(to - from) }}
-                        title={`${name} from ${formatTime(from)}`}
+                        title={`${name}${note ? ` · ${note}` : ''} from ${formatTime(from)}`}
                         onPointerDown={(e) => {
                           e.stopPropagation()
                           audio.seek(from)
                         }}
                       >
-                        {name}
+                        <b>{name}</b>
+                        {note && <span className="nt">{note}</span>}
                       </span>
                     ))}
                   {person &&
