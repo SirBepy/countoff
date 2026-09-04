@@ -154,9 +154,10 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
   const blocks = project.blocks.filter(
     (b) => b.segmentId === segment.id && b.startBeat < rowEnd && b.startBeat + b.beats > rowStart,
   )
-  const cues = project.movements.filter(
-    (m) => m.segmentId === segment.id && m.beat >= rowStart && m.beat < rowEnd,
-  )
+  const hideCast = useStore((s) => s.hideCast)
+  const cues = hideCast
+    ? []
+    : project.movements.filter((m) => m.segmentId === segment.id && m.beat >= rowStart && m.beat < rowEnd)
   const active = nowBeat !== null && nowBeat >= rowStart && nowBeat < rowEnd
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
   const rowSelected = !!selection && selection.startBeat < rowEnd && selection.startBeat + selection.beats > rowStart

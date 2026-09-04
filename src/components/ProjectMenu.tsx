@@ -1,4 +1,4 @@
-import { set, updateProject } from '../lib/store'
+import { set, toggleHideCast, updateProject, useStore } from '../lib/store'
 import type { Project } from '../lib/types'
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 /** The phone's title button opens this: three destinations that were unlabelled
  *  top-bar icons, plus the rename that competed with them for width. */
 export default function ProjectMenu({ project, onClose, onProjects, onBackup }: Props) {
+  const hideCast = useStore((s) => s.hideCast)
   const go = (run: () => void) => () => {
     onClose()
     run()
@@ -49,6 +50,13 @@ export default function ProjectMenu({ project, onClose, onProjects, onBackup }: 
             <span>
               Floor
               <div className="sub">Who dances when, and where they stand</div>
+            </span>
+          </button>
+          <button className="menu-item" onClick={go(toggleHideCast)}>
+            <i className={`ph ${hideCast ? 'ph-eye-closed' : 'ph-eye'}`} />
+            <span>
+              {hideCast ? 'Show the cast' : 'Hide the cast'}
+              <div className="sub">Whose cue tags crowd the sheet on a full number</div>
             </span>
           </button>
           <button className="menu-item" onClick={go(onProjects)}>

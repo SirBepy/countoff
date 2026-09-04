@@ -54,6 +54,8 @@ export interface UiState {
   /** Mirrors the undo/redo stacks so buttons can grey out without reaching into store internals. */
   canUndo: boolean
   canRedo: boolean
+  /** Drops the cast's cue tags from the sheet, which crowd out the moves on a full number. */
+  hideCast: boolean
 }
 
 let state: UiState = {
@@ -71,6 +73,21 @@ let state: UiState = {
   pendingPlacement: null,
   canUndo: false,
   canRedo: false,
+  hideCast: false,
+}
+
+/** A view preference, not part of the choreography, so it stays out of the project
+ *  document and never rides along in a backup or a sync. */
+const castKey = (projectId: string) => `countoff.hideCast.${projectId}`
+
+export const readHideCast = (projectId: string) => localStorage.getItem(castKey(projectId)) === '1'
+
+export function toggleHideCast() {
+  const project = state.project
+  if (!project) return
+  const hideCast = !state.hideCast
+  localStorage.setItem(castKey(project.id), hideCast ? '1' : '0')
+  set({ hideCast }, false)
 }
 
 const listeners = new Set<() => void>()

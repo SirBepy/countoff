@@ -21,7 +21,19 @@ import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
-import { flushSave, getState, hasPendingSave, redo, removeBlocks, set, undo, updateProject, useStore } from './lib/store'
+import {
+  flushSave,
+  getState,
+  hasPendingSave,
+  readHideCast,
+  redo,
+  removeBlocks,
+  set,
+  toggleHideCast,
+  undo,
+  updateProject,
+  useStore,
+} from './lib/store'
 import { pullNow, scheduleSync } from './lib/syncEngine'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -33,6 +45,7 @@ export default function App() {
   const libraryOpen = useStore((s) => s.libraryOpen)
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
+  const hideCast = useStore((s) => s.hideCast)
   const [booted, setBooted] = useState(false)
   const [segmentId, setSegmentId] = useState<string | null>(null)
   const [lyricsFor, setLyricsFor] = useState<string | null>(null)
@@ -82,6 +95,7 @@ export default function App() {
   // deliberate "New" screen (opened without a null project) always steps aside.
   useEffect(() => {
     setCreating(false)
+    if (project) set({ hideCast: readHideCast(project.id) }, false)
   }, [project?.id])
 
   // Pull whenever the tab comes back into view, and push once local edits settle.
@@ -223,6 +237,13 @@ export default function App() {
         </button>
         <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
           <i className="ph ph-users-three i" />
+        </button>
+        <button
+          className={`ghost icon only-wide${hideCast ? ' on' : ''}`}
+          onClick={toggleHideCast}
+          title={hideCast ? "Show the cast's cues on the sheet" : "Hide the cast's cues on the sheet"}
+        >
+          <i className={`ph ${hideCast ? 'ph-eye-closed' : 'ph-eye'} i`} />
         </button>
         <button className="ghost icon only-wide" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
           <i className="ph ph-folders i" />
