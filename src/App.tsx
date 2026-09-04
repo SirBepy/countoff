@@ -83,14 +83,6 @@ export default function App() {
     })()
   }, [])
 
-  // lib/store.ts has no HMR boundary of its own: a hot reload that touches it (or
-  // anything importing it) re-runs the module and resets its state to project: null,
-  // while this component's own booted stays true (Fast Refresh preserves local state).
-  // Refill from IndexedDB rather than leave the empty-state screen up over real work.
-  useEffect(() => {
-    if (booted && !project && !creating) void adoptActiveProject()
-  }, [booted, project, creating])
-
   // Switching or creating a project changes which document is open, so the
   // deliberate "New" screen (opened without a null project) always steps aside.
   useEffect(() => {

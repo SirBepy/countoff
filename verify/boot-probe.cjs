@@ -1,6 +1,6 @@
 /* Boot-time bugs: the empty state's route to an already-pulled project, whether the
-   audio element survives a dev-mode hot reload, and whether the app self-heals if
-   lib/store.ts's module state ever resets out from under a mounted App. */
+   audio element survives a dev-mode hot reload, and whether lib/store.ts's own state
+   survives one too rather than dropping the open project behind a live screen. */
 const { withBrowser, desktopContext, seedProject, silentWav, createChecklist } = require('./harness.cjs')
 const fs = require('fs')
 const path = require('path')
@@ -8,6 +8,7 @@ const path = require('path')
 const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const AUDIO_TS = path.join(__dirname, '..', 'src', 'lib', 'audio.ts')
+const STORE_TS = path.join(__dirname, '..', 'src', 'lib', 'store.ts')
 
 const projA = {
   id: 'pA', name: 'Project A', audioName: 'a.wav', duration: 30,
@@ -51,6 +52,7 @@ const audioState = (page) =>
 async function main() {
   const { check, report } = createChecklist()
   const originalAudioTs = fs.readFileSync(AUDIO_TS, 'utf8')
+  const originalStoreTs = fs.readFileSync(STORE_TS, 'utf8')
 
   await withBrowser(async (browser) => {
     const context = await browser.newContext(desktopContext())
@@ -233,22 +235,37 @@ async function main() {
       `pre-reload clicks=${beforeCounts.clicks} post-reload delta=${clickDelta}`,
     )
 
-    // --- bug 1: the boot state self-heals if lib/store.ts's module state ever resets ---
-    const heal = await page.evaluate(async () => {
+    // --- bug 1 root cause: a real hot reload of lib/store.ts must leave the open
+    // project and its undo history alone, since the store anchors its whole mutable
+    // set on globalThis rather than re-initialising module-scope lets ---
+    const readStore = () =>
+      page.evaluate(async () => {
+        const appSrc = await (await fetch('/src/App.tsx')).text()
+        const mod = await import(appSrc.match(/"([^"]*lib\/store\.ts[^"]*)"/)[1])
+        const st = mod.getState()
+        return { project: st.project && st.project.id, canUndo: st.canUndo, sheet: !!document.querySelector('.sheet') }
+      })
+
+    await page.evaluate(async () => {
       const appSrc = await (await fetch('/src/App.tsx')).text()
-      const specifier = appSrc.match(/"([^"]*lib\/store\.ts[^"]*)"/)[1]
-      const mod = await import(specifier)
-      const hadProject = !!mod.getState().project
-      mod.set({ project: null }, false)
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-      return { hadProject, sheetVisibleAfter: !!document.querySelector('.sheet') }
+      const mod = await import(appSrc.match(/"([^"]*lib\/store\.ts[^"]*)"/)[1])
+      mod.updateProject({ name: 'Renamed before the hot reload' })
     })
-    check('a project was actually loaded before the simulated reset', heal.hadProject)
+    const beforeHmr = await readStore()
+    check('a project is open with undo history before the hot reload', !!beforeHmr.project && beforeHmr.canUndo, JSON.stringify(beforeHmr))
+
+    fs.writeFileSync(STORE_TS, originalStoreTs + '\n// boot-probe hmr touch\n')
+    await page.waitForTimeout(1500)
+    fs.writeFileSync(STORE_TS, originalStoreTs)
+    await page.waitForTimeout(800)
+
+    const afterHmr = await readStore()
     check(
-      'the sheet reappears on its own after the store state resets, with no manual reload',
-      heal.sheetVisibleAfter,
-      JSON.stringify(heal),
+      'a hot reload of lib/store.ts leaves the open project on screen',
+      afterHmr.project === beforeHmr.project && afterHmr.sheet,
+      JSON.stringify(afterHmr),
     )
+    check('undo history survives that same hot reload', afterHmr.canUndo, JSON.stringify(afterHmr))
 
     check('no console or page errors', errors.length === 0, errors.join(' | '))
     await context.close()
@@ -256,6 +273,7 @@ async function main() {
 
   // Belt and suspenders: never leave audio.ts edited if a check above threw first.
   if (fs.readFileSync(AUDIO_TS, 'utf8') !== originalAudioTs) fs.writeFileSync(AUDIO_TS, originalAudioTs)
+  if (fs.readFileSync(STORE_TS, 'utf8') !== originalStoreTs) fs.writeFileSync(STORE_TS, originalStoreTs)
 
   report()
 }

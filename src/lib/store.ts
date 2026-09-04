@@ -58,23 +58,52 @@ export interface UiState {
   hideCast: boolean
 }
 
-let state: UiState = {
-  project: null,
-  audioUrl: null,
-  selection: null,
-  view: 'sheet',
-  activeMoveId: null,
-  status: null,
-  follow: true,
-  libraryOpen: false,
-  editingLyricId: null,
-  editingBlockNoteId: null,
-  sheetMenu: null,
-  pendingPlacement: null,
-  canUndo: false,
-  canRedo: false,
-  hideCast: false,
+interface StoreSingleton {
+  state: UiState
+  listeners: Set<() => void>
+  saveTimer: number | undefined
+  lastSnapshot: number
+  undoStack: Project[]
+  redoStack: Project[]
+  coalesce: { key: string; at: number } | null
+  /** An open gesture (pointerdown..pointerup) holds its first mutation's "before" snapshot
+   *  regardless of elapsed time, unlike `coalesce` which lapses after COALESCE_WINDOW. */
+  gesture: { key: string; pushed: boolean } | null
 }
+
+// A dev-mode hot reload re-runs this module while Fast Refresh keeps App's own `booted`
+// true, so a plain module-scope `let` drops the open project behind a live screen. Same
+// globalThis anchor lib/audio.ts uses, and the whole mutable set is anchored, not just
+// the project: undo history resetting under an open document is the same bug.
+const HMR_KEY = '__countoffStore'
+const globalAny = globalThis as unknown as Record<string, StoreSingleton | undefined>
+const S: StoreSingleton = globalAny[HMR_KEY] ?? {
+  state: {
+    project: null,
+    audioUrl: null,
+    selection: null,
+    view: 'sheet',
+    activeMoveId: null,
+    status: null,
+    follow: true,
+    libraryOpen: false,
+    editingLyricId: null,
+    editingBlockNoteId: null,
+    sheetMenu: null,
+    pendingPlacement: null,
+    canUndo: false,
+    canRedo: false,
+    hideCast: false,
+  },
+  listeners: new Set(),
+  saveTimer: undefined,
+  lastSnapshot: 0,
+  undoStack: [],
+  redoStack: [],
+  coalesce: null,
+  gesture: null,
+}
+globalAny[HMR_KEY] = S
 
 /** A view preference, not part of the choreography, so it stays out of the project
  *  document and never rides along in a backup or a sync. */
@@ -83,28 +112,25 @@ const castKey = (projectId: string) => `countoff.hideCast.${projectId}`
 export const readHideCast = (projectId: string) => localStorage.getItem(castKey(projectId)) === '1'
 
 export function toggleHideCast() {
-  const project = state.project
+  const project = S.state.project
   if (!project) return
-  const hideCast = !state.hideCast
+  const hideCast = !S.state.hideCast
   localStorage.setItem(castKey(project.id), hideCast ? '1' : '0')
   set({ hideCast }, false)
 }
 
-const listeners = new Set<() => void>()
-let saveTimer: number | undefined
-let lastSnapshot = 0
 const SNAPSHOT_EVERY = 60_000
 
 function emit(persist = true) {
-  listeners.forEach((l) => l())
-  if (persist && state.project) {
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      const project = state.project
+  S.listeners.forEach((l) => l())
+  if (persist && S.state.project) {
+    clearTimeout(S.saveTimer)
+    S.saveTimer = setTimeout(() => {
+      const project = S.state.project
       if (!project) return
       void saveProject(project)
-      if (Date.now() - lastSnapshot > SNAPSHOT_EVERY) {
-        lastSnapshot = Date.now()
+      if (Date.now() - S.lastSnapshot > SNAPSHOT_EVERY) {
+        S.lastSnapshot = Date.now()
         snapshot(project, `${project.blocks.length} moves`)
       }
     }, 400)
@@ -112,12 +138,12 @@ function emit(persist = true) {
 }
 
 /** True while an edit is debounced and not yet written to IndexedDB. */
-export const hasPendingSave = () => saveTimer !== undefined && state.project !== null
+export const hasPendingSave = () => S.saveTimer !== undefined && S.state.project !== null
 
 export function flushSave() {
-  clearTimeout(saveTimer)
-  saveTimer = undefined
-  if (state.project) void saveProject(state.project)
+  clearTimeout(S.saveTimer)
+  S.saveTimer = undefined
+  if (S.state.project) void saveProject(S.state.project)
 }
 
 /**
@@ -125,24 +151,24 @@ export function flushSave() {
  * save of the pre-restore project would land back on top of it.
  */
 export function cancelPendingSave() {
-  clearTimeout(saveTimer)
-  saveTimer = undefined
+  clearTimeout(S.saveTimer)
+  S.saveTimer = undefined
 }
 
 export function set(patch: Partial<UiState>, persist = true) {
-  state = { ...state, ...patch }
+  S.state = { ...S.state, ...patch }
   emit(persist)
 }
 
-export const getState = () => state
+export const getState = () => S.state
 
 export function useStore<T>(select: (s: UiState) => T): T {
   return useSyncExternalStore(
     (cb) => {
-      listeners.add(cb)
-      return () => listeners.delete(cb)
+      S.listeners.add(cb)
+      return () => S.listeners.delete(cb)
     },
-    () => select(state),
+    () => select(S.state),
   )
 }
 
@@ -153,12 +179,6 @@ const UNDO_LIMIT = 50
 // key into the entry already on top of the stack instead of one step per letter.
 const COALESCE_WINDOW = 800
 
-let undoStack: Project[] = []
-let redoStack: Project[] = []
-let coalesce: { key: string; at: number } | null = null
-// An open gesture (pointerdown..pointerup) holds its first mutation's "before" snapshot
-// regardless of elapsed time, unlike `coalesce` which lapses after COALESCE_WINDOW.
-let gesture: { key: string; pushed: boolean } | null = null
 
 /**
  * Opens a gesture scope: every `withProject` call passing this same key merges into
@@ -166,54 +186,54 @@ let gesture: { key: string; pushed: boolean } | null = null
  */
 export function beginGesture(key: string) {
   endGesture()
-  gesture = { key, pushed: false }
+  S.gesture = { key, pushed: false }
 }
 
 /** Closes the gesture scope. Call from the same cleanup that removes the pointermove listener. */
 export function endGesture() {
-  gesture = null
+  S.gesture = null
 }
 
 /** Pushes `previous` unless it merges with the in-progress coalesce run or open gesture. Always drops redo: a new edit invalidates it. */
 function pushHistory(previous: Project, coalesceKey?: string) {
   const now = Date.now()
-  const inGesture = !!coalesceKey && gesture !== null && gesture.key === coalesceKey
+  const inGesture = !!coalesceKey && S.gesture !== null && S.gesture.key === coalesceKey
   const merging = inGesture
-    ? gesture!.pushed
-    : !!coalesceKey && coalesce !== null && coalesce.key === coalesceKey && now - coalesce.at < COALESCE_WINDOW
+    ? S.gesture!.pushed
+    : !!coalesceKey && S.coalesce !== null && S.coalesce.key === coalesceKey && now - S.coalesce.at < COALESCE_WINDOW
   if (!merging) {
-    undoStack.push(previous)
-    if (undoStack.length > UNDO_LIMIT) undoStack.shift()
+    S.undoStack.push(previous)
+    if (S.undoStack.length > UNDO_LIMIT) S.undoStack.shift()
   }
-  if (inGesture) gesture!.pushed = true
-  coalesce = coalesceKey ? { key: coalesceKey, at: now } : null
-  redoStack = []
+  if (inGesture) S.gesture!.pushed = true
+  S.coalesce = coalesceKey ? { key: coalesceKey, at: now } : null
+  S.redoStack = []
 }
 
 function withProject(fn: (p: Project) => Project, coalesceKey?: string) {
-  if (!state.project) return
-  pushHistory(state.project, coalesceKey)
-  set({ project: { ...fn(state.project), updatedAt: Date.now() }, canUndo: true, canRedo: false })
+  if (!S.state.project) return
+  pushHistory(S.state.project, coalesceKey)
+  set({ project: { ...fn(S.state.project), updatedAt: Date.now() }, canUndo: true, canRedo: false })
 }
 
 export function undo() {
-  if (!state.project || undoStack.length === 0) return
-  const previous = undoStack.pop()!
-  redoStack.push(state.project)
-  if (redoStack.length > UNDO_LIMIT) redoStack.shift()
-  coalesce = null
-  gesture = null
-  set({ project: previous, canUndo: undoStack.length > 0, canRedo: true })
+  if (!S.state.project || S.undoStack.length === 0) return
+  const previous = S.undoStack.pop()!
+  S.redoStack.push(S.state.project)
+  if (S.redoStack.length > UNDO_LIMIT) S.redoStack.shift()
+  S.coalesce = null
+  S.gesture = null
+  set({ project: previous, canUndo: S.undoStack.length > 0, canRedo: true })
 }
 
 export function redo() {
-  if (!state.project || redoStack.length === 0) return
-  const next = redoStack.pop()!
-  undoStack.push(state.project)
-  if (undoStack.length > UNDO_LIMIT) undoStack.shift()
-  coalesce = null
-  gesture = null
-  set({ project: next, canUndo: true, canRedo: redoStack.length > 0 })
+  if (!S.state.project || S.redoStack.length === 0) return
+  const next = S.redoStack.pop()!
+  S.undoStack.push(S.state.project)
+  if (S.undoStack.length > UNDO_LIMIT) S.undoStack.shift()
+  S.coalesce = null
+  S.gesture = null
+  set({ project: next, canUndo: true, canRedo: S.redoStack.length > 0 })
 }
 
 /**
@@ -221,10 +241,10 @@ export function redo() {
  * pull). Undoing past a document that arrived from elsewhere is incoherent, so both stacks reset.
  */
 export function replaceProject(project: Project, patch: Partial<UiState> = {}, persist = true) {
-  undoStack = []
-  redoStack = []
-  coalesce = null
-  gesture = null
+  S.undoStack = []
+  S.redoStack = []
+  S.coalesce = null
+  S.gesture = null
   set({ project, canUndo: false, canRedo: false, ...patch }, persist)
 }
 
@@ -280,7 +300,7 @@ export function addComment(segmentId: string, startBeat: number, beats: number) 
  * on, matching a fill; a comment overlays instead, since annotating is not occupying.
  */
 export function duplicateBlock(id: string) {
-  const source = state.project?.blocks.find((b) => b.id === id)
+  const source = S.state.project?.blocks.find((b) => b.id === id)
   if (!source) return
   const copy = { ...source, id: uid(), startBeat: source.startBeat + source.beats }
   withProject((p) => ({
