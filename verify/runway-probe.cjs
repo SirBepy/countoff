@@ -63,6 +63,17 @@ async function main() {
 
     await seedProject(page, URL, { project: PROJECT, audioBytes: silentWav(45) })
 
+    // The bottom bar only exists outside rehearse, so read it before switching. 4 counts
+    // of Song One separate beat 36 from the cut, and the countdown stays in those counts
+    // even though Grapevine belongs to the faster song.
+    await seek(page, 18)
+    await page.waitForTimeout(250)
+    check(
+      "the bottom bar names the next song's first move before the cut",
+      (await page.locator('.bar-now .label').textContent()) === 'Now \u00b7 next: Grapevine in 4',
+      await page.locator('.bar-now .label').textContent(),
+    )
+
     await page.keyboard.press('r')
     await page.waitForSelector('.runway', { timeout: 5000 })
 

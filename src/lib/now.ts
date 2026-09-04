@@ -1,4 +1,4 @@
-import { segmentAt, timeToBeat } from './grid'
+import { beatToTime, segmentAt, timeToBeat } from './grid'
 import type { Block, Move, Project, Segment } from './types'
 
 export interface NowState {
@@ -19,12 +19,25 @@ export function nowState(project: Project, time: number): NowState {
   }
 
   const beat = timeToBeat(segment, time)
-  const blocks = project.blocks
-    .filter((b) => b.segmentId === segment.id)
-    .sort((a, b) => a.startBeat - b.startBeat)
+  const blocksIn = (seg: Segment) =>
+    project.blocks.filter((b) => b.segmentId === seg.id).sort((a, b) => a.startBeat - b.startBeat)
+  const blocks = blocksIn(segment)
 
   const block = blocks.find((b) => beat >= b.startBeat && beat < b.startBeat + b.beats) ?? null
-  const upcoming = blocks.find((b) => b.startBeat > (block ? block.startBeat : beat)) ?? null
+  let upcoming = blocks.find((b) => b.startBeat > (block ? block.startBeat : beat)) ?? null
+  let untilNext = upcoming ? upcoming.startBeat - beat : 0
+
+  const nextSegment = project.segments[project.segments.indexOf(segment) + 1] ?? null
+  if (!upcoming && nextSegment) {
+    const ahead = blocksIn(nextSegment)[0] ?? null
+    if (ahead) {
+      upcoming = ahead
+      // Distance stays in THIS song's counts, which is what a dancer is counting through
+      // the cut; the next song's tempo only decides where its first block lands in time.
+      untilNext = timeToBeat(segment, beatToTime(nextSegment, ahead.startBeat)) - beat
+    }
+  }
+
   const find = (id: string | undefined) => project.moves.find((m) => m.id === id) ?? null
 
   return {
@@ -34,6 +47,6 @@ export function nowState(project: Project, time: number): NowState {
     block,
     move: find(block?.moveId),
     next: find(upcoming?.moveId),
-    beatsUntilNext: upcoming ? Math.max(0, Math.ceil(upcoming.startBeat - beat)) : 0,
+    beatsUntilNext: upcoming ? Math.max(0, Math.ceil(untilNext)) : 0,
   }
 }
