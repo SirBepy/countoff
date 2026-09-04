@@ -32,10 +32,15 @@ const commentsCol = (token: string) => collection(db, 'shares', token, 'comments
 /** 128 bits of randomness in the URL, which is the only thing guarding a share. */
 export const newShareToken = () => crypto.randomUUID().replace(/-/g, '')
 
-export const shareUrl = (token: string) => `${location.origin}/v/${token}`
+// The token rides in the hash: GitHub Pages serves the app from a repo subpath and
+// rewrites nothing, so a /v/<token> path 404s before the app can ever boot.
+export const shareUrl = (token: string) => `${location.origin}${location.pathname}#/v/${token}`
 
-export const shareTokenFromPath = (pathname: string): string | null =>
-  pathname.match(/^\/v\/([A-Za-z0-9_-]{8,})\/?$/)?.[1] ?? null
+const TOKEN_IN_URL = /(?:^|\/)v\/([A-Za-z0-9_-]{8,})\/?$/
+
+// The path form still resolves, for a host that does rewrite (firebase.json does).
+export const shareTokenFromUrl = (hash: string, pathname: string): string | null =>
+  hash.match(TOKEN_IN_URL)?.[1] ?? pathname.match(TOKEN_IN_URL)?.[1] ?? null
 
 // Firestore rejects undefined field values (Move.note, Block.note, Segment.lrcSource);
 // round-tripping through JSON drops them the way JSON.stringify already does.

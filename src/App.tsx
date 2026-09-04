@@ -21,7 +21,7 @@ import { requestPersistence } from './lib/backup'
 import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace, migrateProject } from './lib/db'
 import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
-import { loadShare, shareTokenFromPath } from './lib/share'
+import { loadShare, shareTokenFromUrl } from './lib/share'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
 import {
@@ -42,9 +42,9 @@ import { pullNow, scheduleSync } from './lib/syncEngine'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-// Read once: a share link never changes path while the tab is open, and the whole app
+// Read once: a share link never changes while the tab is open, and the whole app
 // boots differently when it is present.
-const VIEW_TOKEN = shareTokenFromPath(location.pathname)
+const VIEW_TOKEN = shareTokenFromUrl(location.hash, location.pathname)
 
 export default function App() {
   const project = useStore((s) => s.project)

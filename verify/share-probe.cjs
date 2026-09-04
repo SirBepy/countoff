@@ -137,19 +137,27 @@ async function main() {
     check('no console or page errors', errors.length === 0, errors.join(' | '))
     await context.close()
 
-    // A second, empty context: /v/<token> must route to the share boot, never fall through
+    // A second, empty context: a share link must route to the share boot, never fall through
     // to the file-drop screen. This token does not exist, so the failure branch is what
     // renders - which is still proof the route is wired and IndexedDB was never consulted.
+    // Both forms are checked: the hash is what shareUrl now hands out, the path is what a
+    // rewriting host still serves.
     const viewer = await browser.newContext(desktopContext())
-    const viewPage = await viewer.newPage()
-    await viewPage.goto(`${URL}v/0123456789abcdef0123456789abcdef`, { waitUntil: 'domcontentloaded' })
-    const broke = await viewPage
-      .waitForSelector('.ph-link-break', { timeout: 20000 })
-      .then(() => true)
-      .catch(() => false)
-    check('an unknown /v/<token> lands on the share failure screen, not the file drop', broke)
-    check('the file-drop screen is not what a share link shows', !(await viewPage.locator('.drop-signin').count()))
-    await viewPage.screenshot({ path: path.join(SHOTS, 'share-2-bad-link.png') })
+    for (const [form, link] of [
+      ['#/v/<token>', `${URL}#/v/0123456789abcdef0123456789abcdef`],
+      ['/v/<token>', `${URL}v/0123456789abcdef0123456789abcdef`],
+    ]) {
+      const viewPage = await viewer.newPage()
+      await viewPage.goto(link, { waitUntil: 'domcontentloaded' })
+      const broke = await viewPage
+        .waitForSelector('.ph-link-break', { timeout: 20000 })
+        .then(() => true)
+        .catch(() => false)
+      check(`an unknown ${form} lands on the share failure screen, not the file drop`, broke)
+      check(`the file-drop screen is not what ${form} shows`, !(await viewPage.locator('.drop-signin').count()))
+      await viewPage.screenshot({ path: path.join(SHOTS, `share-2-bad-link${form.startsWith('#') ? '-hash' : ''}.png`) })
+      await viewPage.close()
+    }
     await viewer.close()
   })
 
