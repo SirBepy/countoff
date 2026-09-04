@@ -23,7 +23,7 @@ async function seedExtraProject(page, proj) {
   await page.evaluate(
     async ({ proj, audioBase64 }) => {
       const db = await new Promise((resolve, reject) => {
-        const req = indexedDB.open('countoff', 1)
+        const req = indexedDB.open('countoff')
         req.onsuccess = () => resolve(req.result)
         req.onerror = () => reject(req.error)
       })

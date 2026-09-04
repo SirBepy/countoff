@@ -58,9 +58,11 @@ async function seedProject(page, url, { project, audioBytes, snapshots } = {}) {
   await page.evaluate(
     async ({ project, audioBase64, snapshots }) => {
       const db = await new Promise((resolve, reject) => {
-        const req = indexedDB.open('countoff', 1)
+        // No version: the reload above already created the database at whatever version
+        // src/lib/db.ts is on, and naming an older one throws VersionError.
+        const req = indexedDB.open('countoff')
         req.onupgradeneeded = () => {
-          for (const s of ['project', 'audio', 'clips'])
+          for (const s of ['project', 'audio', 'clips', 'takes'])
             if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s)
         }
         req.onsuccess = () => resolve(req.result)
@@ -101,7 +103,7 @@ async function readProject(page) {
     const id = localStorage.getItem('countoff.activeProjectId')
     if (!id) return null
     const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('countoff', 1)
+      const req = indexedDB.open('countoff')
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
