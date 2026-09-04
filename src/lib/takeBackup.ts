@@ -6,7 +6,7 @@ import type { Project, Take } from './types'
 
 /** Mirrors the ceiling in storage.rules. The rule is the real guard; this is the half
  *  that can say so before spending the upload. */
-export const MAX_TAKE_BYTES = 200 * 1024 * 1024
+const MAX_TAKE_BYTES = 200 * 1024 * 1024
 
 // One at a time, project-wide: a second backup would only fight the first for the same
 // uplink, and the queue has nowhere to be.
