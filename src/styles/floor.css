@@ -630,7 +630,7 @@
 /* Cast editor rows inside the modal. */
 .cast-row {
   display: grid;
-  grid-template-columns: 52px 1fr 48px auto;
+  grid-template-columns: 52px 1fr 48px 88px auto;
   gap: 8px;
   align-items: center;
 }

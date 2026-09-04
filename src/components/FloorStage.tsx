@@ -61,7 +61,7 @@ export default function FloorStage({ project, time, editable = true, onPick, onM
     if (focus.kind === 'person' && focus.col === col && focus.row === row) return
     // One person per cell: an occupied square refuses rather than stacking two pucks.
     if (occupantAt(project, time, { col, row }, personId)) return
-    placeMovement(personId, here.segment.id, here.beat, { col, row }, key)
+    placeMovement(personId, here.segment.id, here.beat, { col, row }, undefined, key)
   }
 
   return (

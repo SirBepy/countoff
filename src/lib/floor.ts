@@ -1,5 +1,5 @@
 import { beatToTime, timeToBeat } from './grid'
-import type { FloorSize, Movement, Person, Project, Segment } from './types'
+import type { FloorSize, Movement, Person, Project, Segment, Side } from './types'
 
 /** Odd on both axes so a V shape and a lead dancer get a true centre cell. */
 export const DEFAULT_FLOOR: FloorSize = { cols: 11, rows: 7 }
@@ -13,6 +13,16 @@ export const WALK_MAX = 64
 /** Row 0 is the back of the floor; the last row is nearest whatever the dancers face. */
 export const frontRow = (floor: FloorSize) => floor.rows - 1
 export const centreCol = (floor: FloorSize) => Math.floor((floor.cols - 1) / 2)
+export const centreRow = (floor: FloorSize) => Math.floor((floor.rows - 1) / 2)
+
+/** Icon and label for each named edge, in the vocabulary the dancers see on screen. */
+export const SIDES: Side[] = ['back', 'front', 'left', 'right']
+export const SIDE_META: Record<Side, { label: string; icon: string }> = {
+  back: { label: 'Back', icon: 'ph-arrow-up' },
+  front: { label: 'Front', icon: 'ph-arrow-down' },
+  left: { label: 'Left', icon: 'ph-arrow-left' },
+  right: { label: 'Right', icon: 'ph-arrow-right' },
+}
 
 /** Walked in order so the first few people on a floor never land on near colours. */
 const PALETTE = ['#7c5cff', '#3fb8b0', '#f0a63c', '#ff5d8f', '#5ec2ff', '#8fd44a', '#ffd166', '#c77dff']
@@ -87,6 +97,24 @@ export function edgePoint(floor: FloorSize, cell: Cell): Cell {
   return gaps.reduce((best, g) => (g.d < best.d ? g : best)).at
 }
 
+/** A point one cell outside the named edge, aligned with `cell` on the other axis. */
+export function edgeCell(floor: FloorSize, side: Side, cell: Cell): Cell {
+  if (side === 'back') return { col: cell.col, row: -1 }
+  if (side === 'front') return { col: cell.col, row: floor.rows }
+  if (side === 'left') return { col: -1, row: cell.row }
+  return { col: floor.cols, row: cell.row }
+}
+
+/**
+ * movement.side wins, then the dancer's own default, then the nearest-edge guess:
+ * the one place this order runs, so every entrance and exit agrees on it.
+ */
+export function approachEdge(project: Project, movement: Movement, cell: Cell): Cell {
+  const person = project.people.find((p) => p.id === movement.personId)
+  const side = movement.side ?? person?.side
+  return side ? edgeCell(project.floor, side, cell) : edgePoint(project.floor, cell)
+}
+
 /**
  * Where someone is standing, or heading: the destination of the last walk begun by
  * `time`. Null means offstage. This is the settled view, used for collisions and lists.
@@ -114,8 +142,8 @@ export function standingAt(project: Project, personId: string, time: number): St
   if (time >= current.arrive - 1e-9) return to ? { ...to, progress: 1, from: null } : null
 
   const previousTo = previous?.movement.to ?? null
-  const target = to ?? (previousTo ? edgePoint(project.floor, previousTo) : null)
-  const origin = previousTo ?? (to ? edgePoint(project.floor, to) : null)
+  const target = to ?? (previousTo ? approachEdge(project, current.movement, previousTo) : null)
+  const origin = previousTo ?? (to ? approachEdge(project, current.movement, to) : null)
   if (!target || !origin) return null
 
   const span = current.arrive - current.depart
@@ -138,19 +166,36 @@ export function occupantAt(project: Project, time: number, cell: Cell, exclude?:
 }
 
 /**
- * A free cell for someone walking on: the far row from whoever they face, centre
- * first, because dancers come on from behind and then travel toward the focus.
+ * A free cell for someone walking on. With a chosen side, searches outward from the
+ * centre of that edge. With none: the far row from whoever they face, centre first,
+ * because dancers come on from behind and then travel toward the focus.
  */
-export function freeCell(project: Project, time: number, personId?: string): Cell {
+export function freeCell(project: Project, time: number, personId?: string, side?: Side): Cell {
   const { floor, focus } = project
+  const blocked = (cell: Cell) =>
+    (focus.kind === 'person' && focus.col === cell.col && focus.row === cell.row) ||
+    !!occupantAt(project, time, cell, personId)
+
+  if (side) {
+    const onRow = side === 'back' || side === 'front'
+    const along = onRow ? floor.cols : floor.rows
+    const centre = onRow ? centreCol(floor) : centreRow(floor)
+    const fixed = side === 'back' ? 0 : side === 'front' ? frontRow(floor) : side === 'left' ? 0 : floor.cols - 1
+    const cellAt = (pos: number) => (onRow ? { col: pos, row: fixed } : { col: fixed, row: pos })
+    for (let ring = 0; ring <= centre; ring++) {
+      for (const pos of ring === 0 ? [centre] : [centre - ring, centre + ring]) {
+        if (pos < 0 || pos >= along) continue
+        if (!blocked(cellAt(pos))) return cellAt(pos)
+      }
+    }
+    return cellAt(0)
+  }
+
   const centre = centreCol(floor)
   const facing = focus.kind === 'person' ? focus.row : frontRow(floor)
   const rows = Array.from({ length: floor.rows }, (_, row) => row).sort(
     (a, b) => Math.abs(b - facing) - Math.abs(a - facing) || a - b,
   )
-  const blocked = (cell: Cell) =>
-    (focus.kind === 'person' && focus.col === cell.col && focus.row === cell.row) ||
-    !!occupantAt(project, time, cell, personId)
   for (const row of rows) {
     for (let ring = 0; ring <= centre; ring++) {
       for (const col of ring === 0 ? [centre] : [centre - ring, centre + ring]) {
@@ -188,9 +233,13 @@ export function beatAt(project: Project, time: number) {
   return { segment, beat: Math.max(0, Math.round(timeToBeat(segment, time))) }
 }
 
-/** A movement's own note, or the cell it lands on, said the way the timeline shows it. */
-export const movementLabel = (movement: Movement) =>
-  movement.note || (movement.to ? `${movement.to.col + 1}·${movement.to.row + 1}` : 'off')
+/** A movement's own note, the cell it lands on, or which side it left through. */
+export function movementLabel(movement: Movement, person?: Person) {
+  if (movement.note) return movement.note
+  if (movement.to) return `${movement.to.col + 1}·${movement.to.row + 1}`
+  const side = movement.side ?? person?.side
+  return side ? SIDE_META[side].label : 'off'
+}
 
 interface LegacyFormation {
   segmentId: string

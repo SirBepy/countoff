@@ -193,6 +193,88 @@ async function main() {
     )
     check('they appear on the floor straight away', (await page.locator('.stage .puck').count()) === 4)
 
+    // A fresh count of its own, so these entrances and exits don't collide with the
+    // ones already written at AT and confuse the beat-scoped checks around them.
+    await seek(page, 30)
+    await page.waitForTimeout(150)
+
+    // A dedicated dancer proves the side picker end to end: a chosen side beats the guess.
+    await page.fill('.rail-add input', 'Petra Peric')
+    await page.press('.rail-add input', 'Enter')
+    await page.waitForTimeout(200)
+    const withPetra = (await readProject(page)).people
+    const petra = withPetra[withPetra.length - 1]
+    const petraRow = page.locator('.rail-person').nth(withPetra.length - 1)
+
+    await petraRow.locator('button[title$="bring them on from"]').click()
+    await page.waitForSelector('.mv-menu')
+    check('the bring-on caret opens a side picker', await page.locator('.mv-menu .mi:has-text("Left")').isVisible())
+    await page.screenshot({ path: path.join(SHOTS, 'floor-8-side-picker.png') })
+    await page.click('.mv-menu .mi:has-text("Left")')
+    await page.waitForTimeout(250)
+    const petraOn = forPerson(await readProject(page), petra.id)
+    check(
+      'choosing a side on entrance writes that side on the movement',
+      petraOn.length === 1 && petraOn[0].side === 'left',
+      JSON.stringify(petraOn),
+    )
+    check('an entrance with a chosen side lands on that edge', petraOn[0].to.col === 0, JSON.stringify(petraOn[0].to))
+    await page.waitForTimeout(150)
+    await page.screenshot({ path: path.join(SHOTS, 'floor-9-entered-left.png') })
+
+    // The same picker overrides an exit too, and the timeline chip names the direction.
+    await petraRow.locator('button[title="Choose which side to walk off through"]').click()
+    await page.waitForSelector('.mv-menu')
+    await page.click('.mv-menu .mi:has-text("Right")')
+    await page.waitForTimeout(250)
+    const petraOff = forPerson(await readProject(page), petra.id)
+    const petraExit = petraOff.find((m) => m.to === null)
+    check('choosing a side on exit writes that side on the movement', petraExit?.side === 'right', JSON.stringify(petraOff))
+    const petraLane = page.locator('.mv-lane', { has: page.locator('.nm', { hasText: 'Petra Peric' }) })
+    check(
+      'the exit chip names the side instead of a bare "off"',
+      (await petraLane.locator('.mv-walk').first().textContent()) === 'Right',
+    )
+    // A tight crop around the chip itself, legible at the 24px height it actually ships at.
+    const chipBox = await petraLane.locator('.mv-walk').first().boundingBox()
+    await page.screenshot({
+      path: path.join(SHOTS, 'floor-10-exit-chip.png'),
+      clip: { x: chipBox.x - 60, y: chipBox.y - 20, width: chipBox.width + 200, height: chipBox.height + 40 },
+    })
+
+    // A person's own default side is honoured with no per-movement override at all.
+    await page.fill('.rail-add input', 'Ivan Ivic')
+    await page.press('.rail-add input', 'Enter')
+    await page.waitForTimeout(200)
+    const withIvan = (await readProject(page)).people
+    const ivan = withIvan[withIvan.length - 1]
+    await page.click('.rail-head button[title^="Rename"]')
+    await page.waitForSelector('.modal')
+    await page
+      .locator('.cast-row')
+      .nth(withIvan.length - 1)
+      .locator('select')
+      .selectOption('right')
+    await page.click('.modal footer button')
+    await page.waitForTimeout(150)
+    await page
+      .locator('.rail-person')
+      .nth(withIvan.length - 1)
+      .locator('button[title="Bring on for this count"]')
+      .click()
+    await page.waitForTimeout(250)
+    const ivanOn = forPerson(await readProject(page), ivan.id)
+    const floorNow = (await readProject(page)).floor
+    check(
+      'a default side lands an entrance on that edge with no override on the movement itself',
+      ivanOn.length === 1 && ivanOn[0].side === undefined && ivanOn[0].to.col === floorNow.cols - 1,
+      JSON.stringify(ivanOn),
+    )
+
+    // Back to the shared count, so the rest of the script edits what it expects to.
+    await seek(page, AT)
+    await page.waitForTimeout(150)
+
     // Drag Ana onto an empty cell: the destination is what changes, not the count.
     const box = await page.locator('.stage').boundingBox()
     const puck = await page.locator('.stage .puck').first().boundingBox()

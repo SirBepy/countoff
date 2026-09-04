@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
-import { beatAt, movementLabel, orderedMovements, stints } from '../lib/floor'
+import { beatAt, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
 import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { beginGesture, endGesture, removeMovement, togglePin, updateMovement } from '../lib/store'
@@ -255,7 +255,7 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
                         key={movement.id}
                         className={`mv-walk${movement.to ? '' : ' exit'}${movement.travel === 0 ? ' snap' : ''}${live ? ' live' : ''}`}
                         style={{ left: pct(depart), width: pct(arrive - depart), background: person.colour }}
-                        title={`${person.name} is at ${movementLabel(movement)} on ${formatTime(arrive)}. Click to go there, right-click to time it.`}
+                        title={`${person.name} is at ${movementLabel(movement, person)} on ${formatTime(arrive)}. Click to go there, right-click to time it.`}
                         onPointerDown={(e) => dragBlock(movement, arrive, e)}
                         onContextMenu={(e) => {
                           e.preventDefault()
@@ -264,7 +264,7 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
                           setMenu({ movement, x: e.clientX, y: e.clientY })
                         }}
                       >
-                        <b>{movementLabel(movement)}</b>
+                        <b>{movementLabel(movement, person)}</b>
                       </span>
                     )
                   })}
@@ -324,6 +324,31 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
                 }}
               />
             </label>
+            <hr />
+            <div className="mh">Side</div>
+            {SIDES.map((side) => (
+              <button
+                key={side}
+                className={`mi${menu.movement.side === side ? ' on' : ''}`}
+                onClick={() => {
+                  updateMovement(menu.movement.id, { side })
+                  setMenu({ ...menu, movement: { ...menu.movement, side } })
+                }}
+              >
+                <i className={`ph ${menu.movement.side === side ? 'ph-check' : SIDE_META[side].icon}`} />
+                {SIDE_META[side].label}
+              </button>
+            ))}
+            <button
+              className={`mi${!menu.movement.side ? ' on' : ''}`}
+              onClick={() => {
+                updateMovement(menu.movement.id, { side: undefined })
+                setMenu({ ...menu, movement: { ...menu.movement, side: undefined } })
+              }}
+            >
+              <i className={`ph ${!menu.movement.side ? 'ph-check' : 'ph-magic-wand'}`} />
+              Auto
+            </button>
             {menu.movement.to && (
               <button
                 className="mi"

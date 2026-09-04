@@ -10,6 +10,7 @@ import {
   type Person,
   type Project,
   type Segment,
+  type Side,
 } from './types'
 import { saveProject } from './db'
 import { snapshot } from './backup'
@@ -352,16 +353,20 @@ export const placeMovement = (
   segmentId: string,
   beat: number,
   to: { col: number; row: number } | null,
+  side?: Side,
   coalesceKey?: string,
 ) =>
   withProject((p) => {
     const existing = p.movements.find((m) => m.personId === personId && m.segmentId === segmentId && m.beat === beat)
     if (existing) {
-      return { ...p, movements: p.movements.map((m) => (m.id === existing.id ? { ...m, to } : m)) }
+      return {
+        ...p,
+        movements: p.movements.map((m) => (m.id === existing.id ? { ...m, to, ...(side ? { side } : {}) } : m)),
+      }
     }
     // A walk cannot start before the song does, so an early count shortens rather than refuses.
     const travel = Math.min(p.walkCounts, beat)
-    return { ...p, movements: [...p.movements, { id: uid(), personId, segmentId, beat, travel, to }] }
+    return { ...p, movements: [...p.movements, { id: uid(), personId, segmentId, beat, travel, to, side }] }
   }, coalesceKey)
 
 /** Resizing pulls anyone standing past the new edge back onto the floor, chair included. */

@@ -5,6 +5,8 @@ import { useMenuFit } from '../lib/menuFit'
 import {
   FLOOR_MAX,
   FLOOR_MIN,
+  SIDE_META,
+  SIDES,
   WALK_MAX,
   beatAt,
   freeCell,
@@ -25,7 +27,7 @@ import {
   uid,
   updatePerson,
 } from '../lib/store'
-import type { Project } from '../lib/types'
+import type { Project, Side } from '../lib/types'
 import FloorStage, { defaultFocusCell } from './FloorStage'
 import MovementTimeline from './MovementTimeline'
 
@@ -55,17 +57,25 @@ export default function Floor({ project }: { project: Project }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [menu, setMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
+  const [sideMenu, setSideMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
   const [zoom, setZoom] = useState(1)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.personId)
+  const { ref: sideMenuEl, offset: sideOffset } = useMenuFit<HTMLDivElement>(sideMenu?.personId)
 
   const here = beatAt(project, time)
   const floor = project.floor
 
   /** Every edit lands on the count under the playhead, which is the whole flow. */
-  function walk(personId: string, to: { col: number; row: number } | null) {
+  function walk(personId: string, to: { col: number; row: number } | null, side?: Side) {
     if (!here) return flash('No song here to stand on')
-    placeMovement(personId, here.segment.id, here.beat, to)
+    placeMovement(personId, here.segment.id, here.beat, to, side)
     setSelected(personId)
+  }
+
+  /** The one-off side picker for a single bring-on or walk-off, opened from its caret. */
+  function openSideMenu(personId: string, e: React.MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setSideMenu({ personId, x: rect.left, y: rect.bottom + 4 })
   }
 
   function addToCast() {
@@ -81,6 +91,7 @@ export default function Floor({ project }: { project: Project }) {
     project.movements.find((m) => m.personId === personId && m.segmentId === here.segment.id && m.beat === here.beat)
 
   const menuPerson = menu && project.people.find((p) => p.id === menu.personId)
+  const sideMenuOn = sideMenu && !!standingAt(project, sideMenu.personId, time)
 
   return (
     <div className="app floor-view">
@@ -138,12 +149,19 @@ export default function Floor({ project }: { project: Project }) {
                 ) : (
                   <button
                     className="ghost icon"
-                    onClick={() => walk(person.id, freeCell(project, time, person.id))}
+                    onClick={() => walk(person.id, freeCell(project, time, person.id, person.side))}
                     title="Bring on for this count"
                   >
                     <i className="ph ph-plus" />
                   </button>
                 )}
+                <button
+                  className="ghost icon"
+                  onClick={(e) => openSideMenu(person.id, e)}
+                  title={at ? 'Choose which side to walk off through' : 'Choose which side to bring them on from'}
+                >
+                  <i className="ph ph-caret-down" />
+                </button>
               </div>
             )
           })}
@@ -264,6 +282,32 @@ export default function Floor({ project }: { project: Project }) {
         </>
       )}
 
+      {sideMenu && (
+        <>
+          <div className="mv-menu-back" onPointerDown={() => setSideMenu(null)} />
+          <div
+            className="mv-menu"
+            ref={sideMenuEl}
+            style={{ left: sideMenu.x + sideOffset.dx, top: sideMenu.y + sideOffset.dy }}
+          >
+            <div className="mh">{sideMenuOn ? 'Walk off through' : 'Bring on from'}</div>
+            {SIDES.map((side) => (
+              <button
+                key={side}
+                className="mi"
+                onClick={() => {
+                  const to = sideMenuOn ? null : freeCell(project, time, sideMenu.personId, side)
+                  walk(sideMenu.personId, to, side)
+                  setSideMenu(null)
+                }}
+              >
+                <i className={`ph ${SIDE_META[side].icon}`} /> {SIDE_META[side].label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {setupOpen && (
         <div className="modal-back" onPointerDown={(e) => e.target === e.currentTarget && setSetupOpen(false)}>
           <div className="modal">
@@ -369,6 +413,20 @@ export default function Floor({ project }: { project: Project }) {
                     value={person.colour}
                     onChange={(e) => updatePerson(person.id, { colour: e.target.value }, `colour-${person.id}`)}
                   />
+                  <select
+                    value={person.side ?? ''}
+                    title="Their default wing, until one entrance or exit overrides it"
+                    onChange={(e) =>
+                      updatePerson(person.id, { side: (e.target.value || undefined) as Side | undefined }, `side-${person.id}`)
+                    }
+                  >
+                    <option value="">Auto</option>
+                    {SIDES.map((side) => (
+                      <option key={side} value={side}>
+                        {SIDE_META[side].label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     className="ghost icon"
                     onClick={() => removePerson(person.id)}

@@ -69,6 +69,10 @@ export interface Block {
 /** A block with no move is a comment; its `note` is the text on the sheet. */
 export const isComment = (block: Block) => !block.moveId
 
+/** A named edge of the floor, in the vocabulary of what is drawn on screen: back is
+ *  row 0, front the row nearest the audience, left and right the drawn sides. */
+export type Side = 'back' | 'front' | 'left' | 'right'
+
 /** Someone dancing. Colour and initials are what identify them on the floor at a glance. */
 export interface Person {
   id: string
@@ -76,6 +80,8 @@ export interface Person {
   /** Up to two characters on the puck, seeded from the name but editable for two Anas. */
   initials: string
   colour: string
+  /** This dancer's default wing, until one movement overrides it. Absent picks the nearest edge. */
+  side?: Side
 }
 
 /** One person getting somewhere. `beat` is the arrival, not the departure: the walk
@@ -89,6 +95,8 @@ export interface Movement {
   travel: number
   to: { col: number; row: number } | null
   note?: string
+  /** Overrides `Person.side` for this one entrance or exit. */
+  side?: Side
 }
 
 export interface FloorSize {

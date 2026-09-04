@@ -521,7 +521,7 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
                 <button
                   key={cue.id}
                   className="cue-tag"
-                  title={`${person.name} is at ${movementLabel(cue)} on this count. Open the floor.`}
+                  title={`${person.name} is at ${movementLabel(cue, person)} on this count. Open the floor.`}
                   onClick={() => {
                     audio.seek(beatToTime(segment, cue.beat))
                     set({ view: 'floor' }, false)
