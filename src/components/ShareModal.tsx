@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { loadAudio } from '../lib/db'
 import { getCurrentUser } from '../lib/firebase'
-import { newShareToken, publishShare, shareUrl, unpublishShare } from '../lib/share'
+import { newShareToken, publishShare, renameShare, shareUrl, unpublishShare } from '../lib/share'
 import { updateProject } from '../lib/store'
 import type { Project } from '../lib/types'
 
@@ -46,6 +46,15 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
       await publishShare(token, project, (await loadAudio(project.id)) ?? null, onProgress)
     })
 
+  // Hex tokens predate the word form; nothing else in a token ever carries a hyphen.
+  const rename = () =>
+    run('Renaming', async () => {
+      if (!token) return
+      const next = await renameShare(token, project, (await loadAudio(project.id)) ?? null, onProgress)
+      updateProject({ shareToken: next })
+      setCopied(false)
+    })
+
   const stop = () =>
     run('Stopping', async () => {
       if (!token) return
@@ -88,6 +97,11 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
                 <button onClick={() => void republish()} disabled={!!busy}>
                   <i className="ph ph-arrows-clockwise i" /> Update now
                 </button>
+                {token && !token.includes('-') && (
+                  <button onClick={() => void rename()} disabled={!!busy}>
+                    <i className="ph ph-magic-wand i" /> Make it a word link
+                  </button>
+                )}
                 <button className="ghost" style={{ color: 'var(--danger)' }} onClick={() => void stop()} disabled={!!busy}>
                   <i className="ph ph-trash i" /> Stop sharing
                 </button>

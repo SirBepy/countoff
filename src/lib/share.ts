@@ -19,6 +19,14 @@ interface ShareDoc {
   updatedAt: number
 }
 
+/** What a renamed share leaves behind, so a link already handed out still resolves.
+ *  `ownerUid` stays: without it the rules deny every later write to this document. */
+interface PointerDoc {
+  ownerUid: string
+  movedTo: string
+  updatedAt: number
+}
+
 // Firestore caps a document at 1 MiB including field names and overhead, and base64
 // inflates bytes by 4/3. 600k chars per chunk leaves room for both.
 const CHUNK_CHARS = 600_000
@@ -137,18 +145,74 @@ export async function unpublishShare(token: string): Promise<void> {
 export interface LoadedShare {
   project: Project
   audio: Blob | null
+  /** Where the share actually lives, which is not the token in the URL once the link
+   *  has been renamed. Comments belong on this one. */
+  token: string
 }
 
-export async function loadShare(token: string): Promise<LoadedShare> {
-  const snap = await getDoc(shareRef(token))
+// Small enough that a slow phone still shows the counter moving, large enough that
+// 22 chunks are not 22 sequential round trips.
+const FETCH_BATCH = 4
+const MAX_HOPS = 4
+
+export async function loadShare(
+  token: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<LoadedShare> {
+  let snap = await getDoc(shareRef(token))
+  for (let hop = 0; snap.exists() && (snap.data() as ShareDoc & PointerDoc).movedTo; hop++) {
+    if (hop >= MAX_HOPS) throw new Error('That link forwards in a circle')
+    token = (snap.data() as PointerDoc).movedTo
+    snap = await getDoc(shareRef(token))
+  }
   if (!snap.exists()) throw new Error('That link does not point at anything')
   const data = snap.data() as ShareDoc
-  if (!data.chunks) return { project: data.project, audio: null }
-  // Ordered by document id, which is the zero-padded chunk index.
-  const chunks = await getDocs(query(chunksCol(token)))
-  const sorted = chunks.docs.sort((a, b) => a.id.localeCompare(b.id))
-  const type = (sorted[0]?.data().type as string) || 'audio/mpeg'
-  return { project: data.project, audio: base64ToBlob(sorted.map((d) => d.data().data as string).join(''), type) }
+  if (!data.chunks) return { project: data.project, audio: null, token }
+
+  // Ids are the zero-padded chunk index, so the order is known without a query and
+  // each batch can be counted off as it lands.
+  const ids = Array.from({ length: data.chunks }, (_, i) => String(i).padStart(4, '0'))
+  const parts: string[] = []
+  let type = 'audio/mpeg'
+  onProgress?.(0, ids.length)
+  for (let i = 0; i < ids.length; i += FETCH_BATCH) {
+    const batch = await Promise.all(ids.slice(i, i + FETCH_BATCH).map((id) => getDoc(doc(chunksCol(token), id))))
+    for (const chunk of batch) {
+      const value = chunk.data() as { data: string; type?: string } | undefined
+      if (!value) continue
+      type = value.type || type
+      parts.push(value.data)
+    }
+    onProgress?.(Math.min(i + FETCH_BATCH, ids.length), ids.length)
+  }
+  return { project: data.project, audio: base64ToBlob(parts.join(''), type), token }
+}
+
+/** Moves a share onto a fresh token, then strips the old document down to a pointer
+ *  at the new one: the audio is re-uploaded from disk, so the old chunks go. */
+export async function renameShare(
+  oldToken: string,
+  project: Project,
+  audioBlob: Blob | null,
+  onProgress?: (done: number, total: number) => void,
+): Promise<string> {
+  const user = getCurrentUser()
+  if (!user) throw new Error('Sign in before sharing')
+  const next = await newShareToken()
+  await publishShare(next, { ...project, shareToken: next }, audioBlob, onProgress)
+
+  // The dancers' notes are the point of the thread, so they follow the choreography.
+  // The originals stay put: the rules forbid deleting a comment, even the owner's.
+  const comments = await getDocs(commentsCol(oldToken))
+  for (const comment of comments.docs) await setDoc(doc(commentsCol(next), comment.id), comment.data())
+
+  // The pointer lands before the old audio goes: once it is in place nothing reads
+  // those chunks, so a failure here costs storage rather than a silent, songless share.
+  const pointer: PointerDoc = { ownerUid: user.uid, movedTo: next, updatedAt: Date.now() }
+  await setDoc(shareRef(oldToken), pointer)
+  const chunks = await getDocs(chunksCol(oldToken))
+  for (const chunk of chunks.docs) await deleteDoc(chunk.ref)
+  return next
 }
 
 export function subscribeComments(token: string, cb: (comments: ShareComment[]) => void): () => void {

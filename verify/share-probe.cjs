@@ -94,6 +94,24 @@ async function main() {
 
     await store(`mod.updateProject({ shareToken: 'probe0123456789abcdef0123456789ab' })`)
     await page.waitForTimeout(200)
+
+    // The rename button is the migration path off a hex token, so it must appear for one
+    // and stay out of the way once the link is already words.
+    const renameOffered = async () => {
+      await page.click('.ph-share-network')
+      await page.waitForSelector('.modal', { timeout: 5000 })
+      const offered = await page.locator('.modal button:has-text("Make it a word link")').count()
+      await page.click('.modal-back', { position: { x: 5, y: 5 } }).catch(() => {})
+      await page.waitForTimeout(300)
+      return offered
+    }
+    check('a hex link is offered the word-link rename', (await renameOffered()) === 1)
+    await store(`mod.updateProject({ shareToken: 'silver-otter-lantern-quilt' })`)
+    await page.waitForTimeout(200)
+    check('a word link is not offered the rename again', (await renameOffered()) === 0)
+    await store(`mod.updateProject({ shareToken: 'probe0123456789abcdef0123456789ab' })`)
+    await page.waitForTimeout(200)
+
     await page.click('.ph-chat-circle-text')
     await page.waitForSelector('.comment-thread', { timeout: 5000 })
     await page.screenshot({ path: path.join(SHOTS, 'share-4-comments.png') })

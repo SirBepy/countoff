@@ -14,6 +14,7 @@ import Rehearse from './components/Rehearse'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
 import SongSetup from './components/SongSetup'
+import ShareLoading from './components/ShareLoading'
 import ShareModal from './components/ShareModal'
 import SongStrip from './components/SongStrip'
 import VideoScreen from './components/VideoScreen'
@@ -58,6 +59,8 @@ export default function App() {
   const hideCast = useStore((s) => s.hideCast)
   const readOnly = useStore((s) => s.readOnly)
   const [booted, setBooted] = useState(false)
+  const [shareProgress, setShareProgress] = useState<{ done: number; total: number } | null>(null)
+  const [viewToken, setViewToken] = useState(VIEW_TOKEN)
   const [segmentId, setSegmentId] = useState<string | null>(null)
   const [lyricsFor, setLyricsFor] = useState<string | null>(null)
   const [moveFor, setMoveFor] = useState<string | null>(null)
@@ -91,7 +94,10 @@ export default function App() {
    *  it also skips the saved-plus-blob gate adoptActiveProject enforces. */
   async function adoptShare(token: string) {
     try {
-      const { project: shared, audio: blob } = await loadShare(token)
+      const { project: shared, audio: blob, token: resolved } = await loadShare(token, (done, total) =>
+        setShareProgress({ done, total }),
+      )
+      setViewToken(resolved)
       if (blob) audio.load(URL.createObjectURL(blob), shared.name)
       const migrated = migrateProject(shared)
       replaceProject(migrated, { readOnly: true, view: 'rehearse' }, false)
@@ -212,7 +218,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [project])
 
-  if (!booted) return null
+  if (!booted) return VIEW_TOKEN ? <ShareLoading progress={shareProgress} /> : null
   if (VIEW_TOKEN && !project) {
     return (
       <div className="drop">
@@ -246,7 +252,7 @@ export default function App() {
   if (view === 'video') return <VideoScreen project={project} />
 
   // The viewer's token comes from the URL; the owner's comes off the project itself.
-  const commentToken = readOnly ? VIEW_TOKEN : project.shareToken
+  const commentToken = readOnly ? viewToken : project.shareToken
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
   const marker = project.markers.find((m) => m.id === markerFor)
 
