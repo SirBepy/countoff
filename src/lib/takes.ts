@@ -1,4 +1,4 @@
-import { deleteTakeFile, loadTakeFile, saveTakeFile } from './db'
+import { deleteTakeFileIfUnused, getActiveProjectId, loadTakeFile, saveTakeFile } from './db'
 import { addTake, flash, removeTake, setTakeUrl, uid } from './store'
 import type { Project, Take } from './types'
 
@@ -45,5 +45,5 @@ export async function attachTakes(project: Project): Promise<void> {
 export async function dropTake(takeId: string): Promise<void> {
   setTakeUrl(takeId, null)
   removeTake(takeId)
-  await deleteTakeFile(takeId)
+  await deleteTakeFileIfUnused(takeId, getActiveProjectId())
 }

@@ -130,7 +130,7 @@ export const saveTakeFile = (takeId: string, blob: Blob) => tx('takes', 'readwri
 
 export const loadTakeFile = (takeId: string) => tx<Blob | undefined>('takes', 'readonly', (s) => s.get(takeId))
 
-export const deleteTakeFile = (takeId: string) => tx('takes', 'readwrite', (s) => s.delete(takeId))
+const deleteTakeFile = (takeId: string) => tx('takes', 'readwrite', (s) => s.delete(takeId))
 
 /** Falls back to the active project when called with no id, e.g. bpm.ts's tempo re-detect. */
 export function loadAudio(id?: string): Promise<Blob | undefined> {
@@ -143,15 +143,27 @@ export async function listProjects(): Promise<Project[]> {
   return all.filter((p) => p && p.id).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+/** A take's file only goes once no project cites it, since a duplicate shares its source's
+ *  footage. `dropping` skips the one record that can still list it mid-save-debounce. */
+export async function deleteTakeFileIfUnused(takeId: string, dropping?: string | null): Promise<void> {
+  const projects = await listProjects()
+  const cited = projects.some((p) => p.id !== dropping && (p.takes ?? []).some((t) => t.id === takeId))
+  if (!cited) await deleteTakeFile(takeId)
+}
+
 export async function deleteProject(id: string): Promise<void> {
+  const doomed = await tx<Project | undefined>('project', 'readonly', (s) => s.get(id))
   await tx('project', 'readwrite', (s) => s.delete(id))
   await tx('audio', 'readwrite', (s) => s.delete(id))
+  // Read before the record goes, swept after, so the scan cannot count this project itself.
+  for (const take of doomed?.takes ?? []) await deleteTakeFileIfUnused(take.id)
 }
 
 export async function duplicateProject(id: string): Promise<Project> {
   const source = await loadProjectById(id)
   if (!source) throw new Error('Project not found')
   const newId = uid()
+  // Shared take ids are the point: one file, two projects, guarded on delete.
   const copy: Project = { ...source, id: newId, name: `${source.name} copy`, updatedAt: Date.now() }
   await saveProjectRecord(copy)
 
