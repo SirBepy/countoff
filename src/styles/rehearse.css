@@ -329,11 +329,16 @@
 .rehearse.has-video {
   grid-template-rows: auto auto 1fr auto auto auto;
 }
+/* The name centres over the stage below it, which means the lookahead cannot sit in
+   the same flow: as a flex sibling its width would push the name off centre by half
+   its own width, so it is lifted out and pinned, and the padding reserves its room. */
 .rehearse-band {
+  position: relative;
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 12px;
-  padding: 9px 16px 10px;
+  padding: 9px 108px 10px;
   border-bottom: 1px solid var(--line-soft);
   background: linear-gradient(180deg, #171b26, var(--bg));
   min-width: 0;
@@ -360,13 +365,14 @@
   opacity: 0;
 }
 .rehearse-band .nx {
-  margin-left: auto;
+  position: absolute;
+  right: 16px;
+  bottom: 10px;
   text-align: right;
   font-size: 11px;
   line-height: 1.3;
   color: var(--text-faint);
   white-space: nowrap;
-  flex: none;
 }
 .rehearse-band .nx b {
   display: block;
@@ -383,6 +389,21 @@
   .rehearse-top button {
     padding: 0 11px;
   }
+  /* A phone has no width to reserve on both sides, so the lookahead rides above the
+     name instead of beside it and the name keeps the full line. */
+  .rehearse-band {
+    padding: 26px 14px 8px;
+  }
+  .rehearse-band .nx {
+    top: 5px;
+    bottom: auto;
+    right: 14px;
+  }
+  .rehearse-band .nx b {
+    display: inline;
+    font-size: 11px;
+    margin-left: 5px;
+  }
 }
 .rehearse-band {
   flex-wrap: wrap;
@@ -390,22 +411,32 @@
 
 /* Video over floor on a phone, which is why the stage is ordered after it despite
    coming first in the markup: the footage is what a dancer is actually watching.
-   Rows are auto rather than 1fr so the pair centres together instead of leaving a
-   phone-height gap between a letterboxed video and the floor under it. */
+   The floor's row is auto and the footage takes the rest. */
 .rehearse.has-video .rehearse-main {
   display: grid;
-  grid-template-rows: auto auto;
-  align-content: center;
-  justify-items: stretch;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  justify-items: center;
+  align-items: center;
   gap: 10px;
   padding: 10px 12px;
 }
+/* Every take is a phone held upright, so the box is portrait and fixed rather than
+   sized from the file's own ratio: a landscape take then letterboxes inside it, and
+   the layout around it never jumps between clips. object-fit stays contain, so no
+   frame is ever cut. */
 .rehearse.has-video .vstage {
   order: 1;
   min-height: 0;
-  aspect-ratio: var(--ar, 16 / 9);
-  max-height: 100%;
-  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+  /* Its row is the definite side, so the height fills what is left and the ratio
+     derives the width. Sized the other way round it shrink-wraps its own placeholder
+     text and leaves half the screen empty. Short of the full row on purpose: hard
+     against both edges the footage reads as a wall rather than a screen. */
+  height: 94%;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
 }
 .rehearse.has-video .rehearse-floor {
   order: 2;
@@ -419,11 +450,11 @@
   min-height: 0;
   margin-bottom: 0;
   flex: 0 1 auto;
-  text-align: left;
+  text-align: center;
   min-width: 0;
 }
 .rehearse.has-video .stage {
-  width: 120px;
+  width: 168px;
   flex: none;
 }
 .rehearse.has-video .stage-audience {
@@ -437,16 +468,17 @@
 
 @media (min-width: 900px) {
   /* Wide enough to put the floor beside the footage rather than under it, which is
-     the whole point of the layout: position on one side, what it looks like in the middle. */
+     the whole point of the layout: position on one side, what it looks like in the
+     middle. Both columns are content-width and the pair is centred as one, so the
+     gap between them is the 22px below and not half the leftover window. */
   .rehearse.has-video .rehearse-main {
-    grid-template-columns: 232px 1fr;
-    grid-template-rows: 1fr;
-    align-content: stretch;
-    gap: 18px;
+    grid-template-columns: auto auto;
+    grid-template-rows: minmax(0, 1fr);
+    justify-content: center;
+    justify-items: center;
+    align-items: center;
+    gap: 22px;
     padding: 14px 18px;
-  }
-  .rehearse.has-video .vstage {
-    aspect-ratio: auto;
   }
   .rehearse.has-video .rehearse-floor {
     order: 1;
@@ -456,11 +488,12 @@
   }
   .rehearse.has-video .rehearse-floor-name {
     flex: none;
-    text-align: center;
     min-height: calc(1.3em * 2);
   }
+  /* The grid is the reason to look left, so it gets real size rather than whatever
+     a fixed column left over. */
   .rehearse.has-video .stage {
-    width: 100%;
+    width: min(400px, 32vw);
   }
   .rehearse.has-video .vstage {
     order: 2;

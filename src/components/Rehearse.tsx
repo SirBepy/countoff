@@ -22,7 +22,11 @@ export default function Rehearse({ project }: { project: Project }) {
   // Footage is what earns the video layout. With none, the move name keeps the centre
   // it was deliberately given, and this screen is exactly what it always was.
   const hasVideo = project.clips.length > 0 && !videoOff
-  const moveName = now.move?.name ?? (now.block ? 'Note' : 'Waiting')
+  // A block with no move is a comment, and its text IS the headline: titling it "Note"
+  // spends the biggest type on the screen saying nothing and pushes the words below.
+  const comment = !now.move && now.block?.note ? now.block.note : ''
+  const moveName = now.move?.name ?? (comment || 'Waiting')
+  const note = comment ? '' : (now.block?.note ?? '')
 
   const pulse = (
     <div className="pulse">
@@ -57,7 +61,7 @@ export default function Rehearse({ project }: { project: Project }) {
       {hasVideo && (
         <div className="rehearse-band">
           <span className="nm">{moveName}</span>
-          <span className={`nt${now.block?.note ? '' : ' is-empty'}`}>{now.block?.note ?? ''}</span>
+          <span className={`nt${note ? '' : ' is-empty'}`}>{note}</span>
           {now.next && (
             <span className="nx">
               next in {now.beatsUntilNext}
@@ -79,7 +83,7 @@ export default function Rehearse({ project }: { project: Project }) {
         ) : (
           <div className="rehearse-centre">
             <div className="rehearse-move">{moveName}</div>
-            <div className={`rehearse-note${now.block?.note ? '' : ' is-empty'}`}>{now.block?.note ?? ''}</div>
+            <div className={`rehearse-note${note ? '' : ' is-empty'}`}>{note}</div>
             {pulse}
           </div>
         )}
