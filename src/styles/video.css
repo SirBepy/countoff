@@ -36,6 +36,9 @@
   grid-template-rows: auto 1fr auto auto auto;
   height: 100%;
   min-height: 0;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .vs-top {
   display: grid;
@@ -43,6 +46,42 @@
   gap: 12px;
   padding: 12px;
   min-height: 0;
+}
+/* Centres the monitor so the box can be narrower than its column. */
+.vs-monitor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+/* Height first, width from the footage's own ratio, so portrait phone video is a
+   centred pillar rather than a strip stretched across the row. */
+.vs-monitor .vstage {
+  aspect-ratio: var(--ar, 16 / 9);
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+/* Sits over the whole screen while a file is dragged in; transparent to the drop itself. */
+.vs-dropall {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  background: rgba(8, 9, 13, 0.84);
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+  pointer-events: none;
+}
+.vs-dropall i {
+  font-size: 34px;
+  color: var(--accent);
 }
 .vs-badges {
   position: absolute;
@@ -95,12 +134,18 @@
   overflow: auto;
   min-height: 0;
 }
+/* -webkit-user-drag is what actually starts the drag under the view's user-select: none. */
 .vs-take {
   display: flex;
   gap: 9px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--line-soft);
   align-items: center;
+  cursor: grab;
+  -webkit-user-drag: element;
+}
+.vs-take:active {
+  cursor: grabbing;
 }
 .vs-take .thumb {
   width: 46px;
@@ -340,6 +385,16 @@
   display: flex;
   overflow: hidden;
   cursor: grab;
+}
+/* Where a take dragged out of the bin would land. */
+.vt-ghost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
 }
 .vt-clip.sel {
   border-color: var(--accent);

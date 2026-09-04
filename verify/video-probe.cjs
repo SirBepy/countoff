@@ -55,13 +55,14 @@ const PROJECT = {
   updatedAt: Date.now(),
 }
 
-/** Records a moving canvas into the takes store, so the probe has real decodable footage. */
-async function recordTake(page, seconds) {
+/** Records a moving canvas into the takes store, so the probe has real decodable footage.
+ *  The shape is a parameter because portrait phone footage is what the monitor has to fit. */
+async function recordTake(page, seconds, w = 320, h = 180) {
   return page.evaluate(
-    async ({ takeId, seconds }) => {
+    async ({ takeId, seconds, w, h }) => {
       const canvas = document.createElement('canvas')
-      canvas.width = 320
-      canvas.height = 180
+      canvas.width = w
+      canvas.height = h
       const ctx = canvas.getContext('2d')
       const stream = canvas.captureStream(25)
       const chunks = []
@@ -74,9 +75,9 @@ async function recordTake(page, seconds) {
         const draw = () => {
           const t = (performance.now() - started) / 1000
           ctx.fillStyle = '#1b1636'
-          ctx.fillRect(0, 0, 320, 180)
+          ctx.fillRect(0, 0, w, h)
           ctx.fillStyle = '#cfc7ff'
-          ctx.fillRect(20 + ((t * 90) % 240), 60, 60, 90)
+          ctx.fillRect(20 + ((t * 90) % Math.max(40, w - 80)), h / 2 - 45, 60, 90)
           ctx.font = 'bold 22px sans-serif'
           ctx.fillText(t.toFixed(1) + 's', 12, 30)
           if (t >= seconds) return resolve()
@@ -100,7 +101,7 @@ async function recordTake(page, seconds) {
       })
       return blob.size
     },
-    { takeId: TAKE_ID, seconds },
+    { takeId: TAKE_ID, seconds, w, h },
   )
 }
 
@@ -116,8 +117,8 @@ async function main() {
 
     await seedProject(page, URL, { project: PROJECT, audioBytes: silentWav(60) })
 
-    const bytes = await recordTake(page, 4)
-    check('recorded a real take into the takes store', bytes > 1000, `${bytes} bytes`)
+    const bytes = await recordTake(page, 4, 320, 568)
+    check('recorded a real portrait take into the takes store', bytes > 1000, `${bytes} bytes`)
 
     // Reload so attachTakes() resolves the stored blob into an object URL the way a
     // real boot does, rather than testing a path only the probe ever walks.
@@ -165,6 +166,79 @@ async function main() {
       !!trimmed && trimmed.srcOut < laid.srcOut && trimmed.songStart === laid.songStart,
       trimmed && `srcOut ${laid.srcOut.toFixed(2)} -> ${trimmed.srcOut.toFixed(2)}`,
     )
+
+    // Portrait footage must leave the monitor taller than it is wide and centred in its
+    // column, which is the whole point of hugging --ar rather than filling the row.
+    const fit = await page.evaluate(() => {
+      const stage = document.querySelector('.vs-monitor .vstage')
+      const col = document.querySelector('.vs-monitor')
+      if (!stage || !col) return null
+      const s = stage.getBoundingClientRect()
+      const c = col.getBoundingClientRect()
+      return {
+        ratio: s.width / s.height,
+        narrower: s.width < c.width - 8,
+        leftGap: s.left - c.left,
+        rightGap: c.right - s.right,
+      }
+    })
+    check('the monitor hugs the portrait ratio instead of filling the row', !!fit && fit.ratio < 1, fit && `box ratio ${fit.ratio.toFixed(2)}`)
+    check(
+      'the monitor is centred in its column',
+      !!fit && fit.narrower && Math.abs(fit.leftGap - fit.rightGap) < 2,
+      fit && `gaps ${fit.leftGap.toFixed(0)}px / ${fit.rightGap.toFixed(0)}px`,
+    )
+
+    await page.screenshot({ path: path.join(dir, 'desktop-video-portrait-fit.png') })
+
+    // Right-click a clip: the menu is the route to both cutting and deleting.
+    const clipBox = await page.locator('.vt-clip').first().boundingBox()
+    await page.mouse.move(clipBox.x + clipBox.width / 2, clipBox.y + clipBox.height / 2)
+    await page.mouse.down({ button: 'right' })
+    await page.mouse.up({ button: 'right' })
+    await page.waitForTimeout(300)
+    const menuOpen = await page.locator('.mv-menu').count()
+    check('right-clicking a clip opens a menu', menuOpen === 1, `${menuOpen} menus`)
+    const items = await page.locator('.mv-menu .mi').allTextContents()
+    check(
+      'the menu offers both split and delete',
+      items.some((t) => /split/i.test(t)) && items.some((t) => /delete/i.test(t)),
+      items.map((t) => t.trim()).join(' | '),
+    )
+    await page.screenshot({ path: path.join(dir, 'desktop-video-clip-menu.png') })
+
+    // Delete through the menu, which is the gap Joe hit: the clip has to actually go.
+    await page.locator('.mv-menu .mi.danger').click()
+    await page.waitForTimeout(400)
+    const leftAfterDelete = await page.locator('.vt-clip').count()
+    check('deleting from the menu removes the clip', leftAfterDelete === 0, `${leftAfterDelete} clips`)
+
+    // Drag the take out of the bin onto the lane, rather than using the button.
+    const row = await page.locator('.vs-take').first().boundingBox()
+    const lane = await page.locator('.vt-lane.vt-video .vt-track').boundingBox()
+    await page.mouse.move(row.x + 30, row.y + row.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(lane.x + lane.width * 0.4, lane.y + lane.height / 2, { steps: 12 })
+    await page.mouse.move(lane.x + lane.width * 0.45, lane.y + lane.height / 2, { steps: 6 })
+    await page.mouse.up()
+    await page.waitForTimeout(500)
+    const dragged = await page.locator('.vt-clip').count()
+    check('dragging a take from the bin lays a clip on the lane', dragged === 1, `${dragged} clips`)
+
+    // Split with nothing selected: the playhead alone has to be enough.
+    if (dragged === 1) {
+      const placed = (await readProject(page))?.clips?.[0]
+      await page.evaluate((t) => {
+        const el = document.querySelector('audio')
+        if (el) el.currentTime = t
+      }, placed.songStart + (placed.srcOut - placed.srcIn) / 2)
+      await page.waitForTimeout(300)
+      await page.evaluate(() => document.querySelector('.vt')?.click())
+      await page.locator('.vs-insp button', { hasText: 'Split at playhead' }).click()
+      await page.waitForTimeout(400)
+      const pieces = await page.locator('.vt-clip').count()
+      check('split at the playhead works without pre-selecting a clip', pieces === 2, `${pieces} clips`)
+    }
 
     await page.screenshot({ path: path.join(dir, 'desktop-video-screen.png') })
 

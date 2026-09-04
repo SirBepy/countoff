@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { beatAt, orderedMovements, stints } from '../lib/floor'
 import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
+import { useMenuFit } from '../lib/menuFit'
 import { addClip, beginGesture, endGesture, flash, removeClip, set, uid, updateClip } from '../lib/store'
 import { dropTake, importTake } from '../lib/takes'
 import { clipEnd, clipLength, coveredSeconds, fitClip, MIN_CLIP, orderedClips, placedBlocks, roomAt } from '../lib/video'
@@ -12,18 +13,26 @@ import VideoStage from './VideoStage'
 const ZOOM_MAX = 60
 /** A drag under this many pixels is a click, so tapping a clip selects instead of retiming it. */
 const DRAG_SLOP = 4
+/** Marks a bin drag as one of ours, so the file-upload overlay stays out of its way. */
+const TAKE_DRAG = 'application/x-countoff-take'
 
 type Grab = 'body' | 'in' | 'out'
 
 const mb = (bytes: number) => `${Math.max(1, Math.round(bytes / 1e6))} MB`
+
+const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
 
 export default function VideoScreen({ project }: { project: Project }) {
   const { time, playing, rate } = useAudio()
   const [selected, setSelected] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
   const [snap, setSnap] = useState(true)
+  const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [ghost, setGhost] = useState<number | null>(null)
   const scroll = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu)
 
   const duration = project.duration || 1
   const pct = (t: number) => `${(t / duration) * 100}%`
@@ -32,6 +41,11 @@ export default function VideoScreen({ project }: { project: Project }) {
   const take = clip && project.takes.find((t) => t.id === clip.takeId)
   const moves = useMemo(() => placedBlocks(project), [project])
   const here = beatAt(project, clip ? clip.songStart : time)
+  const menuClip = menu ? (clips.find((c) => c.id === menu.clipId) ?? null) : null
+  const menuTake = menuClip && project.takes.find((t) => t.id === menuClip.takeId)
+
+  /** A cut needs a clip's worth of footage either side of it, or it makes a sliver. */
+  const cuttable = (c: Clip) => time > c.songStart + MIN_CLIP && time < clipEnd(c) - MIN_CLIP
 
   /** Time under a client x, measured against the track column rather than the whole lane. */
   function timeAt(clientX: number) {
@@ -101,25 +115,30 @@ export default function VideoScreen({ project }: { project: Project }) {
     window.addEventListener('pointerup', stop)
   }
 
-  /** Lays a take down at the playhead, trimmed to whatever gap is actually free there. */
-  function lay(source: Take) {
-    const fitted = fitClip(project, source, maybeSnap(time), uid())
+  /** Lays a take down, trimmed to whatever gap is actually free there. The playhead is
+   *  where the bin's button drops it; a drag onto the lane names its own time. */
+  function lay(source: Take, at = time) {
+    const fitted = fitClip(project, source, maybeSnap(at), uid())
     if (!fitted) return flash('No room here, the next clip starts too soon')
     addClip(fitted)
     setSelected(fitted.id)
   }
 
-  /** Cuts the selected clip in two at the playhead, so one take can carry two moments. */
-  function split() {
-    if (!clip) return
-    if (time <= clip.songStart + MIN_CLIP || time >= clipEnd(clip) - MIN_CLIP) {
-      return flash('Put the playhead inside the clip first')
-    }
-    const at = clip.srcIn + (time - clip.songStart)
-    const tail: Clip = { id: uid(), takeId: clip.takeId, songStart: time, srcIn: at, srcOut: clip.srcOut }
-    updateClip(clip.id, { srcOut: at })
+  /** Cuts a clip in two at the playhead, so one take can carry two moments. With no clip
+   *  named it takes whichever one the playhead is inside, so nothing has to be selected. */
+  function split(target?: Clip) {
+    const cut = target ?? clips.find(cuttable)
+    if (!cut || !cuttable(cut)) return flash('Put the playhead inside the clip first')
+    const at = cut.srcIn + (time - cut.songStart)
+    const tail: Clip = { id: uid(), takeId: cut.takeId, songStart: time, srcIn: at, srcOut: cut.srcOut }
+    updateClip(cut.id, { srcOut: at })
     addClip(tail)
     setSelected(tail.id)
+  }
+
+  function erase(id: string) {
+    removeClip(id)
+    if (selected === id) setSelected(null)
   }
 
   async function pick(files: FileList | null) {
@@ -127,10 +146,45 @@ export default function VideoScreen({ project }: { project: Project }) {
     if (picker.current) picker.current.value = ''
   }
 
+  // No dependency array: the blade reads the playhead, which moves every frame. Capture
+  // phase, so the Escape that shuts the menu never also walks back to the sheet.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return
+      if (e.key === 'Escape' && menu) {
+        e.stopPropagation()
+        return setMenu(null)
+      }
+      // The sheet already owns 's' for splitting the song, so the blade takes its own key.
+      if (e.key.toLowerCase() === 'b') split()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  })
+
   const covered = coveredSeconds(project)
 
   return (
-    <div className="app video-view">
+    <div
+      className="app video-view"
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        setImporting(true)
+      }}
+      onDragLeave={(e) => {
+        // relatedTarget is where the pointer went; still inside means this was a child
+        // boundary, not the screen edge, and the overlay would otherwise flicker.
+        if (hasFiles(e) && !e.currentTarget.contains(e.relatedTarget as Node)) setImporting(false)
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        setImporting(false)
+        void pick(e.dataTransfer.files)
+      }}
+    >
       <div className="appbar">
         <button className="ghost icon" onClick={() => set({ view: 'sheet' }, false)} title="Back to the sheet">
           <i className="ph ph-caret-left i" />
@@ -169,6 +223,7 @@ export default function VideoScreen({ project }: { project: Project }) {
       </div>
 
       <div className="vs-top">
+        <div className="vs-monitor">
         <VideoStage project={project} time={time} playing={playing} rate={rate}>
           <div className="vs-badges">
             {here && (
@@ -183,12 +238,23 @@ export default function VideoScreen({ project }: { project: Project }) {
             })()}
           </div>
         </VideoStage>
+        </div>
 
         <div className="vs-bin">
           <h3>Takes</h3>
           <div className="vs-takes">
             {project.takes.map((t) => (
-              <div key={t.id} className="vs-take">
+              <div
+                key={t.id}
+                className="vs-take"
+                draggable
+                title="Drag onto the Video lane, or use the button to drop it at the playhead"
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(TAKE_DRAG, t.id)
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
+                onDragEnd={() => setGhost(null)}
+              >
                 <span className="thumb">
                   <i className="ph ph-play" />
                 </span>
@@ -199,7 +265,7 @@ export default function VideoScreen({ project }: { project: Project }) {
                   </span>
                 </span>
                 <button className="ghost icon" title="Lay this take at the playhead" onClick={() => lay(t)}>
-                  <i className="ph ph-arrow-line-down" />
+                  <i className="ph ph-arrow-fat-down" />
                 </button>
                 <button className="ghost icon" title="Remove this take and its clips" onClick={() => void dropTake(t.id)}>
                   <i className="ph ph-trash" />
@@ -252,27 +318,22 @@ export default function VideoScreen({ project }: { project: Project }) {
                 <span className="v">count {(here.beat % here.segment.countsPerRow) + 1}</span>
               </div>
             )}
-            <div className="spacer" />
-            <button onClick={split}>
-              <i className="ph ph-arrows-in-line-vertical i" /> Split at playhead
-            </button>
-            <button
-              className="ghost"
-              style={{ color: 'var(--danger)' }}
-              onClick={() => {
-                removeClip(clip.id)
-                setSelected(null)
-              }}
-            >
-              <i className="ph ph-trash i" /> Delete clip
-            </button>
           </>
         ) : (
           <span className="faint">
             {project.takes.length
-              ? 'Pick a clip on the track to trim it, or send a take down at the playhead.'
-              : 'Add a video, then send it down onto the track at the playhead.'}
+              ? 'Right-click a clip to cut or delete it, or drag a take onto the track.'
+              : 'Add a video, then drag it onto the track or send it down at the playhead.'}
           </span>
+        )}
+        <div className="spacer" />
+        <button onClick={() => split()} title="Cut the clip under the playhead in two (B)">
+          <i className="ph ph-arrows-in-line-vertical i" /> Split at playhead
+        </button>
+        {clip && (
+          <button className="ghost" style={{ color: 'var(--danger)' }} onClick={() => erase(clip.id)}>
+            <i className="ph ph-trash i" /> Delete clip
+          </button>
         )}
       </div>
 
@@ -316,7 +377,25 @@ export default function VideoScreen({ project }: { project: Project }) {
                 <i className="ph ph-film-strip di" />
                 <span className="nm">Video</span>
               </div>
-              <div className="vt-track" onPointerDown={scrub}>
+              <div
+                className="vt-track"
+                onPointerDown={scrub}
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes(TAKE_DRAG)) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'copy'
+                  setGhost(maybeSnap(timeAt(e.clientX)))
+                }}
+                onDragLeave={() => setGhost(null)}
+                onDrop={(e) => {
+                  const source = project.takes.find((t) => t.id === e.dataTransfer.getData(TAKE_DRAG))
+                  setGhost(null)
+                  if (!source) return
+                  e.preventDefault()
+                  lay(source, timeAt(e.clientX))
+                }}
+              >
+                {ghost !== null && <span className="vt-ghost" style={{ left: pct(ghost) }} />}
                 {clips.map((c) => {
                   const source = project.takes.find((t) => t.id === c.takeId)
                   return (
@@ -324,8 +403,14 @@ export default function VideoScreen({ project }: { project: Project }) {
                       key={c.id}
                       className={`vt-clip${c.id === selected ? ' sel' : ''}`}
                       style={{ left: pct(c.songStart), width: pct(clipLength(c)) }}
-                      title={`${source?.name ?? 'missing take'} · ${formatTime(c.srcIn)}–${formatTime(c.srcOut)}`}
+                      title={`${source?.name ?? 'missing take'} · ${formatTime(c.srcIn)}–${formatTime(c.srcOut)}. Right-click to cut or delete.`}
                       onPointerDown={(e) => grab(c, 'body', e)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSelected(c.id)
+                        setMenu({ clipId: c.id, x: e.clientX, y: e.clientY })
+                      }}
                     >
                       <span className="h l" onPointerDown={(e) => grab(c, 'in', e)} />
                       <span className="lab">
@@ -404,6 +489,31 @@ export default function VideoScreen({ project }: { project: Project }) {
         </button>
         <span className="faint mono">{formatTime(time)}</span>
       </div>
+
+      {menuClip && menu && (
+        <>
+          <div className="mv-menu-back" onPointerDown={() => setMenu(null)} onContextMenu={() => setMenu(null)} />
+          <div className="mv-menu" ref={menuEl} style={{ left: menu.x + offset.dx, top: menu.y + offset.dy }}>
+            <div className="mh">{menuTake?.name ?? 'missing take'}</div>
+            <button className="mi" disabled={!cuttable(menuClip)} onClick={() => (split(menuClip), setMenu(null))}>
+              <i className="ph ph-arrows-in-line-vertical" />
+              Split at playhead
+              <span className="k">B</span>
+            </button>
+            <button className="mi danger" onClick={() => (erase(menuClip.id), setMenu(null))}>
+              <i className="ph ph-trash" />
+              Delete clip
+            </button>
+          </div>
+        </>
+      )}
+
+      {importing && (
+        <div className="vs-dropall">
+          <i className="ph ph-upload-simple" />
+          <b>Drop to add footage</b>
+        </div>
+      )}
     </div>
   )
 }
