@@ -1,4 +1,5 @@
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
+import { loadShareCache, saveShareCache } from './db'
 import { db, getCurrentUser } from './firebase'
 import { SHARE_WORDS } from './shareWords'
 import type { Project } from './types'
@@ -148,6 +149,9 @@ export interface LoadedShare {
   /** Where the share actually lives, which is not the token in the URL once the link
    *  has been renamed. Comments belong on this one. */
   token: string
+  /** What this device had cached from the last time this share was viewed, if any:
+   *  lets the caller tell which takes still point at footage already downloaded. */
+  previous?: Project
 }
 
 // Small enough that a slow phone still shows the counter moving, large enough that
@@ -167,7 +171,19 @@ export async function loadShare(
   }
   if (!snap.exists()) throw new Error('That link does not point at anything')
   const data = snap.data() as ShareDoc
-  if (!data.chunks) return { project: data.project, audio: null, token }
+  const cached = await loadShareCache(token)
+
+  if (!data.chunks) {
+    void saveShareCache(token, { project: data.project, chunks: 0, audio: null })
+    return { project: data.project, audio: null, token, previous: cached?.project }
+  }
+
+  // Audio is only ever uploaded once per token (publishShare skips re-upload whenever
+  // chunks is already set), so an unchanged chunk count means unchanged audio bytes.
+  if (cached && cached.chunks === data.chunks && cached.audio) {
+    void saveShareCache(token, { project: data.project, chunks: data.chunks, audio: cached.audio })
+    return { project: data.project, audio: cached.audio, token, previous: cached.project }
+  }
 
   // Ids are the zero-padded chunk index, so the order is known without a query and
   // each batch can be counted off as it lands.
@@ -185,7 +201,9 @@ export async function loadShare(
     }
     onProgress?.(Math.min(i + FETCH_BATCH, ids.length), ids.length)
   }
-  return { project: data.project, audio: base64ToBlob(parts.join(''), type), token }
+  const audio = base64ToBlob(parts.join(''), type)
+  void saveShareCache(token, { project: data.project, chunks: data.chunks, audio })
+  return { project: data.project, audio, token, previous: cached?.project }
 }
 
 /** Moves a share onto a fresh token, then strips the old document down to a pointer

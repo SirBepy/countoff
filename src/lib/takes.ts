@@ -45,6 +45,31 @@ export async function attachTakes(project: Project): Promise<void> {
   void backUpTakes(project)
 }
 
+/** A viewer's version of attachTakes: a take whose remote url matches `previous`
+ *  (this device's last cache of the same share) plays local, no Storage hit. The
+ *  rest still stream remotely now, and get fetched into the background for next time. */
+export async function attachSharedTakes(project: Project, previous?: Project): Promise<Project> {
+  const priorUrl = new Map((previous?.takes ?? []).map((t) => [t.id, t.url]))
+  const takes = await Promise.all(
+    project.takes.map(async (take): Promise<Take> => {
+      if (!take.url) return take
+      if (priorUrl.get(take.id) === take.url) {
+        const blob = await loadTakeFile(take.id)
+        if (blob) {
+          setTakeUrl(take.id, URL.createObjectURL(blob))
+          return { ...take, url: undefined }
+        }
+      }
+      void fetch(take.url)
+        .then((r) => r.blob())
+        .then((blob) => saveTakeFile(take.id, blob))
+        .catch(() => {})
+      return take
+    }),
+  )
+  return { ...project, takes }
+}
+
 export async function dropTake(takeId: string): Promise<void> {
   setTakeUrl(takeId, null)
   removeTake(takeId)

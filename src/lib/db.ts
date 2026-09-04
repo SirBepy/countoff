@@ -4,9 +4,23 @@ import { uid } from './store'
 import type { Marker, Project, Segment } from './types'
 
 const DB_NAME = 'countoff'
-const DB_VERSION = 2
-const STORES = ['project', 'audio', 'clips', 'takes'] as const
+const DB_VERSION = 3
+const STORES = ['project', 'audio', 'clips', 'takes', 'shares'] as const
 const ACTIVE_KEY = 'countoff.activeProjectId'
+
+/** What a viewed share leaves behind on this device, keyed by the resolved token so a
+ *  renamed link never serves another link's cache. Never a Project store entry: a
+ *  viewer's cache must not surface in listProjects or become the active project. */
+export interface ShareCacheEntry {
+  project: Project
+  chunks: number
+  audio: Blob | null
+  lastUsed: number
+}
+
+// However many links Joe hands out, only the ones a viewer actually opened recently
+// are worth the footage they may drag along.
+const MAX_CACHED_SHARES = 5
 
 // Pre-collapse marker shape: retired 2026-08-27 when `kind` merged into `label`.
 const OLD_KIND_LABEL: Record<string, string> = { transition: 'Transition', drop: 'Drop', break: 'Break', cue: 'Cue' }
@@ -143,12 +157,64 @@ export async function listProjects(): Promise<Project[]> {
   return all.filter((p) => p && p.id).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+/** Every id a real project or a cached share still points at, so a take file is only
+ *  ever dropped once nothing on this device can play it. */
+async function citedTakeIds(dropping?: string | null): Promise<Set<string>> {
+  const [projects, shares] = await Promise.all([
+    listProjects(),
+    tx<ShareCacheEntry[]>('shares', 'readonly', (s) => s.getAll()),
+  ])
+  const ids = new Set<string>()
+  for (const p of projects) if (p.id !== dropping) for (const t of p.takes ?? []) ids.add(t.id)
+  for (const entry of shares) for (const t of entry.project.takes ?? []) ids.add(t.id)
+  return ids
+}
+
 /** A take's file only goes once no project cites it, since a duplicate shares its source's
  *  footage. `dropping` skips the one record that can still list it mid-save-debounce. */
 export async function deleteTakeFileIfUnused(takeId: string, dropping?: string | null): Promise<void> {
-  const projects = await listProjects()
-  const cited = projects.some((p) => p.id !== dropping && (p.takes ?? []).some((t) => t.id === takeId))
-  if (!cited) await deleteTakeFile(takeId)
+  const cited = await citedTakeIds(dropping)
+  if (!cited.has(takeId)) await deleteTakeFile(takeId)
+}
+
+/** Reads the cache a prior view of this share left behind. Any read failure, or a
+ *  shape an older version wrote, is treated as no cache: never an error the viewer sees. */
+export async function loadShareCache(token: string): Promise<ShareCacheEntry | undefined> {
+  try {
+    const entry = await tx<ShareCacheEntry | undefined>('shares', 'readonly', (s) => s.get(token))
+    return entry && typeof entry.chunks === 'number' && entry.project ? entry : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Keeps only the `MAX_CACHED_SHARES` most recently viewed shares, since footage
+ *  makes each one heavy and Joe hands out links faster than anyone revisits them. */
+async function evictShareCache(): Promise<void> {
+  const db = await open()
+  const entries = await new Promise<{ key: string; lastUsed: number; takeIds: string[] }[]>((resolve, reject) => {
+    const results: { key: string; lastUsed: number; takeIds: string[] }[] = []
+    const req = db.transaction('shares', 'readonly').objectStore('shares').openCursor()
+    req.onsuccess = () => {
+      const cursor = req.result
+      if (!cursor) return resolve(results)
+      const entry = cursor.value as ShareCacheEntry
+      results.push({ key: String(cursor.key), lastUsed: entry.lastUsed ?? 0, takeIds: (entry.project?.takes ?? []).map((t) => t.id) })
+      cursor.continue()
+    }
+    req.onerror = () => reject(req.error)
+  })
+  if (entries.length <= MAX_CACHED_SHARES) return
+  entries.sort((a, b) => a.lastUsed - b.lastUsed)
+  const doomed = entries.slice(0, entries.length - MAX_CACHED_SHARES)
+  for (const d of doomed) await tx('shares', 'readwrite', (s) => s.delete(d.key))
+  const cited = await citedTakeIds()
+  for (const d of doomed) for (const id of d.takeIds) if (!cited.has(id)) await deleteTakeFile(id)
+}
+
+export async function saveShareCache(token: string, entry: { project: Project; chunks: number; audio: Blob | null }): Promise<void> {
+  await tx('shares', 'readwrite', (s) => s.put({ ...entry, lastUsed: Date.now() }, token))
+  await evictShareCache()
 }
 
 export async function deleteProject(id: string): Promise<void> {

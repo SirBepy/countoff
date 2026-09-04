@@ -24,7 +24,7 @@ import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace, migratePro
 import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { loadShare, shareTokenFromUrl } from './lib/share'
-import { attachTakes } from './lib/takes'
+import { attachSharedTakes, attachTakes } from './lib/takes'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
 import {
@@ -90,19 +90,20 @@ export default function App() {
     return true
   }
 
-  /** A /v/<token> boot never touches IndexedDB: the share document IS the source, so
-   *  it also skips the saved-plus-blob gate adoptActiveProject enforces. */
+  /** A /v/<token> boot always reads the share doc itself, but the audio and any
+   *  footage this device already cached for it are reused instead of re-downloaded
+   *  when the doc says nothing changed. */
   async function adoptShare(token: string) {
     try {
-      const { project: shared, audio: blob, token: resolved } = await loadShare(token, (done, total) =>
+      const { project: shared, audio: blob, token: resolved, previous } = await loadShare(token, (done, total) =>
         setShareProgress({ done, total }),
       )
       setViewToken(resolved)
       if (blob) audio.load(URL.createObjectURL(blob), shared.name)
       const migrated = migrateProject(shared)
-      replaceProject(migrated, { readOnly: true, view: 'rehearse' }, false)
+      const withFootage = await attachSharedTakes(migrated, previous)
+      replaceProject(withFootage, { readOnly: true, view: 'rehearse' }, false)
       setSegmentId(shared.segments[0]?.id ?? null)
-      void attachTakes(migrated)
     } catch (e) {
       console.error('share load failed', e)
       set({ status: 'The share may have been taken down, or the link is wrong.' }, false)
