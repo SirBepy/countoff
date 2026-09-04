@@ -4,9 +4,12 @@
 const path = require('path')
 const { withBrowser, desktopContext, phoneContext, screenshotDir } = require('./harness.cjs')
 
-const PORT = process.argv[2] || '5173'
+/* First argument is a port for the dev server, or a full origin to shoot the deployed
+   site instead. Pages serves the app from a subpath, so the origin carries it. */
+const WHERE = process.argv[2] || '5173'
 const TOKEN = process.argv[3] || '984a22aa0d1940429f665f80520cb562'
-const URL = `http://localhost:${PORT}/#${TOKEN}`
+const BASE = WHERE.startsWith('http') ? WHERE.replace(/\/$/, '') : `http://localhost:${WHERE}`
+const URL = `${BASE}/#${TOKEN}`
 
 async function shoot(browser, label, context) {
   const page = await browser.newContext(context).then((c) => c.newPage())
