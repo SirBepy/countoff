@@ -246,13 +246,20 @@ export default function App() {
       </>
     )
   }
-  if (view === 'rehearse') return <Rehearse project={project} />
+  // The viewer's token comes from the URL; the owner's comes off the project itself.
+  const commentToken = readOnly ? viewToken : project.shareToken
+
+  if (view === 'rehearse')
+    return (
+      <>
+        <Rehearse project={project} commentToken={commentToken} onComments={() => setShowComments(true)} />
+        {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
+      </>
+    )
   if (view === 'setup') return <SongSetup project={project} />
   if (view === 'floor') return <Floor project={project} />
   if (view === 'video') return <VideoScreen project={project} />
 
-  // The viewer's token comes from the URL; the owner's comes off the project itself.
-  const commentToken = readOnly ? viewToken : project.shareToken
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
   const marker = project.markers.find((m) => m.id === markerFor)
 

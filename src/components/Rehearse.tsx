@@ -9,7 +9,15 @@ import FloorStage from './FloorStage'
 import Runway from './Runway'
 import VideoStage from './VideoStage'
 
-export default function Rehearse({ project }: { project: Project }) {
+export default function Rehearse({
+  project,
+  commentToken,
+  onComments,
+}: {
+  project: Project
+  commentToken?: string | null
+  onComments?: () => void
+}) {
   const { time, playing, metronome, rate } = useAudio()
   const [videoOff, setVideoOff] = useState(false)
   const now = nowState(project, time)
@@ -51,6 +59,11 @@ export default function Rehearse({ project }: { project: Project }) {
         {project.clips.length > 0 && (
           <button className={hasVideo ? 'on' : ''} onClick={() => setVideoOff(!videoOff)} title="Show the footage instead of the move name">
             <i className="ph ph-video i" /> <span className="lbl">Video</span>
+          </button>
+        )}
+        {commentToken && (
+          <button onClick={onComments} title="Read or leave a comment on this link">
+            <i className="ph ph-chat-circle-text i" /> <span className="lbl">Comments</span>
           </button>
         )}
         <button onClick={() => set({ view: 'sheet' }, false)}>
