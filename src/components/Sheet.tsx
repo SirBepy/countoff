@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { beatDuration, beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
+import { beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { movementLabel } from '../lib/floor'
 import { MARKER_COLOUR } from '../lib/markers'
@@ -541,5 +541,3 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
     </div>
   )
 }
-
-export const rowDuration = (seg: Segment) => beatDuration(seg.bpm) * seg.countsPerRow
