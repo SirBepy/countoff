@@ -104,8 +104,23 @@ export interface FloorSize {
   rows: number
 }
 
-/** What the dancers face: a crowd along the front edge, or one seated person. */
-export type Focus = { kind: 'audience' } | { kind: 'person'; name: string; col: number; row: number }
+/** The chair being wheeled somewhere mid-number. Same shape as `Movement` minus the
+ *  dancer, and `to` is never null: a chair has nowhere to walk off to. */
+export interface FocusKey {
+  id: string
+  segmentId: string
+  /** Beat index relative to the segment's anchor, like `Movement.beat`. */
+  beat: number
+  travel: number
+  to: { col: number; row: number }
+}
+
+/** What the dancers face: a crowd along the front edge, or one seated person. `col`/`row`
+ *  is where that chair starts; `keys` moves it from there, and its absence is the whole
+ *  migration story for a project saved before the chair could move. */
+export type Focus =
+  | { kind: 'audience' }
+  | { kind: 'person'; name: string; col: number; row: number; keys?: FocusKey[] }
 
 export interface Project {
   id: string

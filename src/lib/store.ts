@@ -422,7 +422,12 @@ export const setFloorSize = (floor: FloorSize) =>
       ...p,
       floor,
       movements: p.movements.map((m) => (m.to ? { ...m, to: fit(m.to) } : m)),
-      focus: p.focus.kind === 'person' ? { ...p.focus, ...fit(p.focus) } : p.focus,
+      // Every chair keyframe needs the same pull-back as the chair's own cell, or a
+      // shrunk floor leaves the move heading off the edge.
+      focus:
+        p.focus.kind === 'person'
+          ? { ...p.focus, ...fit(p.focus), keys: p.focus.keys?.map((k) => ({ ...k, to: fit(k.to) })) }
+          : p.focus,
     }
   })
 
@@ -436,6 +441,30 @@ export const togglePin = (id: string) =>
   }))
 
 export const setFocus = (focus: Focus, coalesceKey?: string) => updateProject({ focus }, coalesceKey)
+
+/** Writes where the chair must be on one count, the same upsert-by-count rule
+ *  `placeMovement` follows, so dragging across ten cells retimes one key. */
+export const placeFocusKey = (
+  segmentId: string,
+  beat: number,
+  to: { col: number; row: number },
+  coalesceKey?: string,
+) =>
+  withProject((p) => {
+    if (p.focus.kind !== 'person') return p
+    const keys = p.focus.keys ?? []
+    const existing = keys.find((k) => k.segmentId === segmentId && k.beat === beat)
+    if (existing) {
+      return { ...p, focus: { ...p.focus, keys: keys.map((k) => (k.id === existing.id ? { ...k, to } : k)) } }
+    }
+    // A move cannot start before the song does, so an early count shortens rather than refuses.
+    const travel = Math.min(p.walkCounts, beat)
+    return { ...p, focus: { ...p.focus, keys: [...keys, { id: uid(), segmentId, beat, travel, to }] } }
+  }, coalesceKey)
+
+/** Back to one static chair, and back to the pre-keyframe shape on disk. */
+export const clearFocusKeys = () =>
+  withProject((p) => (p.focus.kind === 'person' ? { ...p, focus: { ...p.focus, keys: undefined } } : p))
 
 export function flash(message: string) {
   set({ status: message }, false)

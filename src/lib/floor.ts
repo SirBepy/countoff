@@ -1,5 +1,5 @@
 import { beatToTime, timeToBeat } from './grid'
-import type { FloorSize, Movement, Person, Project, Segment, Side } from './types'
+import type { FloorSize, FocusKey, Movement, Person, Project, Segment, Side } from './types'
 
 /** Odd on both axes so a V shape and a lead dancer get a true centre cell. */
 export const DEFAULT_FLOOR: FloorSize = { cols: 11, rows: 7 }
@@ -156,6 +156,42 @@ export function standingAt(project: Project, personId: string, time: number): St
   }
 }
 
+/** Where the chair is at `time`, interpolated across its own move the way `standingAt`
+ *  does a dancer's. Null when the number faces the audience; with no keys it is the
+ *  static cell, which is why an older project renders exactly as it did. */
+export function focusAt(project: Project, time: number): Cell | null {
+  const { focus } = project
+  if (focus.kind !== 'person') return null
+  const keys = focus.keys ?? []
+  if (!keys.length) return { col: focus.col, row: focus.row }
+
+  const bySegment = new Map(project.segments.map((s) => [s.id, s]))
+  const placed = keys
+    .flatMap((key: FocusKey) => {
+      const segment = bySegment.get(key.segmentId)
+      if (!segment) return []
+      const arrive = beatToTime(segment, key.beat)
+      return [{ key, arrive, depart: beatToTime(segment, key.beat - key.travel) }]
+    })
+    .sort((a, b) => a.arrive - b.arrive)
+
+  let origin: Cell = { col: focus.col, row: focus.row }
+  for (const { key, arrive, depart } of placed) {
+    if (time >= arrive - 1e-9) {
+      origin = key.to
+      continue
+    }
+    if (time <= depart) return origin
+    const span = arrive - depart
+    const progress = span > 0 ? (time - depart) / span : 1
+    return {
+      col: origin.col + (key.to.col - origin.col) * progress,
+      row: origin.row + (key.to.row - origin.row) * progress,
+    }
+  }
+  return origin
+}
+
 /** Who is standing on a cell at `time`, so a drop cannot land two people on one square. */
 export function occupantAt(project: Project, time: number, cell: Cell, exclude?: string) {
   return project.people.find((p) => {
@@ -171,9 +207,11 @@ export function occupantAt(project: Project, time: number, cell: Cell, exclude?:
  * because dancers come on from behind and then travel toward the focus.
  */
 export function freeCell(project: Project, time: number, personId?: string, side?: Side): Cell {
-  const { floor, focus } = project
+  const { floor } = project
+  // The chair's cell at THIS instant, not a fixed one: it can be somewhere else by now.
+  const chair = focusAt(project, time)
   const blocked = (cell: Cell) =>
-    (focus.kind === 'person' && focus.col === cell.col && focus.row === cell.row) ||
+    (!!chair && Math.round(chair.col) === cell.col && Math.round(chair.row) === cell.row) ||
     !!occupantAt(project, time, cell, personId)
 
   if (side) {
@@ -192,7 +230,7 @@ export function freeCell(project: Project, time: number, personId?: string, side
   }
 
   const centre = centreCol(floor)
-  const facing = focus.kind === 'person' ? focus.row : frontRow(floor)
+  const facing = chair ? Math.round(chair.row) : frontRow(floor)
   const rows = Array.from({ length: floor.rows }, (_, row) => row).sort(
     (a, b) => Math.abs(b - facing) - Math.abs(a - facing) || a - b,
   )

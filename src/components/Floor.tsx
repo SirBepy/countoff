@@ -9,6 +9,7 @@ import {
   SIDES,
   WALK_MAX,
   beatAt,
+  focusAt,
   freeCell,
   initialsFrom,
   nextColour,
@@ -16,7 +17,9 @@ import {
 } from '../lib/floor'
 import {
   addPerson,
+  clearFocusKeys,
   flash,
+  placeFocusKey,
   placeMovement,
   removeMovement,
   removePerson,
@@ -57,9 +60,11 @@ export default function Floor({ project }: { project: Project }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [menu, setMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
+  const [chairMenu, setChairMenu] = useState<{ x: number; y: number } | null>(null)
   const [sideMenu, setSideMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
   const [zoom, setZoom] = useState(1)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.personId)
+  const { ref: chairEl, offset: chairOffset } = useMenuFit<HTMLDivElement>(chairMenu && 'chair')
   const { ref: sideMenuEl, offset: sideOffset } = useMenuFit<HTMLDivElement>(sideMenu?.personId)
 
   const here = beatAt(project, time)
@@ -196,6 +201,7 @@ export default function Floor({ project }: { project: Project }) {
             project={project}
             time={time}
             onPick={setSelected}
+            onFocusMenu={(x, y) => setChairMenu({ x, y })}
             onMenu={(personId, x, y) => setMenu({ personId, x, y })}
           />
         </div>
@@ -252,6 +258,42 @@ export default function Floor({ project }: { project: Project }) {
           onSelect={setSelected}
         />
       </div>
+
+      {chairMenu && project.focus.kind === 'person' && (
+        <>
+          <div className="mv-menu-back" onPointerDown={() => setChairMenu(null)} />
+          <div
+            className="mv-menu"
+            ref={chairEl}
+            style={{ left: chairMenu.x + chairOffset.dx, top: chairMenu.y + chairOffset.dy }}
+          >
+            <div className="mh">{project.focus.name || 'The chair'}</div>
+            <button
+              className="mi"
+              disabled={!here}
+              onClick={() => {
+                const chair = focusAt(project, time)
+                if (here && chair) placeFocusKey(here.segment.id, here.beat, { col: Math.round(chair.col), row: Math.round(chair.row) })
+                setChairMenu(null)
+              }}
+            >
+              <i className="ph ph-map-pin" /> Pin the chair to this count
+              <span className="k">{here ? here.beat + 1 : '-'}</span>
+            </button>
+            <button
+              className="mi danger"
+              disabled={!project.focus.keys?.length}
+              onClick={() => {
+                clearFocusKeys()
+                setChairMenu(null)
+              }}
+            >
+              <i className="ph ph-trash" /> Clear the chair's moves
+              <span className="k">{project.focus.keys?.length ?? 0}</span>
+            </button>
+          </div>
+        </>
+      )}
 
       {menu && menuPerson && (
         <>

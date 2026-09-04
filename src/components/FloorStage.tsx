@@ -1,6 +1,6 @@
 import { useRef } from 'react'
-import { beatAt, centreCol, frontRow, occupantAt, standingAt } from '../lib/floor'
-import { beginGesture, endGesture, flash, placeMovement, setFocus } from '../lib/store'
+import { beatAt, centreCol, focusAt, frontRow, occupantAt, standingAt } from '../lib/floor'
+import { beginGesture, endGesture, flash, placeFocusKey, placeMovement, setFocus } from '../lib/store'
 import type { FloorSize, Project } from '../lib/types'
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
@@ -16,12 +16,14 @@ interface Props {
   editable?: boolean
   onPick?: (personId: string) => void
   onMenu?: (personId: string, x: number, y: number) => void
+  onFocusMenu?: (x: number, y: number) => void
 }
 
-export default function FloorStage({ project, time, editable = true, onPick, onMenu }: Props) {
+export default function FloorStage({ project, time, editable = true, onPick, onMenu, onFocusMenu }: Props) {
   const stage = useRef<HTMLDivElement>(null)
   const floor = project.floor
   const focus = project.focus
+  const chair = focusAt(project, time)
 
   function cellAt(clientX: number, clientY: number) {
     const rect = stage.current!.getBoundingClientRect()
@@ -54,11 +56,22 @@ export default function FloorStage({ project, time, editable = true, onPick, onM
     }
   }
 
+  /** With no keyframes the chair is a fixed prop, so a drag just moves it. Once it has
+   *  any, a drag says where it must be on the count under the playhead, which is the
+   *  rule a puck drag already follows. */
+  function moveChair(col: number, row: number, key: string) {
+    if (focus.kind !== 'person') return
+    if (!focus.keys?.length) return setFocus({ ...focus, col, row }, key)
+    const here = beatAt(project, time)
+    if (!here) return
+    placeFocusKey(here.segment.id, here.beat, { col, row }, key)
+  }
+
   /** Dragging a puck writes where that person must be on the count under the playhead. */
   function walkTo(personId: string, col: number, row: number, key: string) {
     const here = beatAt(project, time)
     if (!here) return
-    if (focus.kind === 'person' && focus.col === col && focus.row === row) return
+    if (chair && Math.round(chair.col) === col && Math.round(chair.row) === row) return
     // One person per cell: an occupied square refuses rather than stacking two pucks.
     if (occupantAt(project, time, { col, row }, personId)) return
     placeMovement(personId, here.segment.id, here.beat, { col, row }, undefined, key)
@@ -77,14 +90,18 @@ export default function FloorStage({ project, time, editable = true, onPick, onM
         ))}
       </div>
 
-      {focus.kind === 'audience' ? (
+      {focus.kind === 'audience' || !chair ? (
         <div className="stage-audience">AUDIENCE</div>
       ) : (
         <div
           className="stage-focus"
-          style={{ left: centre(focus.col, floor.cols), top: centre(focus.row, floor.rows) }}
+          style={{ left: centre(chair.col, floor.cols), top: centre(chair.row, floor.rows) }}
           title={`${focus.name || 'Front'} - drag to move who everyone is dancing to`}
-          onPointerDown={drag('focus', (col, row, key) => setFocus({ ...focus, col, row }, key))}
+          onPointerDown={drag('focus', moveChair)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            if (editable) onFocusMenu?.(e.clientX, e.clientY)
+          }}
         >
           <i className="ph ph-armchair" />
           <span>{focus.name || 'Front'}</span>
