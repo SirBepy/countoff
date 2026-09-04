@@ -3,7 +3,7 @@ import { alternateSelection, fillSelection } from '../lib/arrange'
 import { countAtPoint } from '../lib/sheetHit'
 import { flash, set, uid, updateProject, useStore } from '../lib/store'
 import { isComment, type Move, type Project } from '../lib/types'
-import { setDropTarget } from './Sheet'
+import { setDropTarget } from '../lib/sheetGestures'
 
 interface Props {
   project: Project
