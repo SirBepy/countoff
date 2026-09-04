@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
 import { beatAt, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
-import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
+import { beatDuration, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { beginGesture, endGesture, removeMovement, togglePin, updateMovement } from '../lib/store'
-import { isComment, type Movement, type Person, type Project } from '../lib/types'
+import { placedBlocks } from '../lib/video'
+import type { Movement, Person, Project } from '../lib/types'
 
 interface Props {
   project: Project
@@ -125,29 +126,7 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
     return [...all.filter(isPinned), ...all.filter((lane) => !isPinned(lane))]
   }, [project.people, project.pinned])
 
-  /** The sheet's blocks as absolute times, so they line up with the walks under them. */
-  const moves = useMemo(() => {
-    const bySegment = new Map(project.segments.map((seg) => [seg.id, seg]))
-    return project.blocks
-      .flatMap((block) => {
-        const segment = bySegment.get(block.segmentId)
-        if (!segment) return []
-        const move = project.moves.find((m) => m.id === block.moveId)
-        const from = beatToTime(segment, block.startBeat)
-        return [
-          {
-            block,
-            name: isComment(block) ? block.note || 'Note' : (move?.name ?? '?'),
-            // A comment already is its note, so only a move carries a second line of text.
-            note: isComment(block) ? undefined : (block.note ?? move?.note),
-            energy: move?.energy ?? 1,
-            from,
-            to: from + block.beats * beatDuration(segment.bpm),
-          },
-        ]
-      })
-      .sort((a, b) => a.from - b.from)
-  }, [project.blocks, project.moves, project.segments])
+  const moves = useMemo(() => placedBlocks(project), [project.blocks, project.moves, project.segments])
 
   return (
     <div
@@ -223,10 +202,10 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
                 </div>
                 <div className="mv-track" onPointerDown={scrub}>
                   {!person &&
-                    moves.map(({ block, name, note, energy, from, to }) => (
+                    moves.map(({ id, name, note, energy, comment, from, to }) => (
                       <span
-                        key={block.id}
-                        className={`mv-move e${energy}${isComment(block) ? ' comment' : ''}`}
+                        key={id}
+                        className={`mv-move e${energy}${comment ? ' comment' : ''}`}
                         style={{ left: pct(from), width: pct(to - from) }}
                         title={`${name}${note ? ` · ${note}` : ''} from ${formatTime(from)}`}
                         onPointerDown={(e) => {

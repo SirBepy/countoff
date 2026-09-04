@@ -4,8 +4,8 @@ import { uid } from './store'
 import type { Marker, Project, Segment } from './types'
 
 const DB_NAME = 'countoff'
-const DB_VERSION = 1
-const STORES = ['project', 'audio', 'clips'] as const
+const DB_VERSION = 2
+const STORES = ['project', 'audio', 'clips', 'takes'] as const
 const ACTIVE_KEY = 'countoff.activeProjectId'
 
 // Pre-collapse marker shape: retired 2026-08-27 when `kind` merged into `label`.
@@ -87,6 +87,9 @@ export function migrateProject(raw: Project): Project {
     pinned: p.pinned ?? [],
     // Pre-movement shape: retired 2026-09-03 when whole-cast formations became per-person walks.
     movements: p.movements ?? movementsFromFormations(formations ?? [], p.segments ?? [], uid),
+    // Pre-video shape: a project saved before footage could be laid over the song.
+    takes: p.takes ?? [],
+    clips: p.clips ?? [],
     // Pre-transition shape: retired 2026-08-27 when count length and transitions went per-song.
     segments: (p.segments ?? []).map((rawSegment) => {
       const { beatsPerBar, lyricOffset, ...s } = rawSegment as Segment & { beatsPerBar?: number; lyricOffset?: number }
@@ -121,6 +124,13 @@ export async function loadProject(): Promise<Project | undefined> {
 }
 
 export const saveAudio = (id: string, blob: Blob) => tx('audio', 'readwrite', (s) => s.put(blob, id))
+
+/** Footage lives per device, keyed by take id, the same way the song lives keyed by project id. */
+export const saveTakeFile = (takeId: string, blob: Blob) => tx('takes', 'readwrite', (s) => s.put(blob, takeId))
+
+export const loadTakeFile = (takeId: string) => tx<Blob | undefined>('takes', 'readonly', (s) => s.get(takeId))
+
+export const deleteTakeFile = (takeId: string) => tx('takes', 'readwrite', (s) => s.delete(takeId))
 
 /** Falls back to the active project when called with no id, e.g. bpm.ts's tempo re-detect. */
 export function loadAudio(id?: string): Promise<Blob | undefined> {

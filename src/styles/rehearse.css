@@ -323,3 +323,146 @@
     font-size: 9px;
   }
 }
+
+/* The video layout. Only reachable with footage on the project: without it the move
+   name keeps the centre commit 470b254 gave it, and none of this applies. */
+.rehearse.has-video {
+  grid-template-rows: auto auto 1fr auto auto auto;
+}
+.rehearse-band {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 16px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, #171b26, var(--bg));
+  min-width: 0;
+}
+.rehearse-band .nm {
+  font-size: clamp(22px, 5.4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rehearse-band .nt {
+  font-size: clamp(12px, 2.6vw, 16px);
+  font-weight: 700;
+  color: var(--e2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.2s ease;
+}
+.rehearse-band .nt.is-empty {
+  opacity: 0;
+}
+.rehearse-band .nx {
+  margin-left: auto;
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: none;
+}
+.rehearse-band .nx b {
+  display: block;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+
+/* Four buttons do not fit 393px with their words on, and the header is one flex row
+   with no wrap, so the labels go rather than the controls. */
+@media (max-width: 899px) {
+  .rehearse-top .lbl {
+    display: none;
+  }
+  .rehearse-top button {
+    padding: 0 11px;
+  }
+}
+.rehearse-band {
+  flex-wrap: wrap;
+}
+
+/* Video over floor on a phone, which is why the stage is ordered after it despite
+   coming first in the markup: the footage is what a dancer is actually watching.
+   Rows are auto rather than 1fr so the pair centres together instead of leaving a
+   phone-height gap between a letterboxed video and the floor under it. */
+.rehearse.has-video .rehearse-main {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: center;
+  justify-items: stretch;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.rehearse.has-video .vstage {
+  order: 1;
+  min-height: 0;
+  aspect-ratio: var(--ar, 16 / 9);
+  max-height: 100%;
+  margin: 0 auto;
+}
+.rehearse.has-video .rehearse-floor {
+  order: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+.rehearse.has-video .rehearse-floor-name {
+  min-height: 0;
+  margin-bottom: 0;
+  flex: 0 1 auto;
+  text-align: left;
+  min-width: 0;
+}
+.rehearse.has-video .stage {
+  width: 120px;
+  flex: none;
+}
+.rehearse.has-video .stage-audience {
+  display: none;
+}
+/* Outside .rehearse-centre now, so it no longer inherits that grid's centring. */
+.rehearse.has-video > .pulse {
+  justify-content: center;
+  padding-bottom: 6px;
+}
+
+@media (min-width: 900px) {
+  /* Wide enough to put the floor beside the footage rather than under it, which is
+     the whole point of the layout: position on one side, what it looks like in the middle. */
+  .rehearse.has-video .rehearse-main {
+    grid-template-columns: 232px 1fr;
+    grid-template-rows: 1fr;
+    align-content: stretch;
+    gap: 18px;
+    padding: 14px 18px;
+  }
+  .rehearse.has-video .vstage {
+    aspect-ratio: auto;
+  }
+  .rehearse.has-video .rehearse-floor {
+    order: 1;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .rehearse.has-video .rehearse-floor-name {
+    flex: none;
+    text-align: center;
+    min-height: calc(1.3em * 2);
+  }
+  .rehearse.has-video .stage {
+    width: 100%;
+  }
+  .rehearse.has-video .vstage {
+    order: 2;
+  }
+}

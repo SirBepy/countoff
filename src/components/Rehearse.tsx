@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { standingAt } from '../lib/floor'
 import { formatTime } from '../lib/grid'
@@ -6,9 +7,11 @@ import { set } from '../lib/store'
 import type { Project } from '../lib/types'
 import FloorStage from './FloorStage'
 import Runway from './Runway'
+import VideoStage from './VideoStage'
 
 export default function Rehearse({ project }: { project: Project }) {
   const { time, playing, metronome, rate } = useAudio()
+  const [videoOff, setVideoOff] = useState(false)
   const now = nowState(project, time)
   // No cast means an empty grid, which would take the centre of the screen and say nothing.
   const walking = project.people.filter((p) => {
@@ -16,23 +19,53 @@ export default function Rehearse({ project }: { project: Project }) {
     return at && at.progress < 1
   })
   const walkingLabel = walking.length > 0 ? `${walking.map((p) => p.name).join(', ')} moving` : ''
+  // Footage is what earns the video layout. With none, the move name keeps the centre
+  // it was deliberately given, and this screen is exactly what it always was.
+  const hasVideo = project.clips.length > 0 && !videoOff
+  const moveName = now.move?.name ?? (now.block ? 'Note' : 'Waiting')
+
+  const pulse = (
+    <div className="pulse">
+      {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (
+        <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
+      ))}
+    </div>
+  )
 
   return (
-    <div className="rehearse">
-      <div className="row" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
+    <div className={`rehearse${hasVideo ? ' has-video' : ''}`}>
+      <div className="row rehearse-top" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
         <strong>{now.segment?.name ?? project.name}</strong>
         <span className="faint mono">{formatTime(time)}</span>
         <div className="spacer" />
         <button className={metronome ? 'on' : ''} onClick={() => audio.setMetronome(!metronome)}>
-          <i className="ph ph-metronome i" /> Click
+          <i className="ph ph-metronome i" /> <span className="lbl">Click</span>
         </button>
         <button className={rate < 1 ? 'on' : ''} onClick={() => audio.setRate(rate < 1 ? 1 : 0.75)}>
-          <i className="ph ph-gauge i" /> {Math.round(rate * 100)}%
+          <i className="ph ph-gauge i" /> <span className="lbl">{Math.round(rate * 100)}%</span>
         </button>
+        {project.clips.length > 0 && (
+          <button className={hasVideo ? 'on' : ''} onClick={() => setVideoOff(!videoOff)} title="Show the footage instead of the move name">
+            <i className="ph ph-video i" /> <span className="lbl">Video</span>
+          </button>
+        )}
         <button onClick={() => set({ view: 'sheet' }, false)}>
-          <i className="ph ph-x i" /> Exit
+          <i className="ph ph-x i" /> <span className="lbl">Exit</span>
         </button>
       </div>
+
+      {hasVideo && (
+        <div className="rehearse-band">
+          <span className="nm">{moveName}</span>
+          <span className={`nt${now.block?.note ? '' : ' is-empty'}`}>{now.block?.note ?? ''}</span>
+          {now.next && (
+            <span className="nx">
+              next in {now.beatsUntilNext}
+              <b>{now.next.name}</b>
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="rehearse-main">
         {project.people.length > 0 && (
@@ -41,16 +74,18 @@ export default function Rehearse({ project }: { project: Project }) {
             <FloorStage project={project} time={time} editable={false} />
           </div>
         )}
-        <div className="rehearse-centre">
-          <div className="rehearse-move">{now.move?.name ?? (now.block ? 'Note' : 'Waiting')}</div>
-          <div className={`rehearse-note${now.block?.note ? '' : ' is-empty'}`}>{now.block?.note ?? ''}</div>
-          <div className="pulse">
-            {Array.from({ length: now.segment?.countsPerRow ?? 8 }, (_, i) => (
-              <i key={i} className={`${i === 0 ? 'one ' : ''}${playing && now.countInRow === i ? 'on' : ''}`} />
-            ))}
+        {hasVideo ? (
+          <VideoStage project={project} time={time} playing={playing} rate={rate} />
+        ) : (
+          <div className="rehearse-centre">
+            <div className="rehearse-move">{moveName}</div>
+            <div className={`rehearse-note${now.block?.note ? '' : ' is-empty'}`}>{now.block?.note ?? ''}</div>
+            {pulse}
           </div>
-        </div>
+        )}
       </div>
+
+      {hasVideo && pulse}
 
       {now.segment && <Runway project={project} segment={now.segment} time={time} />}
 

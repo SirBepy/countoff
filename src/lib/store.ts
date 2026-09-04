@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import {
   isComment,
   type Block,
+  type Clip,
   type Focus,
   type FloorSize,
   type Marker,
@@ -11,6 +12,7 @@ import {
   type Project,
   type Segment,
   type Side,
+  type Take,
 } from './types'
 import { saveProject } from './db'
 import { snapshot } from './backup'
@@ -36,7 +38,7 @@ export interface UiState {
   project: Project | null
   audioUrl: string | null
   selection: Selection | null
-  view: 'sheet' | 'rehearse' | 'setup' | 'floor'
+  view: 'sheet' | 'rehearse' | 'setup' | 'floor' | 'video'
   activeMoveId: string | null
   status: string | null
   /** Scroll the sheet to keep the playing 8-count on screen. */
@@ -58,6 +60,9 @@ export interface UiState {
   hideCast: boolean
   /** A /v/<token> share is open. Every mutation and every persist is refused. */
   readOnly: boolean
+  /** Object URLs for takes whose file is on THIS device, keyed by take id. Out of the
+   *  project for the same reason `audioUrl` is: a blob URL means nothing anywhere else. */
+  takeUrls: Record<string, string>
 }
 
 interface StoreSingleton {
@@ -97,6 +102,7 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
     canRedo: false,
     hideCast: false,
     readOnly: false,
+    takeUrls: {},
   },
   listeners: new Set(),
   saveTimer: undefined,
@@ -410,6 +416,36 @@ export const placeMovement = (
     const travel = Math.min(p.walkCounts, beat)
     return { ...p, movements: [...p.movements, { id: uid(), personId, segmentId, beat, travel, to, side }] }
   }, coalesceKey)
+
+/** Registers footage held on this device. Revokes whatever that take pointed at before. */
+export function setTakeUrl(takeId: string, url: string | null) {
+  const previous = S.state.takeUrls[takeId]
+  if (previous && previous !== url) URL.revokeObjectURL(previous)
+  const takeUrls = { ...S.state.takeUrls }
+  if (url) takeUrls[takeId] = url
+  else delete takeUrls[takeId]
+  set({ takeUrls }, false)
+}
+
+export const addTake = (take: Take) => withProject((p) => ({ ...p, takes: [...p.takes, take] }))
+
+export const updateTake = (id: string, patch: Partial<Take>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, takes: p.takes.map((t) => (t.id === id ? { ...t, ...patch } : t)) }), coalesceKey)
+
+/** Dropping a take takes its clips with it, or the track keeps empty boxes with no footage behind them. */
+export const removeTake = (id: string) =>
+  withProject((p) => ({
+    ...p,
+    takes: p.takes.filter((t) => t.id !== id),
+    clips: p.clips.filter((c) => c.takeId !== id),
+  }))
+
+export const addClip = (clip: Clip) => withProject((p) => ({ ...p, clips: [...p.clips, clip] }))
+
+export const updateClip = (id: string, patch: Partial<Clip>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)) }), coalesceKey)
+
+export const removeClip = (id: string) => withProject((p) => ({ ...p, clips: p.clips.filter((c) => c.id !== id) }))
 
 /** Resizing pulls anyone standing past the new edge back onto the floor, chair included. */
 export const setFloorSize = (floor: FloorSize) =>

@@ -53,6 +53,8 @@ export default function DropAudio({ onCancel, onProjects }: { onCancel?: () => v
       moves: STARTER_MOVES,
       people: [],
       movements: [],
+      takes: [],
+      clips: [],
       floor: DEFAULT_FLOOR,
       walkCounts: DEFAULT_WALK_COUNTS,
       pinned: [],

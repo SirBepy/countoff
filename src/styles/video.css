@@ -1,0 +1,457 @@
+/* The video screen: monitor and takes bin over a clip track. Owned by VideoScreen.tsx,
+   plus the .vstage element VideoStage.tsx renders on both this screen and rehearse. */
+
+.vstage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #06070a;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.vstage.is-gap {
+  background: repeating-linear-gradient(135deg, var(--bg-1), var(--bg-1) 10px, var(--bg) 10px, var(--bg) 20px);
+}
+.vstage-el {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.vstage-gap {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.vstage-gap i {
+  font-size: 26px;
+}
+
+.video-view {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto auto;
+  height: 100%;
+  min-height: 0;
+}
+.vs-top {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;
+}
+.vs-badges {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.vs-badges span {
+  background: rgba(13, 15, 20, 0.8);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.vs-badges b {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.vs-badges .cut {
+  color: #ffb9cd;
+  border-color: var(--e3);
+}
+
+/* The bin is a phone-height list under the monitor, and a column beside it on a desktop. */
+.vs-bin {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.vs-bin h3 {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--line-soft);
+  font-weight: 700;
+}
+.vs-takes {
+  overflow: auto;
+  min-height: 0;
+}
+.vs-take {
+  display: flex;
+  gap: 9px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  align-items: center;
+}
+.vs-take .thumb {
+  width: 46px;
+  height: 30px;
+  border-radius: 5px;
+  flex: none;
+  background: linear-gradient(135deg, #3b3468, #1a1d28);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: #9c8ffb;
+}
+.vs-take .t {
+  min-width: 0;
+  flex: 1;
+}
+.vs-take .t b {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vs-take .t span {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.vs-take button {
+  min-height: var(--tap-sm);
+  width: var(--tap-sm);
+}
+.vs-drop {
+  margin: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 13px 10px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.vs-drop i {
+  font-size: 19px;
+  display: block;
+  margin-bottom: 4px;
+}
+.vs-drop:hover {
+  border-color: var(--accent);
+  color: var(--text-dim);
+}
+
+.vs-insp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-1);
+  font-size: 12px;
+  overflow-x: auto;
+}
+.vs-insp .head {
+  color: var(--accent);
+  font-size: 16px;
+  flex: none;
+}
+.vs-insp .f {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+.vs-insp .f label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.vs-insp .f .v {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.vs-insp .f .v.src {
+  color: #cfc4ff;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vs-insp button {
+  min-height: var(--tap-sm);
+  flex: none;
+}
+
+.vs-trans {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  padding-bottom: calc(10px + var(--safe-b));
+}
+.vs-trans button {
+  min-height: var(--tap-sm);
+  width: var(--tap-sm);
+}
+.vs-trans .primary {
+  min-height: var(--tap);
+  width: var(--tap);
+}
+
+/* The clip track. Same geometry as the movement timeline: a pinned name column,
+   a proportional track, and an inner block that widens with the zoom. */
+.vt {
+  --who: 130px;
+  --lane-h: 34px;
+  user-select: none;
+  position: relative;
+  border-top: 1px solid var(--line);
+  background: var(--bg-1);
+  height: clamp(160px, 30vh, 300px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.vt-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.vt-inner {
+  position: relative;
+  min-width: 100%;
+}
+.vt-lane {
+  display: grid;
+  grid-template-columns: var(--who) 1fr;
+  height: var(--lane-h);
+  border-bottom: 1px solid var(--line-soft);
+}
+.vt-lane.vt-video {
+  height: 58px;
+  background: #10131b;
+}
+/* Everything below the clip lane is there to line a cut up against, never to edit. */
+.vt-lane.moves .vt-track,
+.vt-lane:not(.vt-video):not(.vt-ruler) .vt-track {
+  opacity: 0.72;
+}
+.vt-ruler {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 26px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+}
+.vt-who {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  background: var(--bg-1);
+  border-right: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.vt-ruler .vt-who {
+  z-index: 6;
+}
+.vt-who .nm {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vt-who .di {
+  font-size: 16px;
+  color: var(--text-faint);
+  width: 22px;
+  text-align: center;
+  flex: none;
+}
+.vt-who .disc {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: #0d0f14;
+  flex: none;
+}
+.vt-track {
+  position: relative;
+  overflow: hidden;
+}
+.vt-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--line);
+  padding: 5px 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vt-bar {
+  position: absolute;
+  top: 6px;
+  font-size: 9px;
+  font-style: normal;
+  color: #4b5368;
+}
+
+.vt-clip {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  border-radius: 6px;
+  border: 1px solid #4a3f8f;
+  background: linear-gradient(90deg, #2b2550, #332b60);
+  display: flex;
+  overflow: hidden;
+  cursor: grab;
+}
+.vt-clip.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.vt-clip .lab {
+  padding: 0 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1;
+  pointer-events: none;
+}
+.vt-clip .lab b {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vt-clip .lab span {
+  font-size: 9.5px;
+  color: #bdb2f5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Wide enough for a thumb, which is why the label pads against them rather than
+   sitting under them: a 44px target would swallow a short clip whole. */
+.vt-clip .h {
+  width: 10px;
+  flex: none;
+  background: #4a3f8f;
+  cursor: ew-resize;
+  position: relative;
+}
+.vt-clip.sel .h {
+  background: var(--accent);
+}
+.vt-clip .h::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 13px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.vt-move {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  border-radius: 5px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.vt-move.e1 {
+  background: rgba(63, 184, 176, 0.22);
+  border: 1px solid rgba(63, 184, 176, 0.55);
+  color: #9fe5e0;
+}
+.vt-move.e2 {
+  background: rgba(240, 166, 60, 0.2);
+  border: 1px solid rgba(240, 166, 60, 0.5);
+  color: #f6cf94;
+}
+.vt-move.e3 {
+  background: rgba(255, 93, 143, 0.2);
+  border: 1px solid rgba(255, 93, 143, 0.5);
+  color: #ffb0c8;
+}
+.vt-move.comment {
+  background: rgba(124, 92, 255, 0.16);
+  border: 1px dashed rgba(167, 148, 255, 0.8);
+  color: #ddd6ff;
+  font-style: italic;
+}
+.vt-hold {
+  position: absolute;
+  top: 13px;
+  height: 9px;
+  border-radius: 5px;
+  opacity: 0.32;
+}
+.vt-walk {
+  position: absolute;
+  top: 9px;
+  height: 17px;
+  border-radius: 4px;
+}
+.vt-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--e3);
+  z-index: 6;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .vs-top {
+    grid-template-columns: 1fr 260px;
+    padding: 14px;
+  }
+  .vt {
+    --who: 150px;
+  }
+}

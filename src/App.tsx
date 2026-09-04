@@ -16,12 +16,14 @@ import SongMap from './components/SongMap'
 import SongSetup from './components/SongSetup'
 import ShareModal from './components/ShareModal'
 import SongStrip from './components/SongStrip'
+import VideoScreen from './components/VideoScreen'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
 import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace, migrateProject } from './lib/db'
 import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { loadShare, shareTokenFromUrl } from './lib/share'
+import { attachTakes } from './lib/takes'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
 import {
@@ -80,6 +82,7 @@ export default function App() {
     set({ project: saved, audioUrl: url, view }, false)
     if (prevUrl) URL.revokeObjectURL(prevUrl)
     setSegmentId(saved.segments[0]?.id ?? null)
+    void attachTakes(saved)
     if (getCurrentUser()) void pullNow()
     return true
   }
@@ -90,8 +93,10 @@ export default function App() {
     try {
       const { project: shared, audio: blob } = await loadShare(token)
       if (blob) audio.load(URL.createObjectURL(blob), shared.name)
-      replaceProject(migrateProject(shared), { readOnly: true, view: 'sheet' }, false)
+      const migrated = migrateProject(shared)
+      replaceProject(migrated, { readOnly: true, view: 'rehearse' }, false)
       setSegmentId(shared.segments[0]?.id ?? null)
+      void attachTakes(migrated)
     } catch (e) {
       console.error('share load failed', e)
       set({ status: 'The share may have been taken down, or the link is wrong.' }, false)
@@ -238,6 +243,7 @@ export default function App() {
   if (view === 'rehearse') return <Rehearse project={project} />
   if (view === 'setup') return <SongSetup project={project} />
   if (view === 'floor') return <Floor project={project} />
+  if (view === 'video') return <VideoScreen project={project} />
 
   // The viewer's token comes from the URL; the owner's comes off the project itself.
   const commentToken = readOnly ? VIEW_TOKEN : project.shareToken
@@ -285,6 +291,11 @@ export default function App() {
         <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
           <i className="ph ph-users-three i" />
         </button>
+        {!readOnly && (
+          <button className="ghost icon only-wide" onClick={() => set({ view: 'video' }, false)} title="Video: lay your footage over the song">
+            <i className="ph ph-film-strip i" />
+          </button>
+        )}
         <button
           className={`ghost icon only-wide${hideCast ? ' on' : ''}`}
           onClick={toggleHideCast}

@@ -122,6 +122,27 @@ export type Focus =
   | { kind: 'audience' }
   | { kind: 'person'; name: string; col: number; row: number; keys?: FocusKey[] }
 
+/** One filmed run, uploaded once and shared by every clip cut out of it. */
+export interface Take {
+  id: string
+  name: string
+  /** Absent while the upload is still going, so clips can be laid against it meanwhile. */
+  url?: string
+  duration: number
+  bytes: number
+}
+
+/** A stretch of one take over the song. Anchored in seconds, not counts like everything
+ *  else timed here: the footage is of this exact audio, so a tempo edit must not slide it. */
+export interface Clip {
+  id: string
+  takeId: string
+  songStart: number
+  /** In and out points inside the take, in the take's own seconds. */
+  srcIn: number
+  srcOut: number
+}
+
 export interface Project {
   id: string
   name: string
@@ -133,6 +154,8 @@ export interface Project {
   markers: Marker[]
   people: Person[]
   movements: Movement[]
+  takes: Take[]
+  clips: Clip[]
   floor: FloorSize
   /** Counts a new movement's walk takes, until that one is retimed. */
   walkCounts: number
