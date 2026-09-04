@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
 import { db, getCurrentUser } from './firebase'
 import type { Project } from './types'
 
@@ -64,23 +64,21 @@ function base64ToBlob(base64: string, type: string): Blob {
 
 /** Writes the project copy. The audio is a separate, much more expensive write, so it
  *  only happens when the share has none yet: a track never changes under a project. */
-export async function publishShare(token: string, project: Project, audioBlob: Blob | null): Promise<void> {
+export async function publishShare(
+  token: string,
+  project: Project,
+  audioBlob: Blob | null,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
   const user = getCurrentUser()
   if (!user) throw new Error('Sign in before sharing')
   const existing = await getDoc(shareRef(token))
   const hadAudio = existing.exists() && (existing.data() as ShareDoc).chunks > 0
 
-  let chunks = hadAudio ? (existing.data() as ShareDoc).chunks : 0
-  if (!hadAudio && audioBlob) {
-    const base64 = await blobToBase64(audioBlob)
-    const parts: string[] = []
-    for (let i = 0; i < base64.length; i += CHUNK_CHARS) parts.push(base64.slice(i, i + CHUNK_CHARS))
-    for (const [i, data] of parts.entries()) {
-      await setDoc(doc(chunksCol(token), String(i).padStart(4, '0')), { data, type: audioBlob.type })
-    }
-    chunks = parts.length
-  }
+  const chunks = hadAudio ? (existing.data() as ShareDoc).chunks : 0
 
+  // The parent lands first, always. The audio rule resolves ownerUid by get()ing this
+  // document, so a chunk written before it exists is denied outright.
   const shareDoc: ShareDoc = {
     ownerUid: user.uid,
     project: stripUndefined(project),
@@ -89,6 +87,17 @@ export async function publishShare(token: string, project: Project, audioBlob: B
     updatedAt: Date.now(),
   }
   await setDoc(shareRef(token), shareDoc)
+  if (hadAudio || !audioBlob) return
+
+  const base64 = await blobToBase64(audioBlob)
+  const parts: string[] = []
+  for (let i = 0; i < base64.length; i += CHUNK_CHARS) parts.push(base64.slice(i, i + CHUNK_CHARS))
+  onProgress?.(0, parts.length)
+  for (const [i, data] of parts.entries()) {
+    await setDoc(doc(chunksCol(token), String(i).padStart(4, '0')), { data, type: audioBlob.type })
+    onProgress?.(i + 1, parts.length)
+  }
+  await updateDoc(shareRef(token), { chunks: parts.length, updatedAt: Date.now() })
 }
 
 /** Re-writes only the project copy, for the live mirror on every sync push. */

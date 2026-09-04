@@ -7,13 +7,18 @@ import type { Project } from '../lib/types'
 
 export default function ShareModal({ project, onClose }: { project: Project; onClose: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
+  const [sent, setSent] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const token = project.shareToken
   const url = token ? shareUrl(token) : null
 
+  // A ten-minute track is 20-odd separate writes, so a bare "Updating..." reads as a hang.
+  const status = sent ? `Sending the song, ${sent.done} of ${sent.total}` : busy
+
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label)
+    setSent(null)
     setError(null)
     try {
       await fn()
@@ -21,21 +26,24 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
       setError(e instanceof Error ? e.message : 'That did not work')
     } finally {
       setBusy(null)
+      setSent(null)
     }
   }
+
+  const onProgress = (done: number, total: number) => setSent({ done, total })
 
   const create = () =>
     run('Publishing', async () => {
       if (!getCurrentUser()) throw new Error('Sign in from Backups first, so the share belongs to you')
       const next = newShareToken()
-      await publishShare(next, { ...project, shareToken: next }, (await loadAudio(project.id)) ?? null)
+      await publishShare(next, { ...project, shareToken: next }, (await loadAudio(project.id)) ?? null, onProgress)
       updateProject({ shareToken: next })
     })
 
   const republish = () =>
     run('Updating', async () => {
       if (!token) return
-      await publishShare(token, project, (await loadAudio(project.id)) ?? null)
+      await publishShare(token, project, (await loadAudio(project.id)) ?? null, onProgress)
     })
 
   const stop = () =>
@@ -88,11 +96,23 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
             </>
           ) : (
             <button className="primary" onClick={() => void create()} disabled={!!busy}>
-              <i className="ph ph-link i" /> {busy ?? 'Create a view-only link'}
+              <i className="ph ph-link i" /> {status ?? 'Create a view-only link'}
             </button>
           )}
 
-          {busy && url && <div className="faint">{busy}...</div>}
+          {status && url && <div className="faint">{status}...</div>}
+          {sent && sent.total > 0 && (
+            <div style={{ height: 3, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${(sent.done / sent.total) * 100}%`,
+                  background: 'var(--accent)',
+                  transition: 'width 120ms linear',
+                }}
+              />
+            </div>
+          )}
           {error && <div style={{ color: 'var(--danger)' }}>{error}</div>}
         </div>
       </div>
