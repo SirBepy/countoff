@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { audio } from '../lib/audio'
-import { beatDuration, beatToTime, segmentEnd, timeToBeat } from '../lib/grid'
+import { beatDuration, beatToTime, blocksInSegment, segmentEnd, timeToBeat } from '../lib/grid'
 import type { Project, Segment } from '../lib/types'
 import { isComment } from '../lib/types'
 
@@ -26,9 +26,12 @@ export default function Runway({ project, segment, time }: { project: Project; s
   const horizonTime = end + ((window.innerWidth * 1.5) / 30) * beatDuration(segment.bpm)
 
   const blocks = useMemo(() => {
-    const own = project.blocks
-      .filter((b) => b.segmentId === segment.id)
-      .map((b) => ({ block: b, move: project.moves.find((m) => m.id === b.moveId) ?? null, sb: b.startBeat, nb: b.beats }))
+    const own = blocksInSegment(project, segment.id).map((b) => ({
+      block: b,
+      move: project.moves.find((m) => m.id === b.moveId) ?? null,
+      sb: b.startBeat,
+      nb: b.beats,
+    }))
     const ahead = nextSegment
       ? project.blocks
           .filter((b) => b.segmentId === nextSegment.id && beatToTime(nextSegment, b.startBeat) < horizonTime)

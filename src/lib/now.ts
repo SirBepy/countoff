@@ -1,4 +1,4 @@
-import { beatToTime, segmentAt, timeToBeat } from './grid'
+import { beatToTime, blocksInSegment, segmentAt, timeToBeat } from './grid'
 import type { Block, Move, Project, Segment } from './types'
 
 export interface NowState {
@@ -19,8 +19,7 @@ export function nowState(project: Project, time: number): NowState {
   }
 
   const beat = timeToBeat(segment, time)
-  const blocksIn = (seg: Segment) =>
-    project.blocks.filter((b) => b.segmentId === seg.id).sort((a, b) => a.startBeat - b.startBeat)
+  const blocksIn = (seg: Segment) => blocksInSegment(project, seg.id)
   const blocks = blocksIn(segment)
 
   const block = blocks.find((b) => beat >= b.startBeat && beat < b.startBeat + b.beats) ?? null

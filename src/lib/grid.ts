@@ -1,4 +1,4 @@
-import type { Segment } from './types'
+import type { Block, Project, Segment } from './types'
 
 export const beatDuration = (bpm: number) => 60 / bpm
 
@@ -32,6 +32,11 @@ export function countsInRow(seg: Segment, row: number, end: number) {
   // Epsilon guards a cut that lands exactly on a beat from rounding up one extra cell.
   const visible = Math.ceil(totalBeats - rowStart - 1e-9)
   return Math.max(0, Math.min(seg.countsPerRow, visible))
+}
+
+/** Blocks belonging to one segment, in beat order. */
+export function blocksInSegment(project: Project, segmentId: string): Block[] {
+  return project.blocks.filter((b) => b.segmentId === segmentId).sort((a, b) => a.startBeat - b.startBeat)
 }
 
 export function segmentAt(segments: Segment[], time: number) {
