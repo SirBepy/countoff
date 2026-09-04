@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { getActiveProjectId, listProjects, loadProjectById, migrateProject, saveProject, saveProjectRecord } from './db'
 import { db, getCurrentUser, subscribeAuth } from './firebase'
-import { mirrorShare } from './share'
+import { mirrorShare, stripUndefined } from './share'
 import { cancelPendingSave, flash, getState, replaceProject, set } from './store'
 import type { Project } from './types'
 
@@ -70,10 +70,6 @@ export function useSyncStatus(): SyncStatus {
     return () => listeners.delete(cb)
   }, getSnapshot)
 }
-
-// Firestore rejects undefined field values; round-tripping through JSON drops them
-// (Move.note, Block.note, Segment.lrcSource, etc.) the same way JSON.stringify already does.
-const stripUndefined = (project: Project): Project => JSON.parse(JSON.stringify(project))
 
 const projectRef = (uid: string, id: string) => doc(db, 'users', uid, 'projects', id)
 

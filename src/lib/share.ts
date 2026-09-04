@@ -37,9 +37,9 @@ export const shareUrl = (token: string) => `${location.origin}/v/${token}`
 export const shareTokenFromPath = (pathname: string): string | null =>
   pathname.match(/^\/v\/([A-Za-z0-9_-]{8,})\/?$/)?.[1] ?? null
 
-// Firestore rejects undefined field values; the JSON round trip drops them the same
-// way syncEngine's own push path does.
-const stripUndefined = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
+// Firestore rejects undefined field values (Move.note, Block.note, Segment.lrcSource);
+// round-tripping through JSON drops them the way JSON.stringify already does.
+export const stripUndefined = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -123,7 +123,7 @@ export function subscribeComments(token: string, cb: (comments: ShareComment[]) 
   )
 }
 
-export async function addComment(token: string, name: string, text: string): Promise<void> {
+export async function addShareComment(token: string, name: string, text: string): Promise<void> {
   const id = crypto.randomUUID()
   await setDoc(doc(commentsCol(token), id), {
     name: name.slice(0, NAME_MAX),

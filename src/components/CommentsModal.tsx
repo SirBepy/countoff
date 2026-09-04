@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NAME_MAX, TEXT_MAX, addComment, subscribeComments, type ShareComment } from '../lib/share'
+import { NAME_MAX, TEXT_MAX, addShareComment, subscribeComments, type ShareComment } from '../lib/share'
 
 // Only so a second comment on the same link does not mean retyping your name after
 // the tab is closed and reopened. Never leaves the device.
@@ -24,7 +24,7 @@ export default function CommentsModal({ token, onClose }: { token: string; onClo
     setError(null)
     try {
       localStorage.setItem(NAME_KEY, name.trim())
-      await addComment(token, name.trim(), text.trim())
+      await addShareComment(token, name.trim(), text.trim())
       setText('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not leave that comment')
