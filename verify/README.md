@@ -35,9 +35,10 @@ below.
 
 1. The app renders only a drop screen unless BOTH a project and an audio blob are in IndexedDB, so
    `seedProject` always writes both.
-2. IndexedDB is db `countoff`, stores `project` / `audio` / `clips`. The `project` and `audio`
-   stores are keyed by the project's own `id`, **not** `current` (since commit `c2fd274`), and
-   `localStorage['countoff.activeProjectId']` must name that project or boot finds nothing.
+2. IndexedDB is db `countoff`, stores `project` / `audio` / `clips` / `takes`. The `project` and
+   `audio` stores are keyed by the project's own `id`, **not** `current` (since commit `c2fd274`),
+   and `localStorage['countoff.activeProjectId']` must name that project or boot finds nothing.
+   `takes` is keyed by take id, not project id, and holds one video blob per take.
 3. Seed order is clear -> reload -> seed -> reload. The app flushes its in-memory project on
    `pagehide`/`beforeunload`, so a seed written while the app is live gets overwritten by stale
    state on the next reload.
