@@ -128,7 +128,7 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
                 <div className="faint">
                   <i className={`ph ${footage.done === footage.total ? 'ph-cloud-check' : 'ph-cloud-arrow-up'} i`} />{' '}
                   {footage.done === footage.total
-                    ? `Footage is backed up, all ${footage.total} of it`
+                    ? `Footage is backed up, all ${footage.total} ${footage.total === 1 ? 'take' : 'takes'}`
                     : `Backing up footage, ${footage.done} of ${footage.total}. Viewers see the no-clip plate for the rest.`}
                 </div>
               )}
