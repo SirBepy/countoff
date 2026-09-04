@@ -429,9 +429,6 @@ export function setTakeUrl(takeId: string, url: string | null) {
 
 export const addTake = (take: Take) => withProject((p) => ({ ...p, takes: [...p.takes, take] }))
 
-export const updateTake = (id: string, patch: Partial<Take>, coalesceKey?: string) =>
-  withProject((p) => ({ ...p, takes: p.takes.map((t) => (t.id === id ? { ...t, ...patch } : t)) }), coalesceKey)
-
 /** Dropping a take takes its clips with it, or the track keeps empty boxes with no footage behind them. */
 export const removeTake = (id: string) =>
   withProject((p) => ({
