@@ -7,8 +7,6 @@ export interface Move {
   /** 1 chill, 2 medium, 3 big. Drives the block colour so the sheet reads as a shape. */
   energy: 1 | 2 | 3
   note?: string
-  /** Link to a demo video (e.g. YouTube), shared by every placement of this move. */
-  videoUrl?: string
   builtin?: boolean
   /** Manual rail position from dragging to reorder; absent until the first drag. */
   order?: number

@@ -79,15 +79,6 @@ export default function MoveModal({ project, moveId, onClose }: Props) {
             <label>Note for the dancers</label>
             <input value={draft.note ?? ''} onChange={(e) => patch({ note: e.target.value })} placeholder="Step out, tap foot in" />
           </div>
-
-          <div className="field">
-            <label>Video link</label>
-            <input
-              value={draft.videoUrl ?? ''}
-              onChange={(e) => patch({ videoUrl: e.target.value || undefined })}
-              placeholder="https://youtube.com/watch?v=..."
-            />
-          </div>
         </div>
 
         <footer>

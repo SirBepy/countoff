@@ -27,20 +27,6 @@ function sortMoves(moves: Move[], usedIds: Set<string>, fitBeats?: number) {
   })
 }
 
-/** Extracts a YouTube video id from a watch or short link so the card can show its
- * thumbnail; null for any other URL or a malformed one, never throws. */
-export function youtubeThumb(url: string | undefined): string | null {
-  if (!url) return null
-  try {
-    const u = new URL(url)
-    const host = u.hostname.replace(/^www\./, '')
-    const id = host === 'youtu.be' ? u.pathname.slice(1) : host.endsWith('youtube.com') ? u.searchParams.get('v') : null
-    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null
-  } catch {
-    return null
-  }
-}
-
 export default function MoveLibrary({ project, onEditMove }: Props) {
   const [query, setQuery] = useState('')
   const selection = useStore((s) => s.selection)
@@ -237,8 +223,6 @@ function MoveCard({
   onStartDrag: (e: React.PointerEvent<HTMLElement>, fromHandle: boolean) => void
   onEdit: () => void
 }) {
-  const thumb = youtubeThumb(move.videoUrl)
-
   return (
     <div
       className={`move-card${active ? ' sel' : ''}${used ? ' used' : ''}${fits ? ' fits' : ''}`}
@@ -246,19 +230,9 @@ function MoveCard({
       onPointerDown={(e) => onStartDrag(e, false)}
       title={move.note ?? move.name}
     >
-      {thumb ? (
-        <a className="move-thumb" href={move.videoUrl} target="_blank" rel="noopener noreferrer" onPointerDown={(e) => e.stopPropagation()}>
-          <img src={thumb} alt="" />
-        </a>
-      ) : move.videoUrl ? (
-        <a className="move-thumb" href={move.videoUrl} target="_blank" rel="noopener noreferrer" onPointerDown={(e) => e.stopPropagation()}>
-          <i className="ph ph-link" />
-        </a>
-      ) : (
-        <div className="move-thumb">
-          <i className="ph ph-person-simple-tai-chi" />
-        </div>
-      )}
+      <div className="move-thumb">
+        <i className="ph ph-person-simple-tai-chi" />
+      </div>
       <div style={{ minWidth: 0 }}>
         <div className="move-name">{move.name}</div>
         {move.note && <div className="move-note">{move.note}</div>}
@@ -275,7 +249,7 @@ function MoveCard({
         <span className={`beat-badge e${move.energy}`}>{move.beats}</span>
         <button
           className="ghost sm icon"
-          title="Edit move, add a video link"
+          title="Edit move"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
