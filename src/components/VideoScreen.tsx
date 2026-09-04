@@ -3,10 +3,20 @@ import { audio, useAudio } from '../lib/audio'
 import { beatAt, orderedMovements, stints } from '../lib/floor'
 import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
-import { addClip, beginGesture, endGesture, flash, removeClip, set, uid, updateClip } from '../lib/store'
+import { addClip, beginGesture, endGesture, flash, removeClip, set, uid, updateClip, updateTake, useStore } from '../lib/store'
 import { dropTake, importTake } from '../lib/takes'
-import { clipEnd, clipLength, coveredSeconds, fitClip, MIN_CLIP, orderedClips, placedBlocks, roomAt } from '../lib/video'
-import type { Clip, Project, Take } from '../lib/types'
+import {
+  clipEnd,
+  clipLength,
+  coveredSeconds,
+  fitClip,
+  MIN_CLIP,
+  orderedClips,
+  placedBlocks,
+  roomAt,
+  takeSrc,
+} from '../lib/video'
+import type { Clip, Crop, Project, Take } from '../lib/types'
 import VideoStage from './VideoStage'
 
 /** 1 fits the whole medley; the top end puts a couple of bars across the screen. */
@@ -30,9 +40,16 @@ export default function VideoScreen({ project }: { project: Project }) {
   const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null)
   const [importing, setImporting] = useState(false)
   const [ghost, setGhost] = useState<number | null>(null)
+  // Which take is open in the crop editor, and the rect being dragged there before Save
+  // commits it. Null draft means nothing has been drawn yet on a take with no crop.
+  const [cropTake, setCropTake] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Crop | null>(null)
+  const [cropRatio, setCropRatio] = useState(16 / 9)
   const scroll = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const cropArea = useRef<HTMLDivElement>(null)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu)
+  const takeUrls = useStore((s) => s.takeUrls)
 
   const duration = project.duration || 1
   const pct = (t: number) => `${(t / duration) * 100}%`
@@ -43,6 +60,8 @@ export default function VideoScreen({ project }: { project: Project }) {
   const here = beatAt(project, clip ? clip.songStart : time)
   const menuClip = menu ? (clips.find((c) => c.id === menu.clipId) ?? null) : null
   const menuTake = menuClip && project.takes.find((t) => t.id === menuClip.takeId)
+  const cropTakeObj = cropTake ? (project.takes.find((t) => t.id === cropTake) ?? null) : null
+  const cropSrc = cropTakeObj && takeSrc(cropTakeObj, takeUrls)
 
   /** A cut needs a clip's worth of footage either side of it, or it makes a sliver. */
   const cuttable = (c: Clip) => time > c.songStart + MIN_CLIP && time < clipEnd(c) - MIN_CLIP
@@ -51,6 +70,96 @@ export default function VideoScreen({ project }: { project: Project }) {
   function timeAt(clientX: number) {
     const track = scroll.current!.querySelector('.vt-track')!.getBoundingClientRect()
     return Math.max(0, Math.min(duration, ((clientX - track.left) / track.width) * duration))
+  }
+
+  function enterCrop(t: Take) {
+    setCropTake(t.id)
+    setDraft(t.crop ?? null)
+  }
+
+  /** Point under a client x/y as a 0..1 fraction of the crop box, which is sized to the
+   *  take's own ratio so this maps straight onto the source frame with no letterbox math. */
+  function cropPointAt(clientX: number, clientY: number) {
+    const box = cropArea.current!.getBoundingClientRect()
+    return {
+      x: Math.max(0, Math.min(1, (clientX - box.left) / box.width)),
+      y: Math.max(0, Math.min(1, (clientY - box.top) / box.height)),
+    }
+  }
+
+  /** A pointerdown outside the rect starts a fresh one from that corner. */
+  function drawCrop(e: React.PointerEvent) {
+    if (e.button === 2) return
+    e.preventDefault()
+    const start = cropPointAt(e.clientX, e.clientY)
+    const move = (ev: PointerEvent) => {
+      const cur = cropPointAt(ev.clientX, ev.clientY)
+      setDraft({ x: Math.min(start.x, cur.x), y: Math.min(start.y, cur.y), w: Math.abs(cur.x - start.x), h: Math.abs(cur.y - start.y) })
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
+
+  /** Drags the whole rect without resizing it, clamped so it never slides off the frame. */
+  function moveCrop(e: React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const base = draft!
+    const start = cropPointAt(e.clientX, e.clientY)
+    const move = (ev: PointerEvent) => {
+      const cur = cropPointAt(ev.clientX, ev.clientY)
+      setDraft({
+        x: Math.max(0, Math.min(1 - base.w, base.x + (cur.x - start.x))),
+        y: Math.max(0, Math.min(1 - base.h, base.y + (cur.y - start.y))),
+        w: base.w,
+        h: base.h,
+      })
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
+
+  /** Resizes from one corner, holding the opposite corner fixed. */
+  function resizeCrop(corner: 'nw' | 'ne' | 'sw' | 'se', e: React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const base = draft!
+    const fixed = { x: corner.includes('w') ? base.x + base.w : base.x, y: corner.includes('n') ? base.y + base.h : base.y }
+    const move = (ev: PointerEvent) => {
+      const cur = cropPointAt(ev.clientX, ev.clientY)
+      setDraft({
+        x: Math.min(fixed.x, cur.x),
+        y: Math.min(fixed.y, cur.y),
+        w: Math.abs(cur.x - fixed.x),
+        h: Math.abs(cur.y - fixed.y),
+      })
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
+
+  function saveCrop() {
+    if (!cropTake || !draft) return
+    updateTake(cropTake, { crop: draft })
+    setCropTake(null)
+  }
+
+  function clearCrop() {
+    if (!cropTake) return
+    updateTake(cropTake, { crop: undefined })
+    setCropTake(null)
   }
 
   /** Counts are what a dancer hears, so a drag lands on one unless snapping is off. */
@@ -155,6 +264,10 @@ export default function VideoScreen({ project }: { project: Project }) {
       if (e.key === 'Escape' && menu) {
         e.stopPropagation()
         return setMenu(null)
+      }
+      if (e.key === 'Escape' && cropTake) {
+        e.stopPropagation()
+        return setCropTake(null)
       }
       // The sheet already owns 's' for splitting the song, so the blade takes its own key.
       if (e.key.toLowerCase() === 'b') split()
@@ -266,6 +379,13 @@ export default function VideoScreen({ project }: { project: Project }) {
                 </span>
                 <button className="ghost icon" title="Lay this take at the playhead" onClick={() => lay(t)}>
                   <i className="ph ph-arrow-fat-down" />
+                </button>
+                <button
+                  className={`ghost icon${t.crop ? ' on' : ''}`}
+                  title="Crop this take's footage"
+                  onClick={() => enterCrop(t)}
+                >
+                  <i className="ph ph-crop" />
                 </button>
                 <button className="ghost icon" title="Remove this take and its clips" onClick={() => void dropTake(t.id)}>
                   <i className="ph ph-trash" />
@@ -512,6 +632,56 @@ export default function VideoScreen({ project }: { project: Project }) {
         <div className="vs-dropall">
           <i className="ph ph-upload-simple" />
           <b>Drop to add footage</b>
+        </div>
+      )}
+
+      {cropTakeObj && (
+        <div className="vs-cropmodal">
+          <div className="vs-crop" ref={cropArea} style={{ '--car': cropRatio } as React.CSSProperties} onPointerDown={drawCrop}>
+            {cropSrc && (
+              <video
+                src={cropSrc}
+                muted
+                playsInline
+                onLoadedMetadata={(e) => {
+                  const v = e.currentTarget
+                  v.currentTime = Math.min(1, v.duration / 2)
+                  if (v.videoWidth && v.videoHeight) setCropRatio(v.videoWidth / v.videoHeight)
+                }}
+              />
+            )}
+            {draft && (
+              <div
+                className="vs-croprect"
+                style={{
+                  left: `${draft.x * 100}%`,
+                  top: `${draft.y * 100}%`,
+                  width: `${draft.w * 100}%`,
+                  height: `${draft.h * 100}%`,
+                }}
+                onPointerDown={moveCrop}
+              >
+                {(['nw', 'ne', 'sw', 'se'] as const).map((c) => (
+                  <span key={c} className={`h ${c}`} onPointerDown={(e) => resizeCrop(c, e)} />
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="vs-croptools">
+            <span className="faint">Drag out a rect over the frame it should show, then save.</span>
+            <div className="spacer" />
+            {cropTakeObj.crop && (
+              <button className="ghost" onClick={clearCrop}>
+                <i className="ph ph-arrow-counter-clockwise i" /> Clear crop
+              </button>
+            )}
+            <button className="ghost" onClick={() => setCropTake(null)}>
+              Cancel
+            </button>
+            <button className="primary" disabled={!draft || draft.w < 0.02 || draft.h < 0.02} onClick={saveCrop}>
+              <i className="ph ph-check i" /> Save crop
+            </button>
+          </div>
         </div>
       )}
     </div>

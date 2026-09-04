@@ -28,11 +28,25 @@ export default function VideoStage({ project, time, playing, rate, children }: P
   const el = useRef<HTMLVideoElement>(null)
   // Dance footage is as often shot portrait as landscape, and the layout wants the box
   // to fit the film rather than letterbox it, so the real ratio drives the CSS.
-  const [ratio, setRatio] = useState(16 / 9)
+  const [nativeRatio, setNativeRatio] = useState(16 / 9)
   const takeUrls = useStore((s) => s.takeUrls)
   const showing = clipAt(project, time, takeUrls)
   const src = showing?.src
   const target = showing?.srcTime ?? 0
+  const crop = showing?.take.crop
+  const ratio = crop ? (nativeRatio * crop.w) / crop.h : nativeRatio
+
+  // The crop rect maps onto the frame by scaling the video up by 1/w, 1/h and pulling
+  // it back by the crop's own offset, so only that rect ever lands inside the box.
+  const cropStyle: React.CSSProperties | undefined = crop
+    ? {
+        position: 'absolute',
+        width: `${100 / crop.w}%`,
+        height: `${100 / crop.h}%`,
+        left: `${(-100 * crop.x) / crop.w}%`,
+        top: `${(-100 * crop.y) / crop.h}%`,
+      }
+    : undefined
 
   // Assigning currentTime before the element has metadata is dropped on the floor,
   // so a fresh source is seeked from its own load event rather than from the frame loop.
@@ -54,23 +68,25 @@ export default function VideoStage({ project, time, playing, rate, children }: P
     if (!playing && !v.paused) v.pause()
   })
 
+  // Rehearse holds .vstage to a fixed 9/16 box, so the crop rect's own shape has to
+  // come from a wrapper sized to IT, not from whatever shape .vstage happens to be.
+  const onMeta = () => {
+    const v = el.current
+    if (!v) return
+    v.currentTime = target
+    if (v.videoWidth && v.videoHeight) setNativeRatio(v.videoWidth / v.videoHeight)
+  }
+
   return (
     <div className={`vstage${showing ? '' : ' is-gap'}`} style={{ '--ar': ratio } as React.CSSProperties}>
       {src ? (
-        <video
-          ref={el}
-          className="vstage-el"
-          src={src}
-          muted
-          playsInline
-          preload="auto"
-          onLoadedMetadata={() => {
-            const v = el.current
-            if (!v) return
-            v.currentTime = target
-            if (v.videoWidth && v.videoHeight) setRatio(v.videoWidth / v.videoHeight)
-          }}
-        />
+        crop ? (
+          <div className="vstage-crop" style={{ aspectRatio: ratio }}>
+            <video ref={el} className="vstage-el" src={src} muted playsInline preload="auto" style={cropStyle} onLoadedMetadata={onMeta} />
+          </div>
+        ) : (
+          <video ref={el} className="vstage-el" src={src} muted playsInline preload="auto" onLoadedMetadata={onMeta} />
+        )
       ) : (
         <div className="vstage-gap">
           <i className="ph ph-film-slate" />

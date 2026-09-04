@@ -122,6 +122,14 @@ export type Focus =
   | { kind: 'audience' }
   | { kind: 'person'; name: string; col: number; row: number; keys?: FocusKey[] }
 
+/** Normalized to the source frame, 0..1 with `x`/`y` the top-left corner. */
+export interface Crop {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 /** One filmed run, uploaded once and shared by every clip cut out of it. */
 export interface Take {
   id: string
@@ -130,6 +138,9 @@ export interface Take {
   url?: string
   duration: number
   bytes: number
+  /** How the camera framed this footage. Absent shows the whole frame, and every clip
+   *  cut from this take inherits whatever is set here. */
+  crop?: Crop
 }
 
 /** A stretch of one take over the song. Anchored in seconds, not counts like everything
