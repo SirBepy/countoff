@@ -35,7 +35,7 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
   const create = () =>
     run('Publishing', async () => {
       if (!getCurrentUser()) throw new Error('Sign in from Backups first, so the share belongs to you')
-      const next = newShareToken()
+      const next = await newShareToken()
       await publishShare(next, { ...project, shareToken: next }, (await loadAudio(project.id)) ?? null, onProgress)
       updateProject({ shareToken: next })
     })

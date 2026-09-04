@@ -140,12 +140,13 @@ async function main() {
     // A second, empty context: a share link must route to the share boot, never fall through
     // to the file-drop screen. This token does not exist, so the failure branch is what
     // renders - which is still proof the route is wired and IndexedDB was never consulted.
-    // Both forms are checked: the hash is what shareUrl now hands out, the path is what a
-    // rewriting host still serves.
+    // Three forms: the bare hash shareUrl now hands out, the /v/ hash it used to, and the
+    // path a rewriting host still serves.
     const viewer = await browser.newContext(desktopContext())
-    for (const [form, link] of [
-      ['#/v/<token>', `${URL}#/v/0123456789abcdef0123456789abcdef`],
-      ['/v/<token>', `${URL}v/0123456789abcdef0123456789abcdef`],
+    for (const [form, link, slug] of [
+      ['#<words>', `${URL}#silver-otter-lantern-quilt`, 'words'],
+      ['#/v/<token>', `${URL}#/v/0123456789abcdef0123456789abcdef`, 'hash'],
+      ['/v/<token>', `${URL}v/0123456789abcdef0123456789abcdef`, 'path'],
     ]) {
       const viewPage = await viewer.newPage()
       await viewPage.goto(link, { waitUntil: 'domcontentloaded' })
@@ -155,7 +156,7 @@ async function main() {
         .catch(() => false)
       check(`an unknown ${form} lands on the share failure screen, not the file drop`, broke)
       check(`the file-drop screen is not what ${form} shows`, !(await viewPage.locator('.drop-signin').count()))
-      await viewPage.screenshot({ path: path.join(SHOTS, `share-2-bad-link${form.startsWith('#') ? '-hash' : ''}.png`) })
+      await viewPage.screenshot({ path: path.join(SHOTS, `share-2-bad-link-${slug}.png`) })
       await viewPage.close()
     }
     await viewer.close()

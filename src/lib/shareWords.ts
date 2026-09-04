@@ -1,0 +1,62 @@
+// Short, concrete, unambiguous when read aloud down a phone line. Four of these make
+// a share link, so the count is what sets its entropy: 4 * log2(len) bits.
+export const SHARE_WORDS = [
+  'otter', 'badger', 'heron', 'falcon', 'walrus', 'marten', 'ferret', 'weasel', 'beaver', 'bison',
+  'camel', 'cobra', 'condor', 'coyote', 'dingo', 'donkey', 'eagle', 'egret', 'finch', 'gecko',
+  'gibbon', 'goose', 'gopher', 'grouse', 'hare', 'hawk', 'hornet', 'ibex', 'iguana', 'jackal',
+  'jaguar', 'koala', 'lemur', 'lizard', 'llama', 'lynx', 'magpie', 'mantis', 'marmot', 'mink',
+  'mole', 'moose', 'mouse', 'newt', 'ocelot', 'osprey', 'panda', 'parrot', 'pelican', 'penguin',
+  'pigeon', 'puffin', 'quail', 'rabbit', 'raccoon', 'raven', 'robin', 'salmon', 'shark', 'sparrow',
+  'spider', 'squid', 'stork', 'swan', 'tapir', 'thrush', 'tiger', 'toad', 'trout', 'turtle',
+  'viper', 'vulture', 'whale', 'wombat', 'wren', 'zebra', 'beetle', 'cricket', 'firefly', 'moth',
+  'snail', 'oyster', 'mussel', 'crab', 'prawn', 'urchin', 'coral', 'minnow', 'guppy', 'dolphin',
+
+  'acorn', 'alder', 'aspen', 'basil', 'birch', 'bloom', 'bramble', 'briar', 'cactus', 'cedar',
+  'clover', 'cypress', 'daisy', 'dahlia', 'fern', 'fig', 'flax', 'gorse', 'hazel', 'heather',
+  'holly', 'ivy', 'jasmine', 'juniper', 'laurel', 'lichen', 'lilac', 'lily', 'lotus', 'maple',
+  'mint', 'moss', 'nettle', 'oak', 'orchid', 'palm', 'pansy', 'peony', 'pine', 'poplar',
+  'poppy', 'reed', 'rose', 'sage', 'sorrel', 'spruce', 'thistle', 'thyme', 'tulip', 'willow',
+  'yarrow', 'yew',
+
+  'brook', 'canyon', 'cavern', 'cliff', 'cloud', 'comet', 'crater', 'creek', 'delta', 'dune',
+  'dusk', 'ember', 'fjord', 'frost', 'geyser', 'glacier', 'glade', 'gorge', 'grotto', 'harbor',
+  'haze', 'hollow', 'island', 'lagoon', 'meadow', 'mesa', 'mist', 'moor', 'oasis', 'peak',
+  'plain', 'prairie', 'rain', 'reef', 'ridge', 'river', 'sand', 'savanna', 'shore', 'sleet',
+  'snow', 'steppe', 'storm', 'summit', 'thunder', 'tide', 'tundra', 'valley', 'wave', 'zephyr',
+  'breeze', 'cinder', 'drizzle', 'gale', 'monsoon', 'rainbow', 'sunrise',
+
+  'anchor', 'anvil', 'arrow', 'banjo', 'basket', 'beacon', 'bell', 'bottle', 'bridge', 'brush',
+  'bucket', 'buckle', 'button', 'candle', 'canoe', 'cape', 'cart', 'chime', 'chisel', 'clock',
+  'compass', 'copper', 'crayon', 'crown', 'cup', 'dagger', 'dial', 'drum', 'feather', 'ferry',
+  'flask', 'flute', 'forge', 'gear', 'glass', 'globe', 'hammer', 'harp', 'hinge', 'hook',
+  'jar', 'kettle', 'key', 'kite', 'ladder', 'lamp', 'lantern', 'latch', 'lens', 'lever',
+  'loom', 'mallet', 'marble', 'mask', 'mirror', 'needle', 'oar', 'paddle', 'pebble', 'pencil',
+  'piano', 'pillow', 'pipe', 'plank', 'pocket', 'quill', 'quilt', 'ribbon', 'rope', 'rudder',
+  'saddle', 'sail', 'satchel', 'scarf', 'scroll', 'shovel', 'sickle', 'spindle', 'spool', 'stove',
+  'tassel', 'thimble', 'ticket', 'tinder', 'token', 'torch', 'trumpet', 'vase', 'violin', 'wagon',
+  'wheel', 'whistle', 'window', 'wrench',
+
+  'almond', 'apple', 'apricot', 'barley', 'bean', 'berry', 'biscuit', 'bread', 'butter', 'cake',
+  'candy', 'caramel', 'carrot', 'cashew', 'cherry', 'chili', 'cider', 'clove', 'cocoa', 'coconut',
+  'cookie', 'cream', 'crumb', 'currant', 'date', 'ginger', 'grape', 'honey', 'jam', 'lemon',
+  'lentil', 'lime', 'mango', 'melon', 'millet', 'muffin', 'nectar', 'noodle', 'nutmeg', 'oat',
+  'olive', 'onion', 'orange', 'peach', 'peanut', 'pear', 'pecan', 'pepper', 'pickle', 'plum',
+  'pretzel', 'pudding', 'pumpkin', 'radish', 'raisin', 'rice', 'saffron', 'salt', 'scone', 'sesame',
+  'syrup', 'toast', 'tomato', 'turnip', 'vanilla', 'waffle', 'walnut', 'wheat', 'yogurt',
+
+  'amber', 'azure', 'beige', 'bronze', 'crimson', 'golden', 'indigo', 'ivory', 'jade', 'magenta',
+  'maroon', 'mauve', 'pearl', 'purple', 'russet', 'scarlet', 'sepia', 'silver', 'teal', 'umber',
+  'violet',
+
+  'brave', 'bright', 'brisk', 'calm', 'chilly', 'clever', 'cosmic', 'crisp', 'curious', 'daring',
+  'dizzy', 'eager', 'early', 'fancy', 'fluffy', 'fuzzy', 'gentle', 'giddy', 'glad', 'happy',
+  'hidden', 'humble', 'jolly', 'keen', 'kind', 'lively', 'lofty', 'loud', 'lucky', 'merry',
+  'mighty', 'misty', 'noble', 'nimble', 'plucky', 'proud', 'quick', 'quiet', 'rapid', 'rustic',
+  'sandy', 'shiny', 'silent', 'silly', 'sleepy', 'slick', 'snug', 'solid', 'sonic', 'spry',
+  'steady', 'stormy', 'sturdy', 'sunny', 'swift', 'tender', 'tidy', 'tiny', 'vivid', 'warm',
+  'wild', 'windy', 'wise', 'witty', 'zesty',
+
+  'ballad', 'bass', 'beat', 'cello', 'chord', 'chorus', 'echo', 'fiddle', 'harmony', 'lyric',
+  'melody', 'octave', 'organ', 'pulse', 'rhythm', 'solo', 'sonata', 'tempo', 'tenor', 'treble',
+  'tune', 'verse', 'waltz',
+] as const

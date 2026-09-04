@@ -1,5 +1,6 @@
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
 import { db, getCurrentUser } from './firebase'
+import { SHARE_WORDS } from './shareWords'
 import type { Project } from './types'
 
 export interface ShareComment {
@@ -29,18 +30,37 @@ const shareRef = (token: string) => doc(db, 'shares', token)
 const chunksCol = (token: string) => collection(db, 'shares', token, 'audio')
 const commentsCol = (token: string) => collection(db, 'shares', token, 'comments')
 
-/** 128 bits of randomness in the URL, which is the only thing guarding a share. */
-export const newShareToken = () => crypto.randomUUID().replace(/-/g, '')
+// Rejection sampling, because a plain modulo would quietly favour the first
+// 0x100000000 % length words.
+function pickWord(): string {
+  const limit = Math.floor(0x1_0000_0000 / SHARE_WORDS.length) * SHARE_WORDS.length
+  const buf = new Uint32Array(1)
+  do crypto.getRandomValues(buf)
+  while (buf[0] >= limit)
+  return SHARE_WORDS[buf[0] % SHARE_WORDS.length]
+}
+
+/** Four words out of 471 is ~35 bits, not the 128 the old hex token carried, so the
+ *  clash that used to be unthinkable gets checked for instead of overwriting a share. */
+export async function newShareToken(): Promise<string> {
+  for (let i = 0; i < 6; i++) {
+    const token = Array.from({ length: 4 }, pickWord).join('-')
+    if (!(await getDoc(shareRef(token))).exists()) return token
+  }
+  throw new Error('Could not find a free link name, try again')
+}
 
 // The token rides in the hash: GitHub Pages serves the app from a repo subpath and
 // rewrites nothing, so a /v/<token> path 404s before the app can ever boot.
-export const shareUrl = (token: string) => `${location.origin}${location.pathname}#/v/${token}`
+export const shareUrl = (token: string) => `${location.origin}${location.pathname}#${token}`
 
-const TOKEN_IN_URL = /(?:^|\/)v\/([A-Za-z0-9_-]{8,})\/?$/
+const LEGACY_IN_URL = /(?:^|\/)v\/([A-Za-z0-9_-]{8,})\/?$/
+const TOKEN_IN_HASH = /^#\/?([A-Za-z0-9][A-Za-z0-9_-]{6,}[A-Za-z0-9])$/
 
-// The path form still resolves, for a host that does rewrite (firebase.json does).
+// Links minted before the words carried a /v/ prefix, and firebase.json rewrites the
+// path form, so both still resolve.
 export const shareTokenFromUrl = (hash: string, pathname: string): string | null =>
-  hash.match(TOKEN_IN_URL)?.[1] ?? pathname.match(TOKEN_IN_URL)?.[1] ?? null
+  hash.match(LEGACY_IN_URL)?.[1] ?? pathname.match(LEGACY_IN_URL)?.[1] ?? hash.match(TOKEN_IN_HASH)?.[1] ?? null
 
 // Firestore rejects undefined field values (Move.note, Block.note, Segment.lrcSource);
 // round-tripping through JSON drops them the way JSON.stringify already does.
