@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Footage for one take. Reads are open for the same reason a share document's are: the
+    // download URL carries an unguessable token, and that token is the whole guard.
+    match /takes/{uid}/{takeId} {
+      allow read: if true;
+
+      // The size cap is the one line here that bounds what this project can ever cost.
+      allow create, update: if request.auth != null
+                            && request.auth.uid == uid
+                            && request.resource.size <= 200 * 1024 * 1024
+                            && request.resource.contentType.matches('video/.*');
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /{rest=**} {
+      allow read, write: if false;
+    }
+  }
+}

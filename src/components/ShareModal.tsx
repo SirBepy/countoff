@@ -2,10 +2,27 @@ import { useState } from 'react'
 import { loadAudio } from '../lib/db'
 import { getCurrentUser } from '../lib/firebase'
 import { newShareToken, publishShare, renameShare, shareUrl, unpublishShare } from '../lib/share'
-import { updateProject } from '../lib/store'
+import { updateProject, useStore } from '../lib/store'
+import { backupState } from '../lib/takeBackup'
 import type { Project } from '../lib/types'
 
+const Bar = ({ value }: { value: number }) => (
+  <div style={{ height: 3, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
+    <div
+      style={{
+        height: '100%',
+        width: `${Math.round(value * 100)}%`,
+        background: 'var(--accent)',
+        transition: 'width 120ms linear',
+      }}
+    />
+  </div>
+)
+
 export default function ShareModal({ project, onClose }: { project: Project; onClose: () => void }) {
+  const takeUploads = useStore((s) => s.takeUploads)
+  const footage = backupState(project)
+  const inFlight = project.takes.find((t) => !t.url && takeUploads[t.id] !== undefined)
   const [busy, setBusy] = useState<string | null>(null)
   const [sent, setSent] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -107,6 +124,15 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
                 </button>
               </div>
               <div className="faint">Every sync push rewrites the share, so viewers keep up with your edits.</div>
+              {footage.total > 0 && (
+                <div className="faint">
+                  <i className={`ph ${footage.done === footage.total ? 'ph-cloud-check' : 'ph-cloud-arrow-up'} i`} />{' '}
+                  {footage.done === footage.total
+                    ? `Footage is backed up, all ${footage.total} of it`
+                    : `Backing up footage, ${footage.done} of ${footage.total}. Viewers see the no-clip plate for the rest.`}
+                </div>
+              )}
+              {inFlight && <Bar value={takeUploads[inFlight.id]} />}
             </>
           ) : (
             <button className="primary" onClick={() => void create()} disabled={!!busy}>
@@ -115,18 +141,7 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
           )}
 
           {status && url && <div className="faint">{status}...</div>}
-          {sent && sent.total > 0 && (
-            <div style={{ height: 3, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: `${(sent.done / sent.total) * 100}%`,
-                  background: 'var(--accent)',
-                  transition: 'width 120ms linear',
-                }}
-              />
-            </div>
-          )}
+          {sent && sent.total > 0 && <Bar value={sent.done / sent.total} />}
           {error && <div style={{ color: 'var(--danger)' }}>{error}</div>}
         </div>
       </div>

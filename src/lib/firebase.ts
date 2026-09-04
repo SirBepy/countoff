@@ -12,6 +12,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+import { connectStorageEmulator, getStorage } from 'firebase/storage'
 
 // Set by the Android shell's WebViewClient, only on the site's own origin. Its signIn()
 // resolves or rejects window.__androidAuth{Resolve,Reject}, since a @JavascriptInterface
@@ -37,6 +38,7 @@ const firebaseConfig = {
   authDomain: 'generic-sirbepy-project.firebaseapp.com',
   projectId: 'generic-sirbepy-project',
   messagingSenderId: '639863367604',
+  storageBucket: 'generic-sirbepy-project.firebasestorage.app',
   appId: '1:639863367604:web:1e18472a22556ba919f4e1',
 }
 
@@ -50,12 +52,14 @@ if (location.hostname.endsWith('.web.app') && location.hostname !== firebaseConf
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+export const storage = getStorage(app)
 
 // Opt-in only, and only reachable from a dev build: production never carries this branch.
 const useEmulator = import.meta.env.DEV && new URLSearchParams(window.location.search).get('emulator') === '1'
 if (useEmulator) {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, 'localhost', 8080)
+  connectStorageEmulator(storage, 'localhost', 9199)
   // No Google popup in an automated test; this email/password path only exists
   // behind the same emulator flag, so a test can seed a fake signed-in user.
   Object.assign(window, {

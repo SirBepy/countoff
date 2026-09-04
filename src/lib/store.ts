@@ -63,6 +63,8 @@ export interface UiState {
   /** Object URLs for takes whose file is on THIS device, keyed by take id. Out of the
    *  project for the same reason `audioUrl` is: a blob URL means nothing anywhere else. */
   takeUrls: Record<string, string>
+  /** 0..1 per take id with a backup in flight; absent means idle, not done. */
+  takeUploads: Record<string, number>
 }
 
 interface StoreSingleton {
@@ -103,6 +105,7 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
     hideCast: false,
     readOnly: false,
     takeUrls: {},
+    takeUploads: {},
   },
   listeners: new Set(),
   saveTimer: undefined,
@@ -425,6 +428,22 @@ export function setTakeUrl(takeId: string, url: string | null) {
   if (url) takeUrls[takeId] = url
   else delete takeUrls[takeId]
   set({ takeUrls }, false)
+}
+
+export function setTakeUploadProgress(takeId: string, fraction: number | null) {
+  const takeUploads = { ...S.state.takeUploads }
+  if (fraction === null) delete takeUploads[takeId]
+  else takeUploads[takeId] = fraction
+  set({ takeUploads }, false)
+}
+
+/** A finished upload is not an edit, so it skips undo history: a Ctrl+Z that stranded
+ *  footage already sitting in the bucket would be nonsense. Still refuses in read-only. */
+export function setTakeRemoteUrl(takeId: string, url: string) {
+  const p = S.state.project
+  if (!p || S.state.readOnly) return
+  const takes = p.takes.map((t) => (t.id === takeId ? { ...t, url } : t))
+  set({ project: { ...p, takes, updatedAt: Date.now() } })
 }
 
 export const addTake = (take: Take) => withProject((p) => ({ ...p, takes: [...p.takes, take] }))

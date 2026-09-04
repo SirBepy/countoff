@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { getActiveProjectId, listProjects, loadProjectById, migrateProject, saveProject, saveProjectRecord } from './db'
 import { db, getCurrentUser, subscribeAuth } from './firebase'
 import { mirrorShare, stripUndefined } from './share'
+import { backUpTakes } from './takeBackup'
 import { cancelPendingSave, flash, getState, replaceProject, set } from './store'
 import type { Project } from './types'
 
@@ -137,7 +138,12 @@ async function pushProjectDoc(uid: string, project: Project): Promise<Project | 
   remoteUpdatedAts[project.id] = project.updatedAt
   // The share is a mirror, not a second source of truth: a failed mirror must never
   // fail the push that owns the real document.
-  if (project.shareToken) await mirrorShare(project.shareToken, project).catch(() => {})
+  if (project.shareToken) {
+    await mirrorShare(project.shareToken, project).catch(() => {})
+    // Unawaited: footage is far slower than the document, and each finished take pushes
+    // its own url through this same path anyway.
+    void backUpTakes(project)
+  }
   return null
 }
 

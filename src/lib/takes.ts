@@ -1,5 +1,6 @@
 import { deleteTakeFileIfUnused, getActiveProjectId, loadTakeFile, saveTakeFile } from './db'
 import { addTake, flash, removeTake, setTakeUrl, uid } from './store'
+import { backUpTakes } from './takeBackup'
 import type { Project, Take } from './types'
 
 /** Reads a picked file's length off a throwaway element; the file itself carries no length. */
@@ -40,6 +41,8 @@ export async function attachTakes(project: Project): Promise<void> {
     const blob = await loadTakeFile(take.id)
     if (blob) setTakeUrl(take.id, URL.createObjectURL(blob))
   }
+  // Resumes a backup the last session left half done; a no-op unless this project is shared.
+  void backUpTakes(project)
 }
 
 export async function dropTake(takeId: string): Promise<void> {
