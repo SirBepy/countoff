@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import BackupModal from './components/BackupModal'
+import CommentsModal from './components/CommentsModal'
 import BottomBar from './components/BottomBar'
 import DropAudio from './components/DropAudio'
 import Floor from './components/Floor'
@@ -13,12 +14,14 @@ import Rehearse from './components/Rehearse'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
 import SongSetup from './components/SongSetup'
+import ShareModal from './components/ShareModal'
 import SongStrip from './components/SongStrip'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
-import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace } from './lib/db'
+import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace, migrateProject } from './lib/db'
 import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
+import { loadShare, shareTokenFromPath } from './lib/share'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
 import {
@@ -27,6 +30,7 @@ import {
   hasPendingSave,
   readHideCast,
   redo,
+  replaceProject,
   removeBlocks,
   set,
   toggleHideCast,
@@ -38,6 +42,10 @@ import { pullNow, scheduleSync } from './lib/syncEngine'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+// Read once: a share link never changes path while the tab is open, and the whole app
+// boots differently when it is present.
+const VIEW_TOKEN = shareTokenFromPath(location.pathname)
+
 export default function App() {
   const project = useStore((s) => s.project)
   const view = useStore((s) => s.view)
@@ -46,6 +54,7 @@ export default function App() {
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
   const hideCast = useStore((s) => s.hideCast)
+  const readOnly = useStore((s) => s.readOnly)
   const [booted, setBooted] = useState(false)
   const [segmentId, setSegmentId] = useState<string | null>(null)
   const [lyricsFor, setLyricsFor] = useState<string | null>(null)
@@ -54,6 +63,8 @@ export default function App() {
   const [showBackup, setShowBackup] = useState(false)
   const [showProjects, setShowProjects] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showShare, setShowShare] = useState(false)
+  const [showComments, setShowComments] = useState(false)
   const [creating, setCreating] = useState(false)
   const isDesktop = useIsDesktop()
 
@@ -73,8 +84,27 @@ export default function App() {
     return true
   }
 
+  /** A /v/<token> boot never touches IndexedDB: the share document IS the source, so
+   *  it also skips the saved-plus-blob gate adoptActiveProject enforces. */
+  async function adoptShare(token: string) {
+    try {
+      const { project: shared, audio: blob } = await loadShare(token)
+      if (blob) audio.load(URL.createObjectURL(blob), shared.name)
+      replaceProject(migrateProject(shared), { readOnly: true, view: 'sheet' }, false)
+      setSegmentId(shared.segments[0]?.id ?? null)
+    } catch (e) {
+      console.error('share load failed', e)
+      set({ status: 'The share may have been taken down, or the link is wrong.' }, false)
+    }
+  }
+
   useEffect(() => {
     void (async () => {
+      if (VIEW_TOKEN) {
+        await adoptShare(VIEW_TOKEN)
+        setBooted(true)
+        return
+      }
       await migrateKeySpace()
       await adoptActiveProject()
       setBooted(true)
@@ -178,6 +208,19 @@ export default function App() {
   }, [project])
 
   if (!booted) return null
+  if (VIEW_TOKEN && !project) {
+    return (
+      <div className="drop">
+        <div className="drop-inner">
+          <div style={{ fontSize: 44, marginBottom: 10 }}>
+            <i className="ph ph-link-break" />
+          </div>
+          <h1 style={{ margin: '0 0 6px', fontSize: 26, letterSpacing: '-0.02em' }}>That link did not open</h1>
+          <p className="muted" style={{ margin: 0 }}>{status}</p>
+        </div>
+      </div>
+    )
+  }
   if (!project || creating) {
     return (
       <>
@@ -196,6 +239,8 @@ export default function App() {
   if (view === 'setup') return <SongSetup project={project} />
   if (view === 'floor') return <Floor project={project} />
 
+  // The viewer's token comes from the URL; the owner's comes off the project itself.
+  const commentToken = readOnly ? VIEW_TOKEN : project.shareToken
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
   const marker = project.markers.find((m) => m.id === markerFor)
 
@@ -205,15 +250,25 @@ export default function App() {
         <div className="brand only-wide">
           <span className="dot" /> Countoff
         </div>
-        <button className="app-title only-narrow" onClick={() => setShowMenu(true)} title="Project name, setup, projects and backups">
-          <span className="name">{project.name}</span>
-          <i className="ph ph-caret-down" />
-        </button>
-        <input
-          className="project-name only-wide"
-          value={project.name}
-          onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
-        />
+        {readOnly ? (
+          <span className="app-title only-narrow">
+            <span className="name">{project.name}</span>
+          </span>
+        ) : (
+          <button className="app-title only-narrow" onClick={() => setShowMenu(true)} title="Project name, setup, projects and backups">
+            <span className="name">{project.name}</span>
+            <i className="ph ph-caret-down" />
+          </button>
+        )}
+        {readOnly ? (
+          <span className="project-name only-wide">{project.name}</span>
+        ) : (
+          <input
+            className="project-name only-wide"
+            value={project.name}
+            onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
+          />
+        )}
         <span className="chip only-wide">
           <i className="ph ph-list-numbers i" /> {project.blocks.length} placed
         </span>
@@ -237,18 +292,38 @@ export default function App() {
         >
           <i className={`ph ${hideCast ? 'ph-eye-closed' : 'ph-eye'} i`} />
         </button>
-        <button className="ghost icon only-wide" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
-          <i className="ph ph-folders i" />
-        </button>
-        <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
-          <i className="ph ph-shield-check i" />
-        </button>
-        <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-          <i className="ph ph-arrow-counter-clockwise i" />
-        </button>
-        <button className="ghost icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-          <i className="ph ph-arrow-clockwise i" />
-        </button>
+        {!readOnly && (
+          <>
+            <button className="ghost icon only-wide" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
+              <i className="ph ph-folders i" />
+            </button>
+            <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
+              <i className="ph ph-shield-check i" />
+            </button>
+            <button className="ghost icon only-wide" onClick={() => setShowShare(true)} title="Share a view-only link">
+              <i className="ph ph-share-network i" />
+            </button>
+          </>
+        )}
+        {commentToken && (
+          <button className="ghost icon" onClick={() => setShowComments(true)} title="Comments on the shared link">
+            <i className="ph ph-chat-circle-text i" />
+          </button>
+        )}
+        {readOnly ? (
+          <span className="chip">
+            <i className="ph ph-eye i" /> View only
+          </span>
+        ) : (
+          <>
+            <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+              <i className="ph ph-arrow-counter-clockwise i" />
+            </button>
+            <button className="ghost icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+              <i className="ph ph-arrow-clockwise i" />
+            </button>
+          </>
+        )}
       </div>
 
       {!isDesktop && <SongStrip project={project} />}
@@ -287,12 +362,15 @@ export default function App() {
       {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
       {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
       {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}
+      {showShare && <ShareModal project={project} onClose={() => setShowShare(false)} />}
+      {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
       {showMenu && (
         <ProjectMenu
           project={project}
           onClose={() => setShowMenu(false)}
           onProjects={() => setShowProjects(true)}
           onBackup={() => setShowBackup(true)}
+          onShare={() => setShowShare(true)}
         />
       )}
       {showProjects && (

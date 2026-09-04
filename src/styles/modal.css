@@ -115,3 +115,35 @@
     grid-template-columns: 80px 1fr auto auto;
   }
 }
+
+/* The flat comment thread on a shared link. Scrolls on its own so the composer
+   below it stays reachable on a phone. */
+.comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.comment {
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.comment .who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+.comment .who .faint {
+  font-size: 11px;
+  margin-left: auto;
+}
+.comment .what {
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

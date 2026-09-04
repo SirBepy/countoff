@@ -124,5 +124,7 @@ export interface Project {
   /** Timeline lanes kept in view while the rest scroll. Person ids, plus `moves`. */
   pinned: string[]
   focus: Focus
+  /** Present once this project has been shared: the unguessable path segment in /v/<token>. */
+  shareToken?: string
   updatedAt: number
 }

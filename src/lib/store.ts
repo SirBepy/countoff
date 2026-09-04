@@ -56,6 +56,8 @@ export interface UiState {
   canRedo: boolean
   /** Drops the cast's cue tags from the sheet, which crowd out the moves on a full number. */
   hideCast: boolean
+  /** A /v/<token> share is open. Every mutation and every persist is refused. */
+  readOnly: boolean
 }
 
 interface StoreSingleton {
@@ -94,6 +96,7 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
     canUndo: false,
     canRedo: false,
     hideCast: false,
+    readOnly: false,
   },
   listeners: new Set(),
   saveTimer: undefined,
@@ -123,7 +126,7 @@ const SNAPSHOT_EVERY = 60_000
 
 function emit(persist = true) {
   S.listeners.forEach((l) => l())
-  if (persist && S.state.project) {
+  if (persist && S.state.project && !S.state.readOnly) {
     clearTimeout(S.saveTimer)
     S.saveTimer = setTimeout(() => {
       const project = S.state.project
@@ -143,7 +146,7 @@ export const hasPendingSave = () => S.saveTimer !== undefined && S.state.project
 export function flushSave() {
   clearTimeout(S.saveTimer)
   S.saveTimer = undefined
-  if (S.state.project) void saveProject(S.state.project)
+  if (S.state.project && !S.state.readOnly) void saveProject(S.state.project)
 }
 
 /**
@@ -210,14 +213,16 @@ function pushHistory(previous: Project, coalesceKey?: string) {
   S.redoStack = []
 }
 
+// The single chokepoint every project mutation passes through, so refusing here is
+// what makes a shared view read-only even if a screen forgets to hide its own buttons.
 function withProject(fn: (p: Project) => Project, coalesceKey?: string) {
-  if (!S.state.project) return
+  if (!S.state.project || S.state.readOnly) return
   pushHistory(S.state.project, coalesceKey)
   set({ project: { ...fn(S.state.project), updatedAt: Date.now() }, canUndo: true, canRedo: false })
 }
 
 export function undo() {
-  if (!S.state.project || S.undoStack.length === 0) return
+  if (!S.state.project || S.state.readOnly || S.undoStack.length === 0) return
   const previous = S.undoStack.pop()!
   S.redoStack.push(S.state.project)
   if (S.redoStack.length > UNDO_LIMIT) S.redoStack.shift()
@@ -227,7 +232,7 @@ export function undo() {
 }
 
 export function redo() {
-  if (!S.state.project || S.redoStack.length === 0) return
+  if (!S.state.project || S.state.readOnly || S.redoStack.length === 0) return
   const next = S.redoStack.pop()!
   S.undoStack.push(S.state.project)
   if (S.undoStack.length > UNDO_LIMIT) S.undoStack.shift()

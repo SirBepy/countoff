@@ -6,11 +6,12 @@ interface Props {
   onClose: () => void
   onProjects: () => void
   onBackup: () => void
+  onShare: () => void
 }
 
 /** The phone's title button opens this: three destinations that were unlabelled
  *  top-bar icons, plus the rename that competed with them for width. */
-export default function ProjectMenu({ project, onClose, onProjects, onBackup }: Props) {
+export default function ProjectMenu({ project, onClose, onProjects, onBackup, onShare }: Props) {
   const hideCast = useStore((s) => s.hideCast)
   const go = (run: () => void) => () => {
     onClose()
@@ -64,6 +65,13 @@ export default function ProjectMenu({ project, onClose, onProjects, onBackup }: 
             <span>
               Projects
               <div className="sub">Switch, duplicate, start a new one</div>
+            </span>
+          </button>
+          <button className="menu-item" onClick={go(onShare)}>
+            <i className="ph ph-share-network" />
+            <span>
+              Share
+              <div className="sub">A view-only link anyone can open and comment on</div>
             </span>
           </button>
           <button className="menu-item" onClick={go(onBackup)}>

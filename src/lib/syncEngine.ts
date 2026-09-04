@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
 import { getActiveProjectId, listProjects, loadProjectById, migrateProject, saveProject, saveProjectRecord } from './db'
 import { db, getCurrentUser, subscribeAuth } from './firebase'
+import { mirrorShare } from './share'
 import { cancelPendingSave, flash, getState, replaceProject, set } from './store'
 import type { Project } from './types'
 
@@ -94,7 +95,7 @@ const saveRemoteProjectToDb = (remoteProject: Project) => saveProjectRecord(migr
  * Adopting a non-active project would silently switch which choreography is on screen. */
 export async function pullNow(): Promise<void> {
   const user = getCurrentUser()
-  if (!user || syncing) return
+  if (!user || syncing || getState().readOnly) return
   syncing = true
   emit()
   const failedIds: string[] = []
@@ -138,13 +139,16 @@ async function pushProjectDoc(uid: string, project: Project): Promise<Project | 
   }
   await setDoc(ref, stripUndefined(project))
   remoteUpdatedAts[project.id] = project.updatedAt
+  // The share is a mirror, not a second source of truth: a failed mirror must never
+  // fail the push that owns the real document.
+  if (project.shareToken) await mirrorShare(project.shareToken, project).catch(() => {})
   return null
 }
 
 export async function pushNow(): Promise<void> {
   const user = getCurrentUser()
   const project = getState().project
-  if (!user || !project || syncing) return
+  if (!user || !project || syncing || getState().readOnly) return
   syncing = true
   conflict = null
   emit()
@@ -171,7 +175,7 @@ export async function pushNow(): Promise<void> {
  * project is its own doc, so pushing B can never touch A's remote copy. */
 export async function pushAllProjects(): Promise<SyncAllResult> {
   const user = getCurrentUser()
-  if (!user || syncing) return { pushed: 0, failed: [] }
+  if (!user || syncing || getState().readOnly) return { pushed: 0, failed: [] }
   syncing = true
   conflict = null
   emit()
@@ -207,7 +211,7 @@ export async function pushAllProjects(): Promise<SyncAllResult> {
 
 /** Called whenever the in-memory project changes; debounces the next push. */
 export function scheduleSync(project: Project) {
-  if (!getCurrentUser()) return
+  if (!getCurrentUser() || getState().readOnly) return
   const remoteUpdatedAt = remoteUpdatedAts[project.id]
   if (remoteUpdatedAt !== undefined && project.updatedAt <= remoteUpdatedAt) return
   clearTimeout(pushTimer)
@@ -255,5 +259,5 @@ subscribeAuth(() => {
   const justSignedIn = !wasSignedIn && !!user
   wasSignedIn = !!user
   emit()
-  if (justSignedIn) void pullNow().then(pushLocalOnlyOrNewer)
+  if (justSignedIn && !getState().readOnly) void pullNow().then(pushLocalOnlyOrNewer)
 })

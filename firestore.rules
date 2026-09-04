@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A project document is private to the account that owns it.
+    match /users/{uid}/projects/{projectId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // A share is public to anyone holding the token, which is the whole point: the
+    // unguessable path segment is the only guard, so reads are open and writes are not.
+    match /shares/{token} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerUid;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+
+      match /audio/{chunk} {
+        allow read: if true;
+        allow write: if request.auth != null
+                     && request.auth.uid == get(/databases/$(database)/documents/shares/$(token)).data.ownerUid;
+      }
+
+      // Anyone can leave a comment; nobody can rewrite or delete one, including the owner.
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasOnly(['name', 'text', 'at'])
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() > 0
+                      && request.resource.data.name.size() <= 40
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 800
+                      && request.resource.data.at is int;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
