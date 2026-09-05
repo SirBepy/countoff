@@ -21,7 +21,9 @@ export function rowRects(segmentId?: string): RowRect[] {
 export function beatInRow(seg: Segment, end: number, r: RowRect, clientX: number) {
   const ratio = (clientX - r.rect.left) / r.rect.width
   const visible = countsInRow(seg, r.row, end)
-  return r.row * seg.countsPerRow + Math.max(0, Math.min(visible - 1, Math.floor(ratio * seg.countsPerRow)))
+  // r.rect now spans only the visible counts (Sheet.tsx caps a short row's width),
+  // so the ratio scales against 'visible', not the row's full countsPerRow.
+  return r.row * seg.countsPerRow + Math.max(0, Math.min(visible - 1, Math.floor(ratio * visible)))
 }
 
 /** One song's rows, for a drag that travels past the row it started in. The last

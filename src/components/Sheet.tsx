@@ -116,6 +116,9 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
   const rowStart = row * perRow
   const rowEnd = rowStart + perRow
   const visibleCount = countsInRow(segment, row, end)
+  // A short row caps its own width to visibleCount/perRow of the full track,
+  // so a cut mid-row loses its empty tail instead of stretching cells to fill it.
+  const rowFrac = visibleCount / perRow
   const from = beatToTime(segment, rowStart)
   const to = beatToTime(segment, rowEnd)
   const lines = lyricsBetween(segment.lyrics, from, to)
@@ -185,7 +188,11 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
         {row + 1}
       </button>
       <div>
-        <div className={`row-lyric${lines.length ? '' : ' addable'}`} onPointerDown={addLyricHere}>
+        <div
+          className={`row-lyric${lines.length ? '' : ' addable'}`}
+          style={{ width: `${rowFrac * 100}%` }}
+          onPointerDown={addLyricHere}
+        >
           {lines.length ? (
             lines.map((line, i) =>
               editingLyricId === line.id ? (
@@ -224,7 +231,9 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
           className={`counts${rowSelected ? ' selecting' : ''}`}
           data-segment-id={segment.id}
           data-row={row}
-          style={{ gridTemplateColumns: `repeat(${perRow}, 1fr)`, '--lanes': rowLanes } as React.CSSProperties}
+          style={
+            { gridTemplateColumns: `repeat(${visibleCount}, 1fr)`, width: `${rowFrac * 100}%`, '--lanes': rowLanes } as React.CSSProperties
+          }
           onPointerDown={startSelect}
           onContextMenu={(e) => {
             e.preventDefault()
@@ -287,8 +296,8 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
                 }${draggingId === block.id ? ' dragging' : ''}`}
                 style={
                   {
-                    left: `${((visStart - rowStart) / perRow) * 100}%`,
-                    width: `${((visEnd - visStart) / perRow) * 100}%`,
+                    left: `${((visStart - rowStart) / (visibleCount || 1)) * 100}%`,
+                    width: `${((visEnd - visStart) / (visibleCount || 1)) * 100}%`,
                     borderTopLeftRadius: isHead ? 6 : 0,
                     borderBottomLeftRadius: isHead ? 6 : 0,
                     borderTopRightRadius: isTail ? 6 : 0,
