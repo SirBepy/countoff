@@ -41,6 +41,16 @@ A different, older 45-assertion probe also named `runway-probe.cjs` covered the 
 has been rescued as `verify/movement-probe.cjs` above. The tracked `runway-probe.cjs` above is the
 9-assertion song-lookahead probe, not that one.
 
+## Where a probe writes screenshots
+
+Always `screenshotDir('<label>')` from `harness.cjs`, which resolves to
+`.for_bepy/screenshots/verify-<label>/` and creates it for you. Never build the path by hand.
+A hand-built one reached two tracked probes on 2026-09-05 carrying the authoring session's own
+`<pid>-<ticks>` id, so every later run wrote into a folder named after a session that had long
+since ended, which the cleanup tooling treats as that session's to own and therefore never reclaims.
+Nothing checks this: `readme-list-check.cjs` only verifies a probe is listed above, and no assertion
+reads the path back, so a wrong directory fails silently and forever.
+
 On the Mac, chromium comes from a playwright install kept outside this repo, so the harness
 default (a Windows path) has to be overridden:
 
