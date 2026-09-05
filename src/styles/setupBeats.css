@@ -1,2 +1,75 @@
-/* Owned by SetupBeats.tsx. Empty scaffolding for todo 09's beat detection step -
-   kept separate from setup.css so that agent never has to touch the shared file. */
+/* Owned by SetupBeats.tsx. Todo 09's beat detection + adjustment step. */
+
+.beats {
+  height: 100%;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--bg);
+}
+.beats-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(6px + var(--safe-t)) 12px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+}
+.beats-list {
+  overflow: auto;
+  padding: 12px;
+  padding-bottom: calc(12px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.beats-card {
+  gap: 10px;
+}
+.beats-card-head {
+  align-items: center;
+}
+.beats-proposal-row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.beats-controls {
+  align-items: center;
+}
+.beats-nudge {
+  align-items: center;
+}
+
+.beats-wave {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.beats-wave-zoom {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.beats-wave-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.beats-wave-inner {
+  position: relative;
+}
+.beats-wave-inner canvas {
+  display: block;
+  cursor: pointer;
+}
+.beats-wave-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+}
