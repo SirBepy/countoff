@@ -171,8 +171,14 @@ withBrowser(async (browser) => {
       d.bars.map((b) => b.cls.replace('rw-bar ', '')).join(',') === 'e1,e1,e2,e3',
       d.bars.map((b) => `${b.text}:${b.cls.replace('rw-bar ', '')}`).join(' '),
     )
-    check('count ruler covers the segment', d.numCount > 200 && d.oneCount === Math.ceil(d.numCount / 8), `${d.numCount} counts, ${d.oneCount} downbeats`)
-    check('lyric lane rendered', d.lyricCount === 3, `${d.lyricCount} lines`)
+    // Runway.tsx restarts numbering at the lookahead cut ("the numbers reset to 1
+    // exactly where its own ruler would start"), so s1 contributes its own 30 downbeats
+    // and the s2 lookahead before the 1440px-wide horizon contributes 12 more - not a
+    // clean ceil(numCount / 8) over the combined 324 counts.
+    check('count ruler covers the segment, downbeats renumber at the lookahead cut', d.numCount === 324 && d.oneCount === 42, `${d.numCount} counts, ${d.oneCount} downbeats`)
+    // s1 has 3 lines of its own; the lookahead pulls in s2's first lyric line (time 121s)
+    // too, since 121 < the horizon computed from the 1440px viewport.
+    check('lyric lane rendered, including the next song\'s lead-in line past the cut', d.lyricCount === 4, `${d.lyricCount} lines`)
     check('"Next: X in N" is gone', !d.bodyText.includes('Next:'))
     check('no clip thumbnail in the rehearse view', d.imgs === 0, `${d.imgs} img elements`)
     check('count dots kept', d.dots === 8, `${d.dots} dots`)
