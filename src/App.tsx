@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BackupModal from './components/BackupModal'
 import CommentsModal from './components/CommentsModal'
 import BottomBar from './components/BottomBar'
@@ -29,6 +29,7 @@ import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
 import {
   flushSave,
+  getSheetScrollTop,
   getState,
   hasPendingSave,
   readHideCast,
@@ -36,6 +37,7 @@ import {
   replaceProject,
   removeBlocks,
   set,
+  setSheetScrollTop,
   toggleHideCast,
   undo,
   updateProject,
@@ -72,6 +74,7 @@ export default function App() {
   const [showComments, setShowComments] = useState(false)
   const [creating, setCreating] = useState(false)
   const isDesktop = useIsDesktop()
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   async function adoptActiveProject(): Promise<boolean> {
     const activeId = getActiveProjectId()
@@ -218,6 +221,27 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [project])
+
+  // A trip into a setup step (App.tsx:260) fully unmounts the sheet's scroll
+  // container, so a bare `el.scrollTop = x` on remount races the sheet's own
+  // rows laying out: the browser clamps to whatever scrollHeight exists on
+  // that first frame. Re-applying across a few frames lets it converge once
+  // layout catches up, without touching Sheet itself.
+  useEffect(() => {
+    if (view !== 'sheet') return
+    const el = scrollRef.current
+    const target = getSheetScrollTop()
+    if (!el || target <= 0) return
+    let frame = 0
+    let tries = 0
+    const attempt = () => {
+      el.scrollTop = target
+      tries += 1
+      if (Math.abs(el.scrollTop - target) > 1 && tries < 12) frame = requestAnimationFrame(attempt)
+    }
+    frame = requestAnimationFrame(attempt)
+    return () => cancelAnimationFrame(frame)
+  }, [view])
 
   if (!booted) return VIEW_TOKEN ? <ShareLoading progress={shareProgress} /> : null
   if (VIEW_TOKEN && !project) {
@@ -383,7 +407,7 @@ export default function App() {
               onEditMarker={setMarkerFor}
             />
           )}
-          <div className="scroll">
+          <div className="scroll" ref={scrollRef} onScroll={(e) => setSheetScrollTop(e.currentTarget.scrollTop)}>
             <Sheet
               project={project}
               selectedSegmentId={segmentId}

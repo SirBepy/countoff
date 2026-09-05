@@ -81,6 +81,11 @@ interface StoreSingleton {
   /** An open gesture (pointerdown..pointerup) holds its first mutation's "before" snapshot
    *  regardless of elapsed time, unlike `coalesce` which lapses after COALESCE_WINDOW. */
   gesture: { key: string; pushed: boolean } | null
+  /** The sheet's last scroll offset, captured continuously while it's on screen. A trip
+   *  into a setup step fully unmounts the sheet (App.tsx), so this is what a round trip
+   *  restores from. Navigation state, not project data: outside UiState so reading or
+   *  writing it never triggers a store emit, and it is never persisted. */
+  sheetScrollTop: number
 }
 
 // A dev-mode hot reload re-runs this module while Fast Refresh keeps App's own `booted`
@@ -118,6 +123,7 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
   redoStack: [],
   coalesce: null,
   gesture: null,
+  sheetScrollTop: 0,
 }
 globalAny[HMR_KEY] = S
 
@@ -177,6 +183,11 @@ export function set(patch: Partial<UiState>, persist = true) {
 }
 
 export const getState = () => S.state
+
+export const getSheetScrollTop = () => S.sheetScrollTop
+export const setSheetScrollTop = (top: number) => {
+  S.sheetScrollTop = top
+}
 
 export function useStore<T>(select: (s: UiState) => T): T {
   return useSyncExternalStore(
