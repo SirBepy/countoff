@@ -1,2 +1,7 @@
-/* Owned by SetupCuts.tsx. Empty scaffolding for todo 08's cuts-only editor - kept
-   separate from setup.css so that agent never has to touch the shared file. */
+/* Owned by SetupCuts.tsx. The step reuses .songmap/.map-track (songmap.css) and
+   .setup-head/.setup-list/.setup-card (setup.css) verbatim; this file only lays
+   out the wrapper stacking them, since SetupFlow's own body already scrolls. */
+.cuts-step {
+  display: flex;
+  flex-direction: column;
+}

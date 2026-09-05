@@ -1,6 +1,7 @@
 import { measureStoredTempo } from './bpm'
 import { DEFAULT_COUNTS_PER_ROW } from './grid'
 import { addMarker, addSegment, flash, getState, set, uid, updateSegment } from './store'
+import type { Segment } from './types'
 
 export const MARKER_ICON = 'ph-flag'
 export const MARKER_COLOUR = '#f0a63c'
@@ -12,6 +13,41 @@ const pendingCuts = new Set<number>()
 // Segment id -> bpm from its last open-ended reading. In-memory only, so a reload
 // forgets it and nothing gets auto-re-measured - the safe, under-correct-only direction.
 const openEndedBpm = new Map<string, number>()
+
+/** The segment immediately before `time`, or the first segment if none starts at or before it. */
+function findPrevious(sorted: Segment[], time: number) {
+  return [...sorted].reverse().find((s) => s.start <= time) ?? sorted[0]
+}
+
+/**
+ * Adds a song start at `time` with no tempo detection - the new segment inherits the
+ * previous song's bpm/anchor untouched. For screens that must not decode audio (setup
+ * step 1, todo 08): the detection half of `splitSongAt` runs later, once all cuts exist.
+ */
+export function addSongAt(time: number): string | null {
+  const project = getState().project
+  if (!project) return null
+  if (project.segments.some((s) => Math.abs(s.start - time) < 0.35)) {
+    flash('There is already a song start here')
+    return null
+  }
+  const sorted = [...project.segments].sort((a, b) => a.start - b.start)
+  const previous = findPrevious(sorted, time)
+  const id = uid()
+  addSegment({
+    id,
+    name: `Song ${project.segments.length + 1}`,
+    start: time,
+    bpm: previous?.bpm ?? 120,
+    anchor: time,
+    transitionIn: 0,
+    countsPerRow: previous?.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
+    lyrics: [],
+    fit: { offset: 0, scale: 1 },
+  })
+  flash(`Song start at ${time.toFixed(2)}s.`)
+  return id
+}
 
 /**
  * Starts a new song at `time`, detecting its own tempo over [time, nextStart) rather
@@ -34,7 +70,7 @@ export async function splitSongAt(time: number): Promise<string | null> {
     const sorted = [...project.segments].sort((a, b) => a.start - b.start)
     const next = sorted.find((s) => s.start > time)
     const end = next ? next.start : project.duration
-    const previous = [...sorted].reverse().find((s) => s.start <= time) ?? sorted[0]
+    const previous = findPrevious(sorted, time)
 
     // This cut gives `previous` a real end for the first time; re-measure it only if it
     // still holds the open-ended reading unchanged, so a hand-corrected bpm is never overwritten.
