@@ -17,6 +17,7 @@ node verify/desktop-check.cjs [port]   # 1440px layout regression - defaults to 
 node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
 node verify/floor-probe.cjs [port]     # cast, movements, the walk menu, the sheet cue lane
 node verify/row-truncation-probe.cjs [port]  # a row cut mid-song stops its grid, lyric and blocks at the cut
+node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
 ```
 
 On the Mac, chromium comes from a playwright install kept outside this repo, so the harness
