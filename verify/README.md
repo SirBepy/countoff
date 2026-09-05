@@ -18,7 +18,25 @@ node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
 node verify/floor-probe.cjs [port]     # cast, movements, the walk menu, the sheet cue lane
 node verify/row-truncation-probe.cjs [port]  # a row cut mid-song stops its grid, lyric and blocks at the cut
 node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
+node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
+node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm
+node verify/chair-probe.cjs [port]     # the focus chair's keyframes interpolate during playback, rescale with the floor, and don't move on a pre-keyframe project - defaults to 42213
+node verify/crop-probe.cjs [port]      # a take's crop renders correctly (pixel-sampled) on both the editor monitor and rehearse's fixed-ratio box - defaults to 5173
+node verify/runway-probe.cjs [port]    # the tracked 9-assertion probe: next song's moves, lyrics and counts show up on the runway ahead of the cut - defaults to 42211
+node verify/share-cache-probe.cjs [port] [token]  # a shared link caches firestore/storage reads across reloads, and a corrupted cache falls back to a full re-fetch - defaults to 5173
+node verify/share-probe.cjs [port]     # a read-only share view can't mutate or persist the project through any edit gesture or store call - defaults to 42212
+node verify/take-backup-probe.cjs [port]  # footage never reaches Storage for an unshared project, and does for a shared one - defaults to 5173
+node verify/take-sharing-probe.cjs [port]  # duplicating a project shares its source take rather than copying the file, and deletes only the copy's own reference - defaults to 5173
+node verify/video-probe.cjs [port]     # footage laid over a song: the clip track editor and rehearse's video layout - defaults to 5173
 ```
+
+`node verify/rehearse-shot.cjs [port|origin] [token]` is a screenshot tool, not an assertion probe -
+it has no pass count. It loads a real share token (IndexedDB is per-origin, so localhost has no
+projects of its own) and shoots the rehearse screen through a real play-through.
+
+A different, older 45-assertion probe also named `runway-probe.cjs` covered the floor mini-map; it
+has been rescued as `verify/movement-probe.cjs` above. The tracked `runway-probe.cjs` above is the
+9-assertion song-lookahead probe, not that one.
 
 On the Mac, chromium comes from a playwright install kept outside this repo, so the harness
 default (a Windows path) has to be overridden:
