@@ -1,0 +1,90 @@
+/* Owned by SetupFlow.tsx: the step chrome (picker, Back/Next) wrapping whichever
+   step is active. Separate from setup.css because that file styles the flat list
+   a step's body still renders for now, not the shell around it. */
+.setup-flow {
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.setup-flow-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: calc(10px + var(--safe-t)) 12px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  flex: 0 0 auto;
+}
+.setup-flow-steps {
+  display: flex;
+  gap: 6px;
+}
+.setup-flow-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 6px 12px 6px 6px;
+  font-size: 13px;
+}
+.setup-flow-step-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--line-soft);
+  font-size: 11px;
+}
+.setup-flow-step.done .setup-flow-step-num {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.setup-flow-step.on {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.setup-flow-step.on .setup-flow-step-num {
+  background: var(--accent);
+  color: #fff;
+}
+.setup-flow-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.setup-flow-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The topbar's step picker (rendered in App.tsx's appbar, not inside .setup-flow
+   itself) - lives here because SetupFlow is the only file that knows the three
+   step ids, so its chip states can never drift from the shell above. */
+.setup-picker {
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+}
+.setup-picker-chip {
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.setup-picker-chip.on {
+  background: var(--accent);
+  color: #fff;
+}

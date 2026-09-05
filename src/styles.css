@@ -8,6 +8,10 @@
 @import './styles/bar.css';
 @import './styles/rehearse.css';
 @import './styles/setup.css';
+@import './styles/setupFlow.css';
+@import './styles/setupCuts.css';
+@import './styles/setupBeats.css';
+@import './styles/setupLyrics.css';
 @import './styles/floor.css';
 @import './styles/movementTimeline.css';
 @import './styles/video.css';

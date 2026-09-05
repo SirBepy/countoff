@@ -13,7 +13,7 @@ import ProjectsModal from './components/ProjectsModal'
 import Rehearse from './components/Rehearse'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
-import SongSetup from './components/SongSetup'
+import SetupFlow from './components/SetupFlow'
 import ShareLoading from './components/ShareLoading'
 import ShareModal from './components/ShareModal'
 import SongStrip from './components/SongStrip'
@@ -257,7 +257,7 @@ export default function App() {
         {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
       </>
     )
-  if (view === 'setup') return <SongSetup project={project} />
+  if (view === 'setup') return <SetupFlow project={project} />
   if (view === 'floor') return <Floor project={project} />
   if (view === 'video') return <VideoScreen project={project} />
 
@@ -299,9 +299,24 @@ export default function App() {
         <span className="faint only-wide" style={{ fontSize: 11 }}>
           <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
         </span>
-        <button className="ghost icon only-wide" onClick={() => set({ view: 'setup' }, false)} title="Song setup: cuts, transitions, downbeats, tempo">
-          <i className="ph ph-sliders-horizontal i" />
-        </button>
+        <div className="setup-picker only-wide" role="group" aria-label="Song setup steps">
+          {(
+            [
+              ['cuts', 'Cuts'],
+              ['beats', 'Beats'],
+              ['lyrics', 'Lyrics'],
+            ] as const
+          ).map(([step, label]) => (
+            <button
+              key={step}
+              className="setup-picker-chip"
+              onClick={() => set({ view: 'setup', setupStep: step }, false)}
+              title={`Setup: ${label.toLowerCase()}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
           <i className="ph ph-users-three i" />
         </button>

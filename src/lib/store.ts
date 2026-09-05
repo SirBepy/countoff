@@ -39,6 +39,9 @@ export interface UiState {
   audioUrl: string | null
   selection: Selection | null
   view: 'sheet' | 'rehearse' | 'setup' | 'floor' | 'video'
+  /** Which of the three ordered setup steps is showing. Navigation only, never
+   *  persisted onto the project: the sheet's step picker jumps here directly. */
+  setupStep: 'cuts' | 'beats' | 'lyrics'
   activeMoveId: string | null
   status: string | null
   /** Scroll the sheet to keep the playing 8-count on screen. */
@@ -92,6 +95,7 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
     audioUrl: null,
     selection: null,
     view: 'sheet',
+    setupStep: 'cuts',
     activeMoveId: null,
     status: null,
     follow: true,
