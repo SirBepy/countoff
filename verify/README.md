@@ -16,6 +16,7 @@ node verify/mobile-probe.cjs [port]    # phone touch/scroll/layout findings - de
 node verify/desktop-check.cjs [port]   # 1440px layout regression - defaults to 42001
 node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
 node verify/floor-probe.cjs [port]     # cast, movements, the walk menu, the sheet cue lane
+node verify/row-truncation-probe.cjs [port]  # a row cut mid-song stops its grid, lyric and blocks at the cut
 ```
 
 On the Mac, chromium comes from a playwright install kept outside this repo, so the harness
