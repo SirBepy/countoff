@@ -424,3 +424,34 @@
     min-width: 160px;
   }
 }
+
+/* The cue lane under a sheet row, so an entrance is visible while reading moves. */
+.row-cues {
+  display: flex;
+  gap: 5px;
+  padding: 3px 0 1px;
+  min-height: 0;
+  flex-wrap: wrap;
+}
+.cue-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: var(--tap-sm);
+  padding: 0 8px 0 4px;
+  font-size: 11px;
+  border-radius: 999px;
+}
+.cue-tag .d {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bg);
+}
+.cue-tag .count {
+  color: var(--text-faint);
+}
