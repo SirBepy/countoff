@@ -44,6 +44,7 @@ export function addSongAt(time: number): string | null {
     countsPerRow: previous?.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
     lyrics: [],
     fit: { offset: 0, scale: 1 },
+    noLyrics: false,
   })
   flash(`Song start at ${time.toFixed(2)}s.`)
   return id
@@ -124,6 +125,7 @@ export async function splitSongAt(time: number): Promise<string | null> {
       countsPerRow: previous?.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
       lyrics: [],
       fit: { offset: 0, scale: 1 },
+      noLyrics: false,
     })
     // No `next` yet means this window ran to project.duration - open-ended, so a
     // later cut should close and re-measure it unless the dev retunes it first.

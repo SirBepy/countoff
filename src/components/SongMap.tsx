@@ -163,6 +163,10 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
 function LyricRibbon({ project, time, pct }: { project: Project; time: number; pct: (t: number) => string }) {
   const lines = project.segments.flatMap((s) => s.lyrics.filter((l) => l.time >= 0)).sort((a, b) => a.time - b.time)
   if (!lines.length) {
+    // A song is "resolved" once it has lyrics or was explicitly marked as having
+    // none; nagging about a fully-instrumental medley is the exact bug this guards.
+    const unresolved = project.segments.some((s) => !s.noLyrics && !s.lyrics.length)
+    if (!unresolved) return null
     return (
       <div className="map-lyrics">
         <span className="ribbon-empty faint">No lyrics yet. Open a song below and hit "Lyrics".</span>

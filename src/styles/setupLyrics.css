@@ -1,2 +1,21 @@
-/* Owned by SetupLyrics.tsx. Empty scaffolding for todo 10's naming/lyrics step -
-   kept separate from setup.css so that agent never has to touch the shared file. */
+/* Owned by SetupLyrics.tsx. Reuses .setup-head/.setup-list/.setup-card (setup.css)
+   and .lyric-edit/.chip (modal.css) verbatim; this file only lays out the wrapper
+   and the calibration sub-panel those shared classes don't cover. */
+.lyrics-step {
+  display: flex;
+  flex-direction: column;
+}
+.lyrics-card {
+  gap: 10px;
+}
+.lyrics-card textarea {
+  width: 100%;
+  resize: vertical;
+}
+.fit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}

@@ -112,6 +112,9 @@ export function migrateProject(raw: Project): Project {
         lyrics: (s.lyrics ?? []).map((l) => (l.id ? l : { ...l, id: uid() })),
         // Pre-fit shape: retired 2026-08-27 when the flat offset became offset+scale.
         fit: s.fit ?? { offset: lyricOffset ?? 0, scale: 1 },
+        // Pre-noLyrics shape: a project saved before the marker existed reads as
+        // "not visited" rather than "instrumental", the same as it always has.
+        noLyrics: s.noLyrics ?? false,
         countsPerRow: s.countsPerRow ?? DEFAULT_COUNTS_PER_ROW,
         transitionIn: s.transitionIn ?? 0,
       }

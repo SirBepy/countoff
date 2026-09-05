@@ -38,6 +38,10 @@ export interface Segment {
   /** Maps a line's `srcTime` onto this cut: placed time = srcTime * scale + offset.
    * Lines with no `srcTime` (hand-placed) are never touched by it. */
   fit: { offset: number; scale: number }
+  /** Set by a one-tap "no lyrics for this one" in setup step 3. Distinguishes a
+   *  deliberately instrumental song from one whose lyrics step was simply never
+   *  visited - an empty `lyrics` array alone can't tell those apart. */
+  noLyrics?: boolean
   lrcSource?: string
 }
 
