@@ -17,6 +17,9 @@ node verify/desktop-check.cjs [port]   # 1440px layout regression - defaults to 
 node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
 node verify/floor-probe.cjs [port]     # cast, movements, the walk menu, the sheet cue lane
 node verify/row-truncation-probe.cjs [port]  # a row cut mid-song stops its grid, lyric and blocks at the cut
+node verify/setup-cuts-probe.cjs [port]  # setup step 1 shows only the timeline and start/end, a typed m:ss.mmm lands to the millisecond and survives a reload, and adding a cut runs no tempo scan
+node verify/setup-beats-probe.cjs [port]  # setup step 2 nudges the anchor and tempo across a reload and never silently overwrites an already-approved tempo
+node verify/setup-lyrics-probe.cjs [port]  # setup step 3 stops nagging a song marked as having no lyrics, keeps hand-placed lines put through a fit, and backfills the marker on an older project
 node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
 node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
 node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm
