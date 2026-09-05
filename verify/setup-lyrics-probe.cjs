@@ -5,14 +5,12 @@
  * with no `noLyrics` field at all still loads and behaves as it always did.
  * Run: node verify/setup-lyrics-probe.cjs [port]
  */
-const fs = require('fs')
 const path = require('path')
-const { withBrowser, desktopContext, seedProject, silentWav, readProject, createChecklist } = require('./harness.cjs')
+const { withBrowser, desktopContext, seedProject, silentWav, readProject, screenshotDir, createChecklist } = require('./harness.cjs')
 
 const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}`
-const SCREENSHOT_DIR = path.join(__dirname, '..', '.for_bepy', 'screenshots', '38708-134330726576022206')
-fs.mkdirSync(SCREENSHOT_DIR, { recursive: true })
+const SCREENSHOT_DIR = screenshotDir('setup-lyrics')
 
 const BASE_EXTRAS = { blocks: [{ id: 'b1', segmentId: 's1', moveId: 'step-touch', startBeat: 0, beats: 2 }], moves: [{ id: 'step-touch', name: 'Step touch', beats: 2, energy: 1 }], markers: [], people: [], focus: { kind: 'audience' } }
 
