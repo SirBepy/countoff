@@ -16,11 +16,13 @@ import {
   standingAt,
 } from '../lib/floor'
 import {
+  addGroup,
   addPerson,
   clearFocusKeys,
   flash,
   placeFocusKey,
   placeMovement,
+  removeGroup,
   removeMovement,
   removePerson,
   set,
@@ -28,6 +30,7 @@ import {
   setFocus,
   setWalkCounts,
   uid,
+  updateGroup,
   updatePerson,
 } from '../lib/store'
 import type { Project, Side } from '../lib/types'
@@ -182,6 +185,69 @@ export default function Floor({ project }: { project: Project }) {
               <i className="ph ph-plus" />
             </button>
           </div>
+
+          {/* Groups live here because they are made of the cast standing right above them.
+              A block or a clip only ever refers to one, so this is where it is edited. */}
+          {project.groups.length > 0 && (
+            <>
+              <div className="rail-head">
+                <i className="ph ph-user-circle-gear" /> Groups
+              </div>
+              {project.groups.map((group) => (
+                <div key={group.id} className="rail-group">
+                  <input
+                    value={group.name}
+                    onChange={(e) => updateGroup(group.id, { name: e.target.value }, `group-${group.id}`)}
+                  />
+                  <span className="who">
+                    {group.members.map((id) => {
+                      const person = project.people.find((p) => p.id === id)
+                      return person ? (
+                        <button
+                          key={id}
+                          className="d"
+                          style={{ background: person.colour }}
+                          title={`${person.name} - click to take them out of ${group.name}`}
+                          onClick={() =>
+                            updateGroup(group.id, { members: group.members.filter((m) => m !== id) })
+                          }
+                        >
+                          {person.initials}
+                        </button>
+                      ) : null
+                    })}
+                    {project.people
+                      .filter((p) => !group.members.includes(p.id))
+                      .map((p) => (
+                        <button
+                          key={p.id}
+                          className="d add"
+                          title={`Add ${p.name} to ${group.name}`}
+                          onClick={() => updateGroup(group.id, { members: [...group.members, p.id] })}
+                        >
+                          {p.initials}
+                        </button>
+                      ))}
+                  </span>
+                  <button
+                    className="ghost icon"
+                    title={`Delete ${group.name}. Everything tagged to it keeps these dancers.`}
+                    onClick={() => removeGroup(group.id)}
+                  >
+                    <i className="ph ph-trash" />
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+          {project.people.length > 1 && (
+            <button
+              className="ghost rail-newgroup"
+              onClick={() => addGroup({ id: uid(), name: `Group ${project.groups.length + 1}`, members: [] })}
+            >
+              <i className="ph ph-plus i" /> New group
+            </button>
+          )}
         </aside>
 
         <div className="floor-stage-wrap">

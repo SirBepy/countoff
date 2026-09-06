@@ -8,6 +8,32 @@
   padding-top: var(--safe-t);
   padding-bottom: var(--safe-b);
 }
+/* Where this dancer has to be next, in their own colour, beside the transport rather
+   than in the centre the move name owns. */
+.reh-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 0 12px 0 4px;
+  min-height: var(--tap-sm);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.reh-cue .d {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bg);
+}
+
 .rehearse-main {
   display: grid;
   place-content: center;

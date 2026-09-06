@@ -27,6 +27,7 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
   const [sent, setSent] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copiedPerson, setCopiedPerson] = useState<string | null>(null)
   const token = project.shareToken
   const url = token ? shareUrl(token) : null
 
@@ -124,6 +125,37 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
                 </button>
               </div>
               <div className="faint">Every sync push rewrites the share, so viewers keep up with your edits.</div>
+
+              {/* One link each opens straight into that dancer's own view, which beats
+                  asking a room full of people to find themselves in a list. */}
+              {project.people.length > 0 && token && (
+                <div className="field">
+                  <label>A link each</label>
+                  {project.people.map((p) => {
+                    const personUrl = shareUrl(token, p.id)
+                    return (
+                      <div key={p.id} className="cast-opt">
+                        <span className="d" style={{ background: p.colour }}>
+                          {p.initials}
+                        </span>
+                        <span className="nm">{p.name}</span>
+                        <button
+                          className="ghost"
+                          style={{ marginLeft: 'auto' }}
+                          title={personUrl}
+                          onClick={() => {
+                            void navigator.clipboard?.writeText(personUrl)
+                            setCopiedPerson(p.id)
+                          }}
+                        >
+                          <i className="ph ph-copy i" /> {copiedPerson === p.id ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                  <div className="faint">Opens on their own moves and their own spot. The plain link above stays the whole-cast view.</div>
+                </div>
+              )}
               {footage.total > 0 && (
                 <div className="faint">
                   <i className={`ph ${footage.done === footage.total ? 'ph-cloud-check' : 'ph-cloud-arrow-up'} i`} />{' '}

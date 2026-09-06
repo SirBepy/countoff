@@ -1,6 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { audio } from '../lib/audio'
-import { beatDuration, beatToTime, blocksInSegment, segmentEnd, timeToBeat } from '../lib/grid'
+import { sheetBlocks } from '../lib/cast'
+import { beatDuration, beatToTime, segmentEnd, timeToBeat } from '../lib/grid'
+import { useStore } from '../lib/store'
 import type { Project, Segment } from '../lib/types'
 import { isComment } from '../lib/types'
 
@@ -9,6 +11,7 @@ import { isComment } from '../lib/types'
  *  --beat, and every position, fill and label offset derives from it in CSS. */
 export default function Runway({ project, segment, time }: { project: Project; segment: Segment; time: number }) {
   const root = useRef<HTMLDivElement>(null)
+  const viewAs = useStore((s) => s.viewAs)
   const beat = timeToBeat(segment, time)
   // Read per move rather than captured, so a drag across a cut converts pixels to
   // seconds at the tempo of whichever song is under the head at that moment.
@@ -26,14 +29,19 @@ export default function Runway({ project, segment, time }: { project: Project; s
   const horizonTime = end + ((window.innerWidth * 1.5) / 30) * beatDuration(segment.bpm)
 
   const blocks = useMemo(() => {
-    const own = blocksInSegment(project, segment.id).map((b) => ({
-      block: b,
-      move: project.moves.find((m) => m.id === b.moveId) ?? null,
-      sb: b.startBeat,
-      nb: b.beats,
-    }))
+    // Through the viewer's eyes, same as the sheet: their own moves, and a default only
+    // on the counts none of their own took.
+    const resolved = sheetBlocks(project, viewAs)
+    const own = resolved
+      .filter((b) => b.segmentId === segment.id)
+      .map((b) => ({
+        block: b,
+        move: project.moves.find((m) => m.id === b.moveId) ?? null,
+        sb: b.startBeat,
+        nb: b.beats,
+      }))
     const ahead = nextSegment
-      ? project.blocks
+      ? resolved
           .filter((b) => b.segmentId === nextSegment.id && beatToTime(nextSegment, b.startBeat) < horizonTime)
           .map((b) => {
             const sb = timeToBeat(segment, beatToTime(nextSegment, b.startBeat))
@@ -42,7 +50,7 @@ export default function Runway({ project, segment, time }: { project: Project; s
           })
       : []
     return [...own, ...ahead].sort((a, b) => a.sb - b.sb)
-  }, [project.blocks, project.moves, segment, nextSegment, horizonTime])
+  }, [project.blocks, project.moves, project.groups, viewAs, segment, nextSegment, horizonTime])
 
   const lyrics = useMemo(() => {
     // A lyric's `time` is already absolute audio time, so a next-song line needs only
@@ -134,7 +142,7 @@ export default function Runway({ project, segment, time }: { project: Project; s
         <div className="rw-scroll">
           {blocks.map(({ block, move, sb, nb }) => (
             <div
-              key={block.id}
+              key={block.key}
               className={`rw-bar ${isComment(block) ? 'comment' : `e${move?.energy ?? 1}`}`}
               style={{ '--sb': sb, '--nb': nb } as React.CSSProperties}
             >

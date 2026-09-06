@@ -87,6 +87,59 @@
   width: var(--tap-sm);
 }
 
+/* A group is a saved selection of the cast right above it, edited by toggling faces:
+   a filled disc is in, a hollow one is out. */
+.rail-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rail-group input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap-sm);
+  font-size: 12.5px;
+  background: transparent;
+  border-color: transparent;
+}
+.rail-group input:focus {
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+.rail-group .who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: 100%;
+}
+.rail-group .who .d {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bg);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+.rail-group .who .d.add {
+  background: transparent;
+  color: var(--text-faint);
+  border: 1px dashed var(--line);
+}
+.rail-newgroup {
+  margin-top: 6px;
+  min-height: var(--tap-sm);
+  font-size: 12px;
+  justify-content: flex-start;
+}
+
 /* A disc is the person, everywhere they appear: rail, lane, puck. */
 .disc {
   width: 24px;
@@ -237,6 +290,21 @@
 .puck.walking .nm {
   color: var(--text);
   font-weight: 600;
+}
+/* Reading the floor as one dancer. The rest stay on it, stepped back rather than removed,
+   because a spot only means anything next to the people either side of it. */
+.puck.other {
+  opacity: 0.34;
+}
+.puck.mine {
+  z-index: 2;
+}
+.puck.mine .disc {
+  border-color: #fff;
+}
+.puck.mine .nm {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .focus-pick {

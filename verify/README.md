@@ -31,6 +31,7 @@ node verify/share-probe.cjs [port]     # a read-only share view can't mutate or 
 node verify/take-backup-probe.cjs [port]  # footage never reaches Storage for an unshared project, and does for a shared one - defaults to 5173
 node verify/take-sharing-probe.cjs [port]  # duplicating a project shares its source take rather than copying the file, and deletes only the copy's own reference - defaults to 5173
 node verify/video-probe.cjs [port]     # footage laid over a song: the clip track editor and rehearse's video layout - defaults to 5173
+node verify/viewing-as-probe.cjs [port]  # reading the app as one dancer: the sheet's fold and per-count override, the cue lane, the floor, rehearse, what a move placed under the lens is tagged with, and whether the choice survives a reload
 ```
 
 `node verify/rehearse-shot.cjs [port|origin] [token]` is a screenshot tool, not an assertion probe -

@@ -61,15 +61,23 @@ export async function newShareToken(): Promise<string> {
 
 // The token rides in the hash: GitHub Pages serves the app from a repo subpath and
 // rewrites nothing, so a /v/<token> path 404s before the app can ever boot.
-export const shareUrl = (token: string) => `${location.origin}${location.pathname}#${token}`
+/** One extra segment names a dancer, so a link can open straight into their own view
+ *  rather than asking a room full of people to find themselves in a list. */
+export const shareUrl = (token: string, personId?: string) =>
+  `${location.origin}${location.pathname}#${token}${personId ? `/${personId}` : ''}`
 
 const LEGACY_IN_URL = /(?:^|\/)v\/([A-Za-z0-9_-]{8,})\/?$/
-const TOKEN_IN_HASH = /^#\/?([A-Za-z0-9][A-Za-z0-9_-]{6,}[A-Za-z0-9])$/
+const TOKEN_IN_HASH = /^#\/?([A-Za-z0-9][A-Za-z0-9_-]{6,}[A-Za-z0-9])(?:\/([A-Za-z0-9_-]+))?$/
 
 // Links minted before the words carried a /v/ prefix, and firebase.json rewrites the
 // path form, so both still resolve.
 export const shareTokenFromUrl = (hash: string, pathname: string): string | null =>
   hash.match(LEGACY_IN_URL)?.[1] ?? pathname.match(LEGACY_IN_URL)?.[1] ?? hash.match(TOKEN_IN_HASH)?.[1] ?? null
+
+/** The dancer a per-person link names. Lowercased, so a link typed out by hand with a
+ *  name rather than an id still finds them. */
+export const sharePersonFromUrl = (hash: string): string | null =>
+  hash.match(TOKEN_IN_HASH)?.[2]?.toLowerCase() ?? null
 
 // Firestore rejects undefined field values (Move.note, Block.note, Segment.lrcSource);
 // round-tripping through JSON drops them the way JSON.stringify already does.

@@ -66,6 +66,19 @@ export interface Block {
   /** Annotates this one placement, unlike `Move.note` which is shared by every copy.
    * On a comment block it is the whole content, not an annotation. */
   note?: string
+  /** Who does this one. Absent is everyone, which is what every placement meant before
+   * the cast could be named, so no saved project needs rewriting. Person or group ids;
+   * it rides on the placement and never on the library move, because the same move is
+   * everyone's in one song and one dancer's in the next. */
+  for?: string[]
+}
+
+/** A saved selection of dancers, e.g. the bridesmaids. A `for` list stores the group's
+ *  id rather than its members, so adding someone to it updates every placement at once. */
+export interface Group {
+  id: string
+  name: string
+  members: string[]
 }
 
 /** A block with no move is a comment; its `note` is the text on the sheet. */
@@ -154,6 +167,9 @@ export interface Clip {
   /** In and out points inside the take, in the take's own seconds. */
   srcIn: number
   srcOut: number
+  /** Who this footage is for, read exactly like `Block.for`: absent is everyone, and a
+   * tagged clip shadows the untagged one over the seconds it covers. */
+  for?: string[]
 }
 
 export interface Project {
@@ -166,6 +182,7 @@ export interface Project {
   moves: Move[]
   markers: Marker[]
   people: Person[]
+  groups: Group[]
   movements: Movement[]
   takes: Take[]
   clips: Clip[]

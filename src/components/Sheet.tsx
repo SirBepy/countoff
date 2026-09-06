@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
+import { sheetBlocks, tagLabel, taggedPeople, type SheetBlock } from '../lib/cast'
 import { beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { movementLabel } from '../lib/floor'
@@ -7,25 +8,29 @@ import { MARKER_COLOUR } from '../lib/markers'
 import { dragState, dropState, sheetGestures } from '../lib/sheetGestures'
 import { beatInRow } from '../lib/sheetHit'
 import { removeBlocks, set, updateBlock, updateSegment, useStore } from '../lib/store'
-import { isComment, type Block, type Project, type Segment } from '../lib/types'
+import { isComment, type Project, type Segment } from '../lib/types'
 import SegmentHeader from './SegmentHeader'
 import SheetMenu from './SheetMenu'
 
 /**
  * Greedy lane per block so overlaps stack rather than hide each other. Assigned
  * across the whole segment, so a block spanning two rows keeps one lane in both.
+ * Keyed by `key`, not `id`: a default block split by someone's override draws as
+ * several pieces that all carry the id of the one block they came from.
  */
-function assignLanes(blocks: Block[]) {
+function assignLanes(blocks: SheetBlock[]) {
   const laneEnd: number[] = []
   const lane = new Map<string, number>()
   for (const b of [...blocks].sort((a, c) => a.startBeat - c.startBeat)) {
     let i = laneEnd.findIndex((endsAt) => endsAt <= b.startBeat)
     if (i < 0) i = laneEnd.length
     laneEnd[i] = b.startBeat + b.beats
-    lane.set(b.id, i)
+    lane.set(b.key, i)
   }
   return lane
 }
+
+const overlapsRange = (b: SheetBlock, from: number, to: number) => b.startBeat < to && b.startBeat + b.beats > from
 
 interface Props {
   project: Project
@@ -46,19 +51,22 @@ export default function Sheet({
 }: Props) {
   const { time } = useAudio()
   const selection = useStore((s) => s.selection)
+  const viewAs = useStore((s) => s.viewAs)
 
-  // Playback re-renders this tree every animation frame, so lanes are cached
-  // against the blocks themselves rather than recomputed per tick.
-  const lanes = useMemo(() => {
-    const bySegment = new Map<string, Map<string, number>>()
+  // Playback re-renders this tree every animation frame, so the lens and the lanes are
+  // cached against the blocks themselves rather than recomputed per tick.
+  const resolved = useMemo(
+    () => sheetBlocks(project, viewAs),
+    [project.blocks, project.groups, project.people, viewAs],
+  )
+  const bySegment = useMemo(() => {
+    const map = new Map<string, { blocks: SheetBlock[]; lanes: Map<string, number> }>()
     for (const seg of project.segments) {
-      bySegment.set(
-        seg.id,
-        assignLanes(project.blocks.filter((b) => b.segmentId === seg.id)),
-      )
+      const blocks = resolved.filter((b) => b.segmentId === seg.id)
+      map.set(seg.id, { blocks, lanes: assignLanes(blocks) })
     }
-    return bySegment
-  }, [project.segments, project.blocks])
+    return map
+  }, [project.segments, resolved])
 
   return (
     <div className="sheet">
@@ -86,7 +94,8 @@ export default function Sheet({
                 row={r}
                 end={end}
                 nowBeat={nowBeat}
-                lanes={lanes.get(seg.id)!}
+                blocks={bySegment.get(seg.id)!.blocks}
+                lanes={bySegment.get(seg.id)!.lanes}
                 onEditMarker={onEditMarker}
                 selection={selection?.segmentId === seg.id ? selection : null}
               />
@@ -106,12 +115,13 @@ interface RowProps {
   row: number
   end: number
   nowBeat: number | null
+  blocks: SheetBlock[]
   lanes: Map<string, number>
   onEditMarker: (id: string) => void
   selection: { startBeat: number; beats: number } | null
 }
 
-function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, selection }: RowProps) {
+function SheetRow({ project, segment, row, end, nowBeat, blocks: segBlocks, lanes, onEditMarker, selection }: RowProps) {
   const perRow = segment.countsPerRow
   const rowStart = row * perRow
   const rowEnd = rowStart + perRow
@@ -122,17 +132,29 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
   const from = beatToTime(segment, rowStart)
   const to = beatToTime(segment, rowEnd)
   const lines = lyricsBetween(segment.lyrics, from, to)
-  const blocks = project.blocks.filter(
-    (b) => b.segmentId === segment.id && b.startBeat < rowEnd && b.startBeat + b.beats > rowStart,
+  const viewAs = useStore((s) => s.viewAs)
+  const [unfolded, setUnfolded] = useState(false)
+  const inRow = segBlocks.filter((b) => overlapsRange(b, rowStart, rowEnd))
+  // In the general view a variant folds away behind a "differ" chip, so the default stays
+  // the line the sheet reads as. Only one sitting over a default folds: a move nobody else
+  // has on those counts is all there is to show, and hiding it would empty the row.
+  const foldable = inRow.filter(
+    (b) => b.for?.length && inRow.some((d) => !d.for?.length && !isComment(d) && overlapsRange(d, b.startBeat, b.startBeat + b.beats)),
   )
+  const folded = !viewAs && !unfolded && foldable.length > 0
+  const blocks = folded ? inRow.filter((b) => !foldable.includes(b)) : inRow
   const hideCast = useStore((s) => s.hideCast)
+  // A dancer's sheet carries a dancer's cues. The general view keeps the whole cast's.
   const cues = hideCast
     ? []
-    : project.movements.filter((m) => m.segmentId === segment.id && m.beat >= rowStart && m.beat < rowEnd)
+    : project.movements.filter(
+        (m) =>
+          m.segmentId === segment.id && m.beat >= rowStart && m.beat < rowEnd && (!viewAs || m.personId === viewAs),
+      )
   const active = nowBeat !== null && nowBeat >= rowStart && nowBeat < rowEnd
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
   const rowSelected = !!selection && selection.startBeat < rowEnd && selection.startBeat + selection.beats > rowStart
-  const rowLanes = blocks.reduce((n, b) => Math.max(n, (lanes.get(b.id) ?? 0) + 1), 1)
+  const rowLanes = blocks.reduce((n, b) => Math.max(n, (lanes.get(b.key) ?? 0) + 1), 1)
   const el = useRef<HTMLDivElement>(null)
   const follow = useStore((s) => s.follow)
   const editingLyricId = useStore((s) => s.editingLyricId)
@@ -225,6 +247,25 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
               + Add lyric
             </span>
           )}
+          {/* On the lyric line rather than over the grid: parked inside the counts it
+              collides with whatever block ends the row. */}
+          {(folded || (!viewAs && unfolded && foldable.length > 0)) && (
+            <button
+              className={`variant-chip${folded ? '' : ' on'}`}
+              title={
+                folded
+                  ? 'Someone does something else on these counts. Show it.'
+                  : 'Fold these back behind the default'
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                setUnfolded(!unfolded)
+              }}
+            >
+              <i className="ph ph-users-three i" /> {foldable.length} differ
+            </button>
+          )}
         </div>
 
         <div
@@ -287,13 +328,18 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
             const now = nowBeat !== null && nowBeat >= block.startBeat && nowBeat < block.startBeat + block.beats
             const editing = editingBlockNoteId === block.id
             const label = comment ? block.note || 'Comment' : (move?.name ?? '?')
+            const cast = taggedPeople(project, block)
+            // Gestures act on the whole block, never on the piece an override left of it.
+            const source = project.blocks.find((b) => b.id === block.id) ?? block
             return (
               <div
-                key={block.id}
+                key={block.key}
                 data-block-id={block.id}
                 className={`block ${comment ? 'comment' : `e${move?.energy ?? 2}`}${now ? ' now' : ''}${
                   editing ? ' editing-note' : ''
-                }${draggingId === block.id ? ' dragging' : ''}`}
+                }${draggingId === block.id ? ' dragging' : ''}${block.clipped ? ' clipped' : ''}${
+                  block.clash ? ' clash' : ''
+                }${!viewAs && cast.length ? ' variant' : ''}`}
                 style={
                   {
                     left: `${((visStart - rowStart) / (visibleCount || 1)) * 100}%`,
@@ -302,15 +348,17 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
                     borderBottomLeftRadius: isHead ? 6 : 0,
                     borderTopRightRadius: isTail ? 6 : 0,
                     borderBottomRightRadius: isTail ? 6 : 0,
-                    '--lane': lanes.get(block.id) ?? 0,
+                    '--lane': lanes.get(block.key) ?? 0,
                   } as React.CSSProperties
                 }
-                title={`${label} - ${block.beats} beats. Tap for the menu, hold to drag, drag the right edge to stretch.`}
-                onPointerDown={(e) => isHead && !editing && dragBlock(block, e, 'move')}
+                title={`${label} - ${source.beats} beats, ${tagLabel(project, source).toLowerCase()}${
+                  block.clipped ? ', overridden on the counts either side' : ''
+                }. Tap for the menu, hold to drag, drag the right edge to stretch.`}
+                onPointerDown={(e) => isHead && !editing && dragBlock(source, e, 'move')}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  openBlockMenu(block, e.clientX, e.clientY)
+                  openBlockMenu(source, e.clientX, e.clientY)
                 }}
               >
                 {editing ? (
@@ -333,10 +381,25 @@ function SheetRow({ project, segment, row, end, nowBeat, lanes, onEditMarker, se
                   />
                 ) : (
                   <>
+                    {block.clash && isHead && (
+                      <i className="ph ph-warning block-clash i" title="Two of this dancer's own moves land on these counts" />
+                    )}
                     {isHead && <span className="block-name">{label}</span>}
                     {isHead && !comment && block.note && <span className="block-note">{block.note}</span>}
                     {!comment && block.note && <span className="block-note-dot" />}
-                    {isTail && <span className="grip" onPointerDown={(e) => dragBlock(block, e, 'resize')} />}
+                    {/* Whose it is, on the block itself: in the general view a variant that
+                        did not say so would read as a second move for everybody. */}
+                    {isTail && cast.length > 0 && (
+                      <span className="block-cast" title={tagLabel(project, source)}>
+                        {cast.slice(0, 3).map((p) => (
+                          <span key={p.id} className="d" style={{ background: p.colour }}>
+                            {p.initials}
+                          </span>
+                        ))}
+                        {cast.length > 3 && <span className="more">+{cast.length - 3}</span>}
+                      </span>
+                    )}
+                    {isTail && <span className="grip" onPointerDown={(e) => dragBlock(source, e, 'resize')} />}
                   </>
                 )}
               </div>

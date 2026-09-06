@@ -95,6 +95,9 @@ export function migrateProject(raw: Project): Project {
     blocks: p.blocks ?? [],
     // Pre-floor shape: a project saved before the floor view carries none of these.
     people: p.people ?? [],
+    // Pre-groups shape: every block was everyone's, which an absent `Block.for` still says,
+    // so there is nothing to backfill onto the blocks themselves.
+    groups: p.groups ?? [],
     focus: p.focus ?? { kind: 'audience' },
     floor: p.floor ?? DEFAULT_FLOOR,
     walkCounts: p.walkCounts ?? DEFAULT_WALK_COUNTS,

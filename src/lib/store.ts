@@ -5,6 +5,7 @@ import {
   type Clip,
   type Focus,
   type FloorSize,
+  type Group,
   type Marker,
   type Move,
   type Movement,
@@ -14,6 +15,7 @@ import {
   type Side,
   type Take,
 } from './types'
+import { sameAudience, type Tagged } from './cast'
 import { saveProject } from './db'
 import { snapshot } from './backup'
 
@@ -61,6 +63,12 @@ export interface UiState {
   canRedo: boolean
   /** Drops the cast's cue tags from the sheet, which crowd out the moves on a full number. */
   hideCast: boolean
+  /** Read the whole app as this dancer: their moves, their spot, their footage. Null is
+   *  the general view, the whole-cast plan the app has always drawn. */
+  viewAs: string | null
+  /** A shared link opened by someone who has never said who they are, so the sheet offers
+   *  the cast once. Never asked twice: "just watching" is an answer and is remembered. */
+  askWhoAreYou: boolean
   /** A /v/<token> share is open. Every mutation and every persist is refused. */
   readOnly: boolean
   /** Object URLs for takes whose file is on THIS device, keyed by take id. Out of the
@@ -112,6 +120,8 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
     canUndo: false,
     canRedo: false,
     hideCast: false,
+    viewAs: null,
+    askWhoAreYou: false,
     readOnly: false,
     takeUrls: {},
     takeUploads: {},
@@ -139,6 +149,27 @@ export function toggleHideCast() {
   const hideCast = !S.state.hideCast
   localStorage.setItem(castKey(project.id), hideCast ? '1' : '0')
   set({ hideCast }, false)
+}
+
+/** Which dancer the app is being read as. A device preference like `hideCast` above, and
+ *  for a second reason: on the project it would ride the share document, so every viewer
+ *  of one link would be looking through the same person's eyes. */
+const viewAsKey = (projectId: string) => `countoff.viewAs.${projectId}`
+
+/** The general view is stored as a word rather than as a missing key: "I am just watching"
+ *  is an answer, and a viewer who gave it must not be asked again on the next open. */
+const EVERYONE = 'everyone'
+
+export const readViewAs = (projectId: string) => {
+  const stored = localStorage.getItem(viewAsKey(projectId))
+  return { answered: stored !== null, personId: stored === EVERYONE ? null : stored }
+}
+
+export function setViewAs(personId: string | null) {
+  const project = S.state.project
+  if (!project) return
+  localStorage.setItem(viewAsKey(project.id), personId ?? EVERYONE)
+  set({ viewAs: personId, askWhoAreYou: false }, false)
 }
 
 const SNAPSHOT_EVERY = 60_000
@@ -340,6 +371,7 @@ export function duplicateBlock(id: string) {
         : p.blocks.filter(
             (b) =>
               isComment(b) ||
+              !sameAudience(b, copy) ||
               b.segmentId !== copy.segmentId ||
               b.startBeat + b.beats <= copy.startBeat ||
               b.startBeat >= copy.startBeat + copy.beats,
@@ -377,13 +409,18 @@ export const removeMove = (id: string) =>
 /**
  * Clears the moves overlapping [startBeat, startBeat+beats) in the segment, so
  * dropping onto occupied counts replaces rather than stacks. Comments survive it.
+ *
+ * Only what shares the incoming audience is cleared: laying a move down for everyone
+ * replaces the default lane and leaves the bridesmaids' variant standing, which is what
+ * makes the sheet safe to edit while a variant exists under it.
  */
-export function clearRange(segmentId: string, startBeat: number, beats: number) {
+export function clearRange(segmentId: string, startBeat: number, beats: number, audience: Tagged = {}) {
   withProject((p) => ({
     ...p,
     blocks: p.blocks.filter(
       (b) =>
         isComment(b) ||
+        !sameAudience(b, audience) ||
         b.segmentId !== segmentId ||
         b.startBeat + b.beats <= startBeat ||
         b.startBeat >= startBeat + beats,
@@ -391,18 +428,62 @@ export function clearRange(segmentId: string, startBeat: number, beats: number) 
   }))
 }
 
+/** Retags one placement. An empty pick means everyone, the same as never having tagged it. */
+export const setBlockCast = (id: string, ids: string[]) =>
+  withProject((p) => ({
+    ...p,
+    blocks: p.blocks.map((b) => (b.id === id ? { ...b, for: ids.length ? ids : undefined } : b)),
+  }))
+
+export const setClipCast = (id: string, ids: string[]) =>
+  withProject((p) => ({
+    ...p,
+    clips: p.clips.map((c) => (c.id === id ? { ...c, for: ids.length ? ids : undefined } : c)),
+  }))
+
+export const addGroup = (group: Group) => withProject((p) => ({ ...p, groups: [...p.groups, group] }))
+
+export const updateGroup = (id: string, patch: Partial<Group>, coalesceKey?: string) =>
+  withProject((p) => ({ ...p, groups: p.groups.map((g) => (g.id === id ? { ...g, ...patch } : g)) }), coalesceKey)
+
+/** Deleting a group expands it to its members wherever it was used, so the placements it
+ *  tagged keep meaning exactly what they meant rather than quietly reverting to everyone. */
+export const removeGroup = (id: string) =>
+  withProject((p) => {
+    const members = p.groups.find((g) => g.id === id)?.members ?? []
+    const expand = <T extends Tagged>(item: T): T =>
+      item.for?.includes(id) ? { ...item, for: [...new Set(item.for.flatMap((t) => (t === id ? members : [t])))] } : item
+    return {
+      ...p,
+      groups: p.groups.filter((g) => g.id !== id),
+      blocks: p.blocks.map(expand),
+      clips: p.clips.map(expand),
+    }
+  })
+
 export const addPerson = (person: Person) => withProject((p) => ({ ...p, people: [...p.people, person] }))
 
 export const updatePerson = (id: string, patch: Partial<Person>, coalesceKey?: string) =>
   withProject((p) => ({ ...p, people: p.people.map((x) => (x.id === id ? { ...x, ...patch } : x)) }), coalesceKey)
 
-/** Removing someone takes their whole path with them, or it lingers as an unnamed puck. */
+/**
+ * Removing someone takes their whole path with them, or it lingers as an unnamed puck.
+ * Their name also leaves every group and every tag, and a placement tagged to nobody else
+ * goes with them: a move that was only ever theirs has no one left to do it.
+ */
 export const removePerson = (id: string) =>
-  withProject((p) => ({
-    ...p,
-    people: p.people.filter((x) => x.id !== id),
-    movements: p.movements.filter((m) => m.personId !== id),
-  }))
+  withProject((p) => {
+    const untag = <T extends Tagged>(item: T): T =>
+      item.for?.includes(id) ? { ...item, for: item.for.filter((t) => t !== id) } : item
+    return {
+      ...p,
+      people: p.people.filter((x) => x.id !== id),
+      movements: p.movements.filter((m) => m.personId !== id),
+      groups: p.groups.map((g) => ({ ...g, members: g.members.filter((m) => m !== id) })),
+      blocks: p.blocks.map(untag).filter((b) => !b.for || b.for.length > 0),
+      clips: p.clips.map(untag).filter((c) => !c.for || c.for.length > 0),
+    }
+  })
 
 export const updateMovement = (id: string, patch: Partial<Movement>, coalesceKey?: string) =>
   withProject((p) => ({ ...p, movements: p.movements.map((m) => (m.id === id ? { ...m, ...patch } : m)) }), coalesceKey)

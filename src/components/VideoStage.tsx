@@ -30,7 +30,8 @@ export default function VideoStage({ project, time, playing, rate, children }: P
   // to fit the film rather than letterbox it, so the real ratio drives the CSS.
   const [nativeRatio, setNativeRatio] = useState(16 / 9)
   const takeUrls = useStore((s) => s.takeUrls)
-  const showing = clipAt(project, time, takeUrls)
+  const viewAs = useStore((s) => s.viewAs)
+  const showing = clipAt(project, time, takeUrls, viewAs)
   const src = showing?.src
   const target = showing?.srcTime ?? 0
   const crop = showing?.take.crop

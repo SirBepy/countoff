@@ -301,6 +301,87 @@
   background: rgba(0, 0, 0, 0.22);
   touch-action: none;
 }
+
+/* A default block trimmed to the counts an override left it. The dashed edge says it
+   carries on underneath someone else's move, rather than that it was cancelled. */
+.block.clipped {
+  border-style: dashed;
+  border-color: rgba(11, 13, 18, 0.75);
+}
+/* Two placements tagged to the same dancer over the same counts. Nothing in the rules
+   picks a winner, so the sheet says so instead of quietly drawing one on top. */
+.block.clash {
+  outline: 2px dashed var(--danger);
+  outline-offset: -2px;
+}
+.block-clash {
+  flex: none;
+  margin-right: 3px;
+  font-size: 12px;
+}
+/* Somebody's variant seen from the general view: same block, one step back, so the
+   default stays the line the sheet reads as. */
+.block.variant {
+  opacity: 0.72;
+}
+.block.variant.now,
+.block.variant:hover {
+  opacity: 1;
+}
+
+/* Whose block this is, on the block. Overlapping discs, newest tucked behind. */
+.block-cast {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 5px;
+  flex: none;
+  /* Clears the resize grip, which owns the last 22px of a block's tail. */
+  margin-right: 20px;
+}
+.block-cast .d {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #0b0d12;
+  box-shadow: 0 0 0 1px rgba(11, 13, 18, 0.4);
+}
+.block-cast .d + .d {
+  margin-left: -5px;
+}
+.block-cast .more {
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 3px;
+  opacity: 0.75;
+}
+
+/* Rides on the lyric line, not over the grid: inside the counts it collides with
+   whatever block ends the row. */
+.variant-chip {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+.variant-chip.on {
+  color: #d9cfff;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
 .block-name {
   overflow: hidden;
   text-overflow: ellipsis;

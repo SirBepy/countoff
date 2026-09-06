@@ -411,6 +411,33 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+/* Footage for named dancers rather than for everyone. A different fill, not a badge
+   alone: the whole point of the lane is reading coverage at a glance. */
+.vt-clip.tagged {
+  border-color: #6b4f9e;
+  background: linear-gradient(90deg, #3a2550, #4a2f66);
+}
+.vt-cast {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding-right: 8px;
+  flex: none;
+}
+.vt-cast .d {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--bg);
+  box-shadow: 0 0 0 1px rgba(11, 13, 18, 0.5);
+}
+.vt-cast .d + .d {
+  margin-left: -5px;
+}
 .vt-clip .lab {
   padding: 0 4px;
   display: flex;

@@ -39,6 +39,72 @@
   background: var(--accent);
   flex: none;
 }
+
+/* Who the app is being read as. It sits in every screen's own bar, so the anchor is
+   position-only and carries no chrome of its own. */
+.view-as-anchor {
+  position: relative;
+  flex: none;
+}
+.view-as {
+  gap: 7px;
+  min-height: var(--tap-sm);
+  padding: 0 8px 0 4px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.view-as.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: #d9cfff;
+}
+.view-as .d {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bg);
+  flex: none;
+}
+.view-as .d.all {
+  background: var(--bg-3);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.view-as .nm {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.view-as-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 210px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.view-as-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-faint);
+  padding: 4px 8px 6px;
+}
 /* The phone's title: a button that opens the project sheet, so the full name
    gets the width five icon buttons and a live text field used to fight over. */
 .app-title {

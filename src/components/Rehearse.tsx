@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { standingAt } from '../lib/floor'
-import { formatTime } from '../lib/grid'
+import { movementLabel, orderedMovements, standingAt } from '../lib/floor'
+import { beatDuration, formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
-import { set } from '../lib/store'
+import { set, useStore } from '../lib/store'
 import type { Project } from '../lib/types'
 import FloorStage from './FloorStage'
 import Runway from './Runway'
 import VideoStage from './VideoStage'
+import ViewAs from './ViewAs'
 
 export default function Rehearse({
   project,
@@ -20,13 +21,38 @@ export default function Rehearse({
 }) {
   const { time, playing, metronome, rate } = useAudio()
   const [videoOff, setVideoOff] = useState(false)
-  const now = nowState(project, time)
+  const viewAs = useStore((s) => s.viewAs)
+  const now = nowState(project, time, viewAs)
+  const me = project.people.find((p) => p.id === viewAs) ?? null
   // No cast means an empty grid, which would take the centre of the screen and say nothing.
   const walking = project.people.filter((p) => {
     const at = standingAt(project, p.id, time)
     return at && at.progress < 1
   })
-  const walkingLabel = walking.length > 0 ? `${walking.map((p) => p.name).join(', ')} moving` : ''
+  // Read as one dancer, the label answers "am I moving", not "who is moving".
+  const walkingLabel = me
+    ? walking.some((p) => p.id === me.id)
+      ? 'You are moving'
+      : ''
+    : walking.length > 0
+      ? `${walking.map((p) => p.name).join(', ')} moving`
+      : ''
+  // Where this dancer has to be next, in the counts they are already counting. Their own
+  // walk in force wins over one still ahead, since that is the one they are doing now.
+  const myNextSpot = (() => {
+    if (!me || !now.segment) return ''
+    const next = orderedMovements(project, me.id).find((m) => m.arrive > time - 0.15)
+    if (next) {
+      const counts = Math.max(0, Math.round((next.arrive - time) / beatDuration(now.segment.bpm)))
+      const where = movementLabel(next.movement, me)
+      return counts === 0 ? `You are ${where}` : `${where} in ${counts}`
+    }
+    // Past their last walk, where they are standing is still the answer to the question
+    // this line exists to answer. Nothing to say only when they are off the floor.
+    const at = standingAt(project, me.id, time)
+    return at ? `You are ${at.col + 1}·${at.row + 1}` : ''
+  })()
+
   // Footage is what earns the video layout. With none, the move name keeps the centre
   // it was deliberately given, and this screen is exactly what it always was.
   const hasVideo = project.clips.length > 0 && !videoOff
@@ -50,6 +76,17 @@ export default function Rehearse({
         <strong>{now.segment?.name ?? project.name}</strong>
         <span className="faint mono">{formatTime(time)}</span>
         <div className="spacer" />
+        <ViewAs project={project} />
+        {/* A dancer's next spot is the other half of what they came here to learn, and it
+            is nowhere else on this screen. */}
+        {me && myNextSpot && (
+          <span className="reh-cue" style={{ background: `${me.colour}22`, borderColor: `${me.colour}66` }}>
+            <span className="d" style={{ background: me.colour }}>
+              {me.initials}
+            </span>
+            {myNextSpot}
+          </span>
+        )}
         <button className={metronome ? 'on' : ''} onClick={() => audio.setMetronome(!metronome)}>
           <i className="ph ph-metronome i" /> <span className="lbl">Click</span>
         </button>

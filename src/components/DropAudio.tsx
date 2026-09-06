@@ -52,6 +52,7 @@ export default function DropAudio({ onCancel, onProjects }: { onCancel?: () => v
       markers: [],
       moves: STARTER_MOVES,
       people: [],
+      groups: [],
       movements: [],
       takes: [],
       clips: [],

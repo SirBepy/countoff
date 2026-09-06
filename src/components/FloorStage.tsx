@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { beatAt, centreCol, focusAt, frontRow, occupantAt, standingAt } from '../lib/floor'
-import { beginGesture, endGesture, flash, placeFocusKey, placeMovement, setFocus } from '../lib/store'
+import { beginGesture, endGesture, flash, placeFocusKey, placeMovement, setFocus, useStore } from '../lib/store'
 import type { FloorSize, Project } from '../lib/types'
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
@@ -21,6 +21,7 @@ interface Props {
 
 export default function FloorStage({ project, time, editable = true, onPick, onMenu, onFocusMenu }: Props) {
   const stage = useRef<HTMLDivElement>(null)
+  const viewAs = useStore((s) => s.viewAs)
   const floor = project.floor
   const focus = project.focus
   const chair = focusAt(project, time)
@@ -131,10 +132,13 @@ export default function FloorStage({ project, time, editable = true, onPick, onM
         const at = standingAt(project, person.id, time)
         if (!at) return null
         const walking = at.progress < 1
+        // The others stay drawn when reading as one dancer, only dimmed: knowing who you
+        // are lining up next to is most of what a spot on the floor means.
+        const mine = viewAs === person.id
         return (
           <div
             key={person.id}
-            className={`puck${walking ? ' walking' : ''}`}
+            className={`puck${walking ? ' walking' : ''}${mine ? ' mine' : ''}${viewAs && !mine ? ' other' : ''}`}
             style={{ left: centre(at.col, floor.cols), top: centre(at.row, floor.rows) }}
             title={`${person.name} - drag to say where they are on this count`}
             onPointerDown={(e) => {

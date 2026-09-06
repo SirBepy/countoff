@@ -1,3 +1,4 @@
+import { isFor } from './cast'
 import { beatToTime, blocksInSegment, segmentAt, timeToBeat } from './grid'
 import type { Block, Move, Project, Segment } from './types'
 
@@ -11,18 +12,24 @@ export interface NowState {
   beatsUntilNext: number
 }
 
-/** Everything the transport and the rehearse screen need for one instant. */
-export function nowState(project: Project, time: number): NowState {
+/**
+ * Everything the transport and the rehearse screen need for one instant, through one
+ * viewer's eyes. `viewAs` null is the general view: the whole cast's plan.
+ */
+export function nowState(project: Project, time: number, viewAs: string | null = null): NowState {
   const segment = project.segments.length ? segmentAt(project.segments, time) : null
   if (!segment) {
     return { segment: null, beat: 0, countInRow: 0, block: null, move: null, next: null, beatsUntilNext: 0 }
   }
 
   const beat = timeToBeat(segment, time)
-  const blocksIn = (seg: Segment) => blocksInSegment(project, seg.id)
+  const blocksIn = (seg: Segment) => blocksInSegment(project, seg.id).filter((b) => isFor(project, b, viewAs))
   const blocks = blocksIn(segment)
 
-  const block = blocks.find((b) => beat >= b.startBeat && beat < b.startBeat + b.beats) ?? null
+  // A tagged block wins on the counts it covers, so a dancer with their own move here
+  // sees it rather than the default it is standing in front of.
+  const here = blocks.filter((b) => beat >= b.startBeat && beat < b.startBeat + b.beats)
+  const block = here.find((b) => b.for?.length) ?? here[0] ?? null
   let upcoming = blocks.find((b) => b.startBeat > (block ? block.startBeat : beat)) ?? null
   let untilNext = upcoming ? upcoming.startBeat - beat : 0
 

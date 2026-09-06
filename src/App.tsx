@@ -18,12 +18,13 @@ import ShareLoading from './components/ShareLoading'
 import ShareModal from './components/ShareModal'
 import SongStrip from './components/SongStrip'
 import VideoScreen from './components/VideoScreen'
+import ViewAs, { WhoAreYou } from './components/ViewAs'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
 import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace, migrateProject } from './lib/db'
 import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
-import { loadShare, shareTokenFromUrl } from './lib/share'
+import { loadShare, sharePersonFromUrl, shareTokenFromUrl } from './lib/share'
 import { attachSharedTakes, attachTakes } from './lib/takes'
 import { getCurrentUser } from './lib/firebase'
 import { useIsDesktop } from './lib/media'
@@ -33,6 +34,7 @@ import {
   getState,
   hasPendingSave,
   readHideCast,
+  readViewAs,
   redo,
   replaceProject,
   removeBlocks,
@@ -50,6 +52,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 // Read once: a share link never changes while the tab is open, and the whole app
 // boots differently when it is present.
 const VIEW_TOKEN = shareTokenFromUrl(location.hash, location.pathname)
+// The dancer a per-person link names, read at the same moment and for the same reason.
+const VIEW_PERSON = sharePersonFromUrl(location.hash)
 
 export default function App() {
   const project = useStore((s) => s.project)
@@ -60,6 +64,7 @@ export default function App() {
   const canRedo = useStore((s) => s.canRedo)
   const hideCast = useStore((s) => s.hideCast)
   const readOnly = useStore((s) => s.readOnly)
+  const askWhoAreYou = useStore((s) => s.askWhoAreYou)
   const [booted, setBooted] = useState(false)
   const [shareProgress, setShareProgress] = useState<{ done: number; total: number } | null>(null)
   const [viewToken, setViewToken] = useState(VIEW_TOKEN)
@@ -132,7 +137,19 @@ export default function App() {
   // deliberate "New" screen (opened without a null project) always steps aside.
   useEffect(() => {
     setCreating(false)
-    if (project) set({ hideCast: readHideCast(project.id) }, false)
+    if (!project) return
+    const answer = readViewAs(project.id)
+    // A link naming a dancer opens straight into their view; otherwise the stored answer
+    // stands, and only a shared link with a cast asks someone who has never answered.
+    const named = VIEW_PERSON ? project.people.find((p) => p.id === VIEW_PERSON || p.name.toLowerCase() === VIEW_PERSON) : null
+    set(
+      {
+        hideCast: readHideCast(project.id),
+        viewAs: named?.id ?? (answer.personId && project.people.some((p) => p.id === answer.personId) ? answer.personId : null),
+        askWhoAreYou: !named && !answer.answered && !!VIEW_TOKEN && project.people.length > 0,
+      },
+      false,
+    )
   }, [project?.id])
 
   // Pull whenever the tab comes back into view, and push once local edits settle.
@@ -274,15 +291,25 @@ export default function App() {
   // The viewer's token comes from the URL; the owner's comes off the project itself.
   const commentToken = readOnly ? viewToken : project.shareToken
 
+  // Offered on whichever screen the link happened to open on, so it is never missed.
+  const whoAreYou = askWhoAreYou ? <WhoAreYou project={project} /> : null
+
   if (view === 'rehearse')
     return (
       <>
         <Rehearse project={project} commentToken={commentToken} onComments={() => setShowComments(true)} />
         {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
+        {whoAreYou}
       </>
     )
   if (view === 'setup') return <SetupFlow project={project} />
-  if (view === 'floor') return <Floor project={project} />
+  if (view === 'floor')
+    return (
+      <>
+        <Floor project={project} />
+        {whoAreYou}
+      </>
+    )
   if (view === 'video') return <VideoScreen project={project} />
 
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
@@ -349,6 +376,7 @@ export default function App() {
             <i className="ph ph-film-strip i" />
           </button>
         )}
+        <ViewAs project={project} compact={!isDesktop} />
         <button
           className={`ghost icon only-wide${hideCast ? ' on' : ''}`}
           onClick={toggleHideCast}

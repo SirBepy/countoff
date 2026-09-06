@@ -29,6 +29,20 @@ level. Add your own, link a video that shows how one goes, and rename or retime 
 second move to alternate A B A B. Blocks drag, stretch and delete, and each placed block can carry
 its own note, so the second of four can say "turn".
 
+**Whose move is whose.** A placed move is everyone's until you say otherwise. Right-click it, name a
+dancer or a group, and it belongs to them on exactly the counts it covers: the default underneath
+survives on the counts they did not take, and everybody else keeps it whole. There is no blacklist to
+maintain, because tagging the override already says who is excluded. Groups are saved selections, so
+adding someone to the bridesmaids later updates every move they are on. Footage is tagged the same
+way: one run for everyone, another for the back row.
+
+**Reading it as one dancer.** Pick a name in the bar and the whole app answers one question, what do
+I do and where do I stand: their variant replaces the default on the sheet, the cue lane and the
+rehearse screen carry only their walks, their puck leads on the floor while the rest stay dimmed
+behind it, and the footage tagged to them is the footage that plays. Everyone stays a first-class
+view, so someone who is not in the cast still reads the whole plan. The choice is remembered per
+device, and the share modal hands out a link each, which opens straight into that dancer's own view.
+
 **Floor.** Add the cast, scrub to a count, and drag someone to where they have to be on it. That
 count is the arrival, not the departure: the walk is fitted into the bar in front of it, so a cue
 reads "on the drop, Ana is front centre". Every walk is a block on that person's own lane in the

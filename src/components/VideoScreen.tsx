@@ -1,9 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
+import { tagLabel, taggedPeople } from '../lib/cast'
 import { beatAt, orderedMovements, stints } from '../lib/floor'
 import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
-import { addClip, beginGesture, endGesture, flash, removeClip, set, uid, updateClip, updateTake, useStore } from '../lib/store'
+import {
+  addClip,
+  beginGesture,
+  endGesture,
+  flash,
+  removeClip,
+  set,
+  setClipCast,
+  uid,
+  updateClip,
+  updateTake,
+  useStore,
+} from '../lib/store'
 import { dropTake, importTake } from '../lib/takes'
 import {
   clipEnd,
@@ -17,6 +30,7 @@ import {
   takeSrc,
 } from '../lib/video'
 import type { Clip, Crop, Project, Take } from '../lib/types'
+import CastPicker from './CastPicker'
 import VideoStage from './VideoStage'
 
 /** 1 fits the whole medley; the top end puts a couple of bars across the screen. */
@@ -38,6 +52,7 @@ export default function VideoScreen({ project }: { project: Project }) {
   const [zoom, setZoom] = useState(1)
   const [snap, setSnap] = useState(true)
   const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null)
+  const [castFor, setCastFor] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [ghost, setGhost] = useState<number | null>(null)
   // Which take is open in the crop editor, and the rect being dragged there before Save
@@ -59,6 +74,7 @@ export default function VideoScreen({ project }: { project: Project }) {
   const moves = useMemo(() => placedBlocks(project), [project])
   const here = beatAt(project, clip ? clip.songStart : time)
   const menuClip = menu ? (clips.find((c) => c.id === menu.clipId) ?? null) : null
+  const castClip = castFor ? (clips.find((c) => c.id === castFor) ?? null) : null
   const menuTake = menuClip && project.takes.find((t) => t.id === menuClip.takeId)
   const cropTakeObj = cropTake ? (project.takes.find((t) => t.id === cropTake) ?? null) : null
   const cropSrc = cropTakeObj && takeSrc(cropTakeObj, takeUrls)
@@ -518,12 +534,16 @@ export default function VideoScreen({ project }: { project: Project }) {
                 {ghost !== null && <span className="vt-ghost" style={{ left: pct(ghost) }} />}
                 {clips.map((c) => {
                   const source = project.takes.find((t) => t.id === c.takeId)
+                  const cast = taggedPeople(project, c)
                   return (
                     <span
                       key={c.id}
-                      className={`vt-clip${c.id === selected ? ' sel' : ''}`}
+                      className={`vt-clip${c.id === selected ? ' sel' : ''}${cast.length ? ' tagged' : ''}`}
                       style={{ left: pct(c.songStart), width: pct(clipLength(c)) }}
-                      title={`${source?.name ?? 'missing take'} · ${formatTime(c.srcIn)}–${formatTime(c.srcOut)}. Right-click to cut or delete.`}
+                      title={`${source?.name ?? 'missing take'} · ${formatTime(c.srcIn)}–${formatTime(c.srcOut)} · ${tagLabel(
+                        project,
+                        c,
+                      ).toLowerCase()}. Right-click to cut, retag or delete.`}
                       onPointerDown={(e) => grab(c, 'body', e)}
                       onContextMenu={(e) => {
                         e.preventDefault()
@@ -539,6 +559,15 @@ export default function VideoScreen({ project }: { project: Project }) {
                           {formatTime(c.srcIn)} – {formatTime(c.srcOut)}
                         </span>
                       </span>
+                      {cast.length > 0 && (
+                        <span className="vt-cast">
+                          {cast.slice(0, 3).map((p) => (
+                            <span key={p.id} className="d" style={{ background: p.colour }}>
+                              {p.initials}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                       <span className="h r" onPointerDown={(e) => grab(c, 'out', e)} />
                     </span>
                   )
@@ -620,12 +649,35 @@ export default function VideoScreen({ project }: { project: Project }) {
               Split at playhead
               <span className="k">B</span>
             </button>
+            <button className="mi" onClick={() => (setCastFor(menuClip.id), setMenu(null))}>
+              <i className="ph ph-users-three" />
+              {menuClip.for?.length ? `For ${tagLabel(project, menuClip)}` : 'Who is this for?'}
+            </button>
             <button className="mi danger" onClick={() => (erase(menuClip.id), setMenu(null))}>
               <i className="ph ph-trash" />
               Delete clip
             </button>
           </div>
         </>
+      )}
+
+      {castClip && (
+        <CastPicker
+          project={project}
+          title="Who is this footage for?"
+          subject={`${project.takes.find((t) => t.id === castClip.takeId)?.name ?? 'This clip'} · ${formatTime(
+            castClip.songStart,
+          )}–${formatTime(clipEnd(castClip))}`}
+          value={castClip.for ?? []}
+          overlapping={clips.filter(
+            (c) => c.id !== castClip.id && c.songStart < clipEnd(castClip) && clipEnd(c) > castClip.songStart,
+          )}
+          onSave={(ids) => {
+            setClipCast(castClip.id, ids)
+            setCastFor(null)
+          }}
+          onClose={() => setCastFor(null)}
+        />
       )}
 
       {importing && (

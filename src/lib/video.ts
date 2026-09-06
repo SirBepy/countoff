@@ -1,3 +1,4 @@
+import { isFor } from './cast'
 import { beatDuration, beatToTime } from './grid'
 import { isComment, type Clip, type Project, type Take } from './types'
 
@@ -24,14 +25,31 @@ export interface Showing {
 export const takeSrc = (take: Take, local: Record<string, string>): string | undefined => take.url ?? local[take.id]
 
 /** Which clip covers an audio time. A take with no footage reachable here is skipped
- *  rather than mounted as a broken element. */
-export function clipAt(project: Project, time: number, local: Record<string, string>): Showing | null {
-  for (const clip of project.clips) {
-    if (time < clip.songStart || time >= clipEnd(clip)) continue
+ *  rather than mounted as a broken element.
+ *
+ *  Footage reads exactly like the sheet: a clip tagged to this viewer wins over the
+ *  untagged run for the seconds it covers, and the untagged run covers the rest. */
+export function clipAt(
+  project: Project,
+  time: number,
+  local: Record<string, string>,
+  viewAs: string | null = null,
+): Showing | null {
+  const showing = (clip: Clip): Showing | null => {
     const take = project.takes.find((t) => t.id === clip.takeId)
     const src = take && takeSrc(take, local)
-    if (!take || !src) continue
-    return { clip, take, src, srcTime: clip.srcIn + (time - clip.songStart) }
+    return take && src ? { clip, take, src, srcTime: clip.srcIn + (time - clip.songStart) } : null
+  }
+  const covering = project.clips.filter(
+    (c) => time >= c.songStart && time < clipEnd(c) && isFor(project, c, viewAs),
+  )
+  for (const clip of covering.filter((c) => c.for?.length)) {
+    const found = showing(clip)
+    if (found) return found
+  }
+  for (const clip of covering) {
+    const found = showing(clip)
+    if (found) return found
   }
   return null
 }
