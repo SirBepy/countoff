@@ -81,6 +81,41 @@ async function main() {
     await page.waitForSelector('.sheet', { timeout: 8000 })
     check('picking it from the home screen adopts it without creating a new project first', await page.locator('.sheet').isVisible())
 
+    // --- a project whose audio this device does not have must not half-adopt: the store
+    // has to agree with the screen, or cancelling out of "New choreography" falls through
+    // every render guard and draws the whole editor over a silent transport ---
+    await page.evaluate(() => {
+      indexedDB.deleteDatabase('countoff')
+      localStorage.clear()
+    })
+    await page.goto(URL, { waitUntil: 'domcontentloaded' })
+    await page.evaluate(async (proj) => {
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('countoff')
+        req.onsuccess = () => resolve(req.result)
+        req.onerror = () => reject(req.error)
+      })
+      await new Promise((resolve, reject) => {
+        const r = db.transaction('project', 'readwrite').objectStore('project').put(proj, proj.id)
+        r.onsuccess = () => resolve()
+        r.onerror = () => reject(r.error)
+      })
+      localStorage.setItem('countoff.activeProjectId', proj.id)
+    }, projA)
+    await page.goto(URL, { waitUntil: 'networkidle' })
+    await page.waitForSelector('.home', { timeout: 15000 })
+    check('a project with no audio on this device lands on the home screen', await page.locator('.home').isVisible())
+    check(
+      'and is not left half-adopted in the store',
+      (await page.evaluate(() => globalThis.__countoffStore?.state?.project ?? null)) === null,
+    )
+    await page.click('.home-card.new')
+    await page.waitForSelector('.drop', { timeout: 5000 })
+    check(
+      'so the new-project screen offers no cancel back into a songless editor',
+      (await page.locator('.drop button[title="Back to current project"]').count()) === 0,
+    )
+
     // --- bug 3: sign-in state is visible on the empty state, not just implied by a button ---
     await page.evaluate(() => {
       indexedDB.deleteDatabase('countoff')

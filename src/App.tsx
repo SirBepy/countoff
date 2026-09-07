@@ -93,6 +93,12 @@ export default function App() {
     const activeId = getActiveProjectId()
     const saved = activeId ? await loadProject() : undefined
     if (!saved) return false
+    // The song may only exist in the project's own upload, if this device never picked it.
+    // Attached BEFORE the project reaches the store, so returning false leaves nothing
+    // half-adopted: a project in the store with no audio renders the whole editor over a
+    // silent transport, reachable from the home screen by starting a new one and cancelling.
+    // Opening one by hand is the deliberate exception, and openProject.ts says why there.
+    if (!(await attachAudio(saved))) return false
     // What this account may do with it, which for a project shared by somebody else is the
     // difference between the whole app and a read of it.
     const role = getCurrentUser() ? await readMyRole(saved.id).catch(() => null) : null
@@ -100,8 +106,6 @@ export default function App() {
     const view = saved.blocks.length === 0 ? 'setup' : 'sheet'
     set({ project: saved, view, role, readOnly: role === 'viewer', shareView: false }, false)
     setSegmentId(saved.segments[0]?.id ?? null)
-    // The song may only exist in the project's own upload, if this device never picked it.
-    if (!(await attachAudio(saved))) return false
     void attachTakes(saved)
     if (getCurrentUser()) void pullNow()
     return true
