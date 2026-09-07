@@ -76,6 +76,13 @@ export function roomAt(project: Project, songStart: number, ignoreId?: string): 
   return (next ? next.songStart : project.duration) - songStart
 }
 
+/** How far the footage inside a clip can really shift by `by`, holding the clip still on
+ *  the song. Both ends are capped by the take itself: there is no film before its first
+ *  frame or after its last. Returns 0 when it is already against that end. */
+export function slipRoom(clip: Clip, take: Take, by: number): number {
+  return Math.max(-clip.srcIn, Math.min(by, take.duration - clip.srcOut))
+}
+
 /** Trims a take down to whatever gap it is being dropped into, or null if there is none. */
 export function fitClip(project: Project, take: Take, songStart: number, id: string): Clip | null {
   const room = Math.min(roomAt(project, songStart), take.duration)

@@ -255,6 +255,39 @@
   min-height: var(--tap-sm);
   flex: none;
 }
+/* The bar is a 12px strip of readouts; a full-height form input would double its height.
+   The 16px font stays, since anything smaller makes iOS zoom the page on focus. */
+.vs-insp .f input {
+  min-height: var(--tap-sm);
+  padding: 3px 8px;
+}
+.vs-slip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 1px;
+}
+.vs-slip .amt {
+  min-width: 46px;
+  text-align: center;
+  color: #cfc4ff;
+}
+.vs-step {
+  display: flex;
+}
+.vs-step button {
+  padding: 0 9px;
+  border-radius: 0;
+}
+.vs-step button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.vs-step button:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: none;
+}
 
 .vs-trans {
   display: flex;

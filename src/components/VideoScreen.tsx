@@ -27,10 +27,12 @@ import {
   orderedClips,
   placedBlocks,
   roomAt,
+  slipRoom,
   takeSrc,
 } from '../lib/video'
 import type { Clip, Crop, Project, Take } from '../lib/types'
 import CastPicker from './CastPicker'
+import { formatPrecise, TimeField } from './TimeField'
 import VideoStage from './VideoStage'
 
 /** 1 fits the whole medley; the top end puts a couple of bars across the screen. */
@@ -39,6 +41,9 @@ const ZOOM_MAX = 60
 const DRAG_SLOP = 4
 /** Marks a bin drag as one of ours, so the file-upload overlay stays out of its way. */
 const TAKE_DRAG = 'application/x-countoff-take'
+/** What one caret click or arrow key is worth. A hundredth is a frame or two, a tenth is
+ *  the size of a sync that is visibly off. */
+const STEPS = [0.01, 0.1]
 
 type Grab = 'body' | 'in' | 'out'
 
@@ -51,6 +56,7 @@ export default function VideoScreen({ project }: { project: Project }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
   const [snap, setSnap] = useState(true)
+  const [step, setStep] = useState(STEPS[0])
   const [menu, setMenu] = useState<{ clipId: string; x: number; y: number } | null>(null)
   const [castFor, setCastFor] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
@@ -71,6 +77,7 @@ export default function VideoScreen({ project }: { project: Project }) {
   const clips = orderedClips(project)
   const clip = clips.find((c) => c.id === selected) ?? null
   const take = clip && project.takes.find((t) => t.id === clip.takeId)
+  const limits = clip && take ? fieldLimits(clip, take) : null
   const moves = useMemo(() => placedBlocks(project), [project])
   const here = beatAt(project, clip ? clip.songStart : time)
   const menuClip = menu ? (clips.find((c) => c.id === menu.clipId) ?? null) : null
@@ -240,6 +247,33 @@ export default function VideoScreen({ project }: { project: Project }) {
     window.addEventListener('pointerup', stop)
   }
 
+  /** A field names an exact time where a handle can only be dragged towards one, so each
+   *  one carries the limits its matching drag already enforces. `srcOut` never floors
+   *  below where the clip already ends: a clip dragged over its neighbour is legal here,
+   *  and merely tabbing through the field must not silently trim it back. */
+  function fieldLimits(c: Clip, source: Take) {
+    const room = Math.min(source.duration, c.srcIn + roomAt(project, c.songStart, c.id))
+    return {
+      songStart: { min: 0, max: Math.max(0, duration - clipLength(c)) },
+      srcIn: { min: Math.max(0, c.srcIn - c.songStart), max: c.srcOut - MIN_CLIP },
+      srcOut: { min: c.srcIn + MIN_CLIP, max: Math.max(c.srcOut, room) },
+    }
+  }
+
+  /** A head trim, exactly like the left handle: song start and source in-point move
+   *  together, so the clip carries on cutting out at the same moment of the song. */
+  function trimHead(c: Clip, srcIn: number, key?: string) {
+    updateClip(c.id, { songStart: Number((c.songStart + (srcIn - c.srcIn)).toFixed(3)), srcIn }, key)
+  }
+
+  /** Slides the footage inside a clip while the clip holds still on the song. Neither
+   *  handle can do this: both of them retime the song as well as the film. */
+  function slip(c: Clip, source: Take, by: number) {
+    const shift = slipRoom(c, source, by)
+    if (!shift) return flash(by < 0 ? 'No footage before the start of this take' : 'No footage after the end of this take')
+    updateClip(c.id, { srcIn: Number((c.srcIn + shift).toFixed(3)), srcOut: Number((c.srcOut + shift).toFixed(3)) })
+  }
+
   /** Lays a take down, trimmed to whatever gap is actually free there. The playhead is
    *  where the bin's button drops it; a drag onto the lane names its own time. */
   function lay(source: Take, at = time) {
@@ -284,6 +318,15 @@ export default function VideoScreen({ project }: { project: Project }) {
       if (e.key === 'Escape' && cropTake) {
         e.stopPropagation()
         return setCropTake(null)
+      }
+      // Nudging is the one edit worth repeating a dozen times, so it gets the arrows:
+      // bare walks the clip along the song, shifted slides the film inside it.
+      if (clip && take && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        const by = e.key === 'ArrowLeft' ? -step : step
+        if (e.shiftKey) return slip(clip, take, by)
+        const { min, max } = fieldLimits(clip, take).songStart
+        return updateClip(clip.id, { songStart: Number(Math.min(max, Math.max(min, clip.songStart + by)).toFixed(3)) })
       }
       // The sheet already owns 's' for splitting the song, so the blade takes its own key.
       if (e.key.toLowerCase() === 'b') split()
@@ -433,20 +476,61 @@ export default function VideoScreen({ project }: { project: Project }) {
               <span className="v src">{take.name}</span>
             </div>
             <div className="f">
+              <label>Starts on song</label>
+              <TimeField
+                value={clip.songStart}
+                min={limits!.songStart.min}
+                max={limits!.songStart.max}
+                step={step}
+                onCommit={(v) => updateClip(clip.id, { songStart: v }, `clip-song-${clip.id}`)}
+                onNudge={(v) => updateClip(clip.id, { songStart: v })}
+              />
+            </div>
+            <div className="f">
+              <label>Footage sync</label>
+              <span className="vs-slip">
+                <button
+                  className="ghost sm icon"
+                  title={`Shift the film ${Math.round(step * 1000)}ms earlier inside the clip, without moving the clip (Shift+Left)`}
+                  onClick={() => slip(clip, take, -step)}
+                >
+                  <i className="ph ph-caret-left" />
+                </button>
+                <span className="amt mono">{step.toFixed(2)}s</span>
+                <button
+                  className="ghost sm icon"
+                  title={`Shift the film ${Math.round(step * 1000)}ms later inside the clip, without moving the clip (Shift+Right)`}
+                  onClick={() => slip(clip, take, step)}
+                >
+                  <i className="ph ph-caret-right" />
+                </button>
+              </span>
+            </div>
+            <div className="f">
               <label>From</label>
-              <span className="v">{formatTime(clip.srcIn)}</span>
+              <TimeField
+                value={clip.srcIn}
+                min={limits!.srcIn.min}
+                max={limits!.srcIn.max}
+                step={step}
+                onCommit={(v) => trimHead(clip, v, `clip-in-${clip.id}`)}
+                onNudge={(v) => trimHead(clip, v)}
+              />
             </div>
             <div className="f">
               <label>To</label>
-              <span className="v">{formatTime(clip.srcOut)}</span>
-            </div>
-            <div className="f">
-              <label>Starts on song</label>
-              <span className="v">{formatTime(clip.songStart)}</span>
+              <TimeField
+                value={clip.srcOut}
+                min={limits!.srcOut.min}
+                max={limits!.srcOut.max}
+                step={step}
+                onCommit={(v) => updateClip(clip.id, { srcOut: v }, `clip-out-${clip.id}`)}
+                onNudge={(v) => updateClip(clip.id, { srcOut: v })}
+              />
             </div>
             <div className="f">
               <label>Length</label>
-              <span className="v">{formatTime(clipLength(clip))}</span>
+              <span className="v">{formatPrecise(clipLength(clip))}</span>
             </div>
             {here && (
               <div className="f">
@@ -454,6 +538,21 @@ export default function VideoScreen({ project }: { project: Project }) {
                 <span className="v">count {(here.beat % here.segment.countsPerRow) + 1}</span>
               </div>
             )}
+            <div className="f">
+              <label>Step</label>
+              <span className="vs-step">
+                {STEPS.map((s) => (
+                  <button
+                    key={s}
+                    className={`sm${s === step ? ' on' : ''}`}
+                    title={`Every caret and arrow key moves ${Math.round(s * 1000)}ms`}
+                    onClick={() => setStep(s)}
+                  >
+                    {s.toFixed(2)}
+                  </button>
+                ))}
+              </span>
+            </div>
           </>
         ) : (
           <span className="faint">
