@@ -33,6 +33,7 @@ node verify/share-probe.cjs [port]     # a read-only share view can't mutate or 
 node verify/take-backup-probe.cjs [port]  # footage never reaches Storage for an unshared project, and does for a shared one - defaults to 5173
 node verify/take-sharing-probe.cjs [port]  # duplicating a project shares its source take rather than copying the file, and deletes only the copy's own reference - defaults to 5173
 node verify/video-probe.cjs [port]     # footage laid over a song: the clip track editor and rehearse's video layout - defaults to 5173
+node verify/timeline-zoom-probe.cjs [port]  # both timelines zoom the same way: a slider in the transport, a logarithmic range, ctrl+scroll still working, and every zoom change re-centring on the playhead on the clip track and the walk track alike - defaults to 42215
 node verify/clip-times-probe.cjs [port]  # the video inspector as fields: a typed song time to the millisecond, the 0.01/0.1 step chip governing both carets and arrow keys, footage sync holding the clip still, a typed From trimming only the head, and the clamp at the take's first frame - defaults to 42214
 node verify/viewing-as-probe.cjs [port]  # reading the app as one dancer: the sheet's fold and per-count override, the cue lane, the floor, rehearse, what a move placed under the lens is tagged with, and whether the choice survives a reload
 ```
