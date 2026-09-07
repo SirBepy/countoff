@@ -21,6 +21,7 @@ node verify/setup-cuts-probe.cjs [port]  # setup step 1 shows only the timeline 
 node verify/setup-beats-probe.cjs [port]  # setup step 2 nudges the anchor and tempo across a reload and never silently overwrites an already-approved tempo
 node verify/setup-lyrics-probe.cjs [port]  # setup step 3 stops nagging a song marked as having no lyrics, keeps hand-placed lines put through a fit, and backfills the marker on an older project
 node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
+node verify/turns-probe.cjs [port]     # move shapes and turns: a half turn keeps the facing and is chased until something undoes it, a full turn passes through the same angles and leaves nothing
 node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
 node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm
 node verify/collab-probe.cjs [port]   # the whole collaboration model against the REAL rules in the Firebase emulator: an owner's push, the song upload, invite by address, claiming it on the next sign-in, an outsider being refused, the join link, and a demotion landing - defaults to 42210, needs `firebase emulators:start --only auth,firestore,storage` running as well
