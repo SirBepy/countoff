@@ -87,7 +87,12 @@ async function main() {
     await page.click('.ph-share-network')
     await page.waitForSelector('.modal', { timeout: 5000 })
     await page.screenshot({ path: path.join(SHOTS, 'share-3-share-modal.png') })
-    check('the share modal opens from the header', await page.locator('.modal:has-text("Create a view-only link")').count() === 1)
+    // Adding people is the headline of this modal now, so it opens there; the view-only
+    // link that predates it keeps its own tab rather than its own modal.
+    check('the share modal opens on People', (await page.textContent('.tabs button.on')).includes('People'))
+    await page.click('.tabs button:has-text("View-only link")')
+    await page.waitForTimeout(200)
+    check('the view-only link is still one tab away', await page.locator('.modal:has-text("Create a view-only link")').count() === 1)
     await page.keyboard.press('Escape')
     await page.click('.modal-back', { position: { x: 5, y: 5 } }).catch(() => {})
     await page.waitForTimeout(300)
@@ -99,7 +104,9 @@ async function main() {
     // and stay out of the way once the link is already words.
     const renameOffered = async () => {
       await page.click('.ph-share-network')
-      await page.waitForSelector('.modal', { timeout: 5000 })
+      await page.waitForSelector('.modal .tabs', { timeout: 5000 })
+      await page.click('.tabs button:has-text("View-only link")')
+      await page.waitForTimeout(200)
       const offered = await page.locator('.modal button:has-text("Make it a word link")').count()
       await page.click('.modal-back', { position: { x: 5, y: 5 } }).catch(() => {})
       await page.waitForTimeout(300)

@@ -148,6 +148,89 @@
   overflow-wrap: anywhere;
 }
 
+/* Two ways to hand a project out, one modal. A segmented control rather than a dropdown
+   because both halves have to be discoverable: nobody goes looking for a second sharing
+   model behind a menu. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+.tabs button {
+  flex: 1;
+  min-height: var(--tap-sm);
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  border-radius: 7px;
+}
+.tabs button.on {
+  background: var(--bg-3);
+  border-color: var(--line);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* An address, what it is being granted, and the button that does it. Not `.row`: every
+   control there defaults to width:100%, so the dropdown wins the space the address needs. */
+.share-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.share-add input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.share-add select {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: var(--tap-sm);
+}
+.share-add button {
+  flex: none;
+}
+
+/* One account with access to the project, or one address still waiting to claim it. Not
+   .cast-opt: a dancer is a name on the floor, this is a person with a login. */
+.share-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  min-width: 0;
+}
+.share-person .who {
+  flex: 1;
+  min-width: 0;
+}
+.share-person .who .nm,
+.share-person .who .em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-person .who .nm {
+  font-size: 13.5px;
+}
+.share-person .who .em {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.share-person .act {
+  flex: none;
+  margin-left: auto;
+}
+.share-person select {
+  width: auto;
+  min-height: var(--tap-sm);
+}
+
 /* Naming who a block or a clip is for, and who the app is being read as, are the same
    list of dancers, so they share one row style. */
 .cast-opt {
