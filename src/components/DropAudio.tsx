@@ -5,15 +5,11 @@ import { DEFAULT_FLOOR, DEFAULT_WALK_COUNTS } from '../lib/floor'
 import { DEFAULT_COUNTS_PER_ROW } from '../lib/grid'
 import { STARTER_MOVES } from '../lib/moves'
 import { flash, replaceProject, uid } from '../lib/store'
-import { signInWithGoogle } from '../lib/firebase'
-import { pullNow, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
 import { audio } from '../lib/audio'
 
-export default function DropAudio({ onCancel, onProjects }: { onCancel?: () => void; onProjects?: () => void } = {}) {
-  const syncStatus = useSyncStatus()
+export default function DropAudio({ onCancel, onHome }: { onCancel?: () => void; onHome?: () => void } = {}) {
   const [over, setOver] = useState(false)
-  const [signingIn, setSigningIn] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -76,19 +72,6 @@ export default function DropAudio({ onCancel, onProjects }: { onCancel?: () => v
     setBusy(null)
   }
 
-  // A fresh device has no audio yet, but it may have a whole library waiting in the
-  // cloud, so signing in has to be reachable before any file is chosen.
-  async function signIn() {
-    setSigningIn(true)
-    try {
-      await signInWithGoogle()
-      await pullNow()
-    } catch {
-      flash('Could not sign in')
-    }
-    setSigningIn(false)
-  }
-
   return (
     <div className="drop">
       {onCancel && (
@@ -143,27 +126,15 @@ export default function DropAudio({ onCancel, onProjects }: { onCancel?: () => v
             if (file) void accept(file)
           }}
         />
-        <div className="drop-signin">
-          {syncStatus.configured ? (
-            <span className="faint">
-              <i className="ph ph-cloud-check i" /> Signed in as {syncStatus.email}
-            </span>
-          ) : (
-            <>
-              <span className="faint">or</span>
-              <button disabled={!!busy || signingIn} onClick={signIn}>
-                <i className="ph ph-google-logo i" /> {signingIn ? 'Signing in...' : 'Sign in and pull my choreographies'}
-              </button>
-            </>
-          )}
-          {onProjects && (
-            <button onClick={onProjects}>
-              <i className="ph ph-folders i" /> Open an existing project
+        {onHome && (
+          <div className="drop-signin">
+            <button onClick={onHome}>
+              <i className="ph ph-folders i" /> Back to my choreographies
             </button>
-          )}
-        </div>
+          </div>
+        )}
         <p className="faint" style={{ marginTop: 22, marginBottom: 0, fontSize: 12 }}>
-          The audio stays on this device. Signing in carries the choreography, not the song.
+          Signed in, the song is uploaded once so anyone you share this with can hear it too.
         </p>
       </div>
     </div>

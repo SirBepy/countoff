@@ -63,15 +63,15 @@ export default function ProjectMenu({ project, onClose, onProjects, onBackup, on
           <button className="menu-item" onClick={go(onProjects)}>
             <i className="ph ph-folders" />
             <span>
-              Projects
-              <div className="sub">Switch, duplicate, start a new one</div>
+              Your choreographies
+              <div className="sub">Switch, share, start a new one</div>
             </span>
           </button>
           <button className="menu-item" onClick={go(onShare)}>
             <i className="ph ph-share-network" />
             <span>
               Share
-              <div className="sub">A view-only link anyone can open and comment on</div>
+              <div className="sub">Add people who can edit, or a view-only link</div>
             </span>
           </button>
           <button className="menu-item" onClick={go(onBackup)}>

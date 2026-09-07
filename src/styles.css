@@ -2,6 +2,7 @@
    inside it. Order matters here and nowhere else, so keep it. */
 @import './styles/base.css';
 @import './styles/shell.css';
+@import './styles/home.css';
 @import './styles/songmap.css';
 @import './styles/sheet.css';
 @import './styles/library.css';

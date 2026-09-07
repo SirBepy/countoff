@@ -4,12 +4,13 @@ import CommentsModal from './components/CommentsModal'
 import BottomBar from './components/BottomBar'
 import DropAudio from './components/DropAudio'
 import Floor from './components/Floor'
+import Home from './components/Home'
+import JoinLink from './components/JoinLink'
 import LyricsModal from './components/LyricsModal'
 import MarkerModal from './components/MarkerModal'
 import MoveLibrary from './components/MoveLibrary'
 import MoveModal from './components/MoveModal'
 import ProjectMenu from './components/ProjectMenu'
-import ProjectsModal from './components/ProjectsModal'
 import Rehearse from './components/Rehearse'
 import Sheet from './components/Sheet'
 import SongMap from './components/SongMap'
@@ -21,7 +22,9 @@ import VideoScreen from './components/VideoScreen'
 import ViewAs, { WhoAreYou } from './components/ViewAs'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
-import { getActiveProjectId, loadAudio, loadProject, migrateKeySpace, migrateProject } from './lib/db'
+import { joinTokenFromUrl, readMyRole } from './lib/collab'
+import { getActiveProjectId, loadProject, migrateKeySpace, migrateProject } from './lib/db'
+import { attachAudio } from './lib/openProject'
 import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { loadShare, sharePersonFromUrl, shareTokenFromUrl } from './lib/share'
@@ -45,7 +48,7 @@ import {
   updateProject,
   useStore,
 } from './lib/store'
-import { pullNow, scheduleSync } from './lib/syncEngine'
+import { pullNow, scheduleSync, watchProject } from './lib/syncEngine'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -54,6 +57,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const VIEW_TOKEN = shareTokenFromUrl(location.hash, location.pathname)
 // The dancer a per-person link names, read at the same moment and for the same reason.
 const VIEW_PERSON = sharePersonFromUrl(location.hash)
+// A collaborator link, which grants a role rather than handing over a snapshot, so it
+// boots through a sign-in rather than straight into the app.
+const JOIN_TOKEN = joinTokenFromUrl(location.hash)
 
 export default function App() {
   const project = useStore((s) => s.project)
@@ -73,7 +79,9 @@ export default function App() {
   const [moveFor, setMoveFor] = useState<string | null>(null)
   const [markerFor, setMarkerFor] = useState<string | null>(null)
   const [showBackup, setShowBackup] = useState(false)
-  const [showProjects, setShowProjects] = useState(false)
+  const [showHome, setShowHome] = useState(false)
+  const [joinToken, setJoinToken] = useState(JOIN_TOKEN)
+  const [joining, setJoining] = useState(!!JOIN_TOKEN)
   const [showMenu, setShowMenu] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [showComments, setShowComments] = useState(false)
@@ -83,16 +91,17 @@ export default function App() {
 
   async function adoptActiveProject(): Promise<boolean> {
     const activeId = getActiveProjectId()
-    const [saved, blob] = await Promise.all([loadProject(), activeId ? loadAudio(activeId) : Promise.resolve(undefined)])
-    if (!saved || !blob) return false
-    const prevUrl = getState().audioUrl
-    const url = URL.createObjectURL(blob)
-    audio.load(url, saved.name)
+    const saved = activeId ? await loadProject() : undefined
+    if (!saved) return false
+    // What this account may do with it, which for a project shared by somebody else is the
+    // difference between the whole app and a read of it.
+    const role = getCurrentUser() ? await readMyRole(saved.id).catch(() => null) : null
     // No blocks placed yet means he hasn't started choreographing; land on setup.
     const view = saved.blocks.length === 0 ? 'setup' : 'sheet'
-    set({ project: saved, audioUrl: url, view }, false)
-    if (prevUrl) URL.revokeObjectURL(prevUrl)
+    set({ project: saved, view, role, readOnly: role === 'viewer', shareView: false }, false)
     setSegmentId(saved.segments[0]?.id ?? null)
+    // The song may only exist in the project's own upload, if this device never picked it.
+    if (!(await attachAudio(saved))) return false
     void attachTakes(saved)
     if (getCurrentUser()) void pullNow()
     return true
@@ -110,7 +119,7 @@ export default function App() {
       if (blob) audio.load(URL.createObjectURL(blob), shared.name)
       const migrated = migrateProject(shared)
       const withFootage = await attachSharedTakes(migrated, previous)
-      replaceProject(withFootage, { readOnly: true, view: 'rehearse' }, false)
+      replaceProject(withFootage, { readOnly: true, shareView: true, view: 'rehearse' }, false)
       setSegmentId(shared.segments[0]?.id ?? null)
     } catch (e) {
       console.error('share load failed', e)
@@ -126,12 +135,35 @@ export default function App() {
         return
       }
       await migrateKeySpace()
-      await adoptActiveProject()
+      // A collaborator link opens its own project once the sign-in lands, so booting the
+      // last one first would only put the wrong choreography on screen for a second.
+      if (!JOIN_TOKEN && !(await adoptActiveProject())) setShowHome(true)
       setBooted(true)
       // Asking early means the grant is in place before there is work to lose.
       void requestPersistence()
     })()
   }, [])
+
+  // A collaborator link opened in a tab that already has Countoff in it is a same-document
+  // navigation: the hash changes, nothing reloads, and the token read at module scope stays
+  // whatever it was. Without this the link silently does nothing, which is exactly what it
+  // looks like when it has been revoked.
+  useEffect(() => {
+    const onHash = () => {
+      const next = joinTokenFromUrl(location.hash)
+      if (!next) return
+      setJoinToken(next)
+      setJoining(true)
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  // Keeps the open project level with what collaborators are writing to it.
+  useEffect(() => {
+    watchProject(project?.id ?? null)
+    return () => watchProject(null)
+  }, [project?.id])
 
   // Switching or creating a project changes which document is open, so the
   // deliberate "New" screen (opened without a null project) always steps aside.
@@ -261,6 +293,19 @@ export default function App() {
   }, [view])
 
   if (!booted) return VIEW_TOKEN ? <ShareLoading progress={shareProgress} /> : null
+  if (joinToken && joining)
+    return (
+      <JoinLink
+        token={joinToken}
+        onOpened={() => {
+          // The token is spent once the membership exists; leaving it in the address bar
+          // would re-run the whole join on every refresh of an already-open project.
+          history.replaceState(null, '', location.pathname + location.search)
+          setJoining(false)
+          setShowHome(!getState().project)
+        }}
+      />
+    )
   if (VIEW_TOKEN && !project) {
     return (
       <div className="drop">
@@ -274,20 +319,26 @@ export default function App() {
       </div>
     )
   }
-  if (!project || creating) {
+  if (creating)
     return (
-      <>
-        <DropAudio onCancel={project ? () => setCreating(false) : undefined} onProjects={() => setShowProjects(true)} />
-        {showProjects && (
-          <ProjectsModal
-            activeProjectId={project?.id ?? ''}
-            onClose={() => setShowProjects(false)}
-            onCreateNew={() => setShowProjects(false)}
-          />
-        )}
-      </>
+      <DropAudio
+        onCancel={project ? () => setCreating(false) : undefined}
+        onHome={() => {
+          setCreating(false)
+          setShowHome(true)
+        }}
+      />
     )
-  }
+  if (!project || showHome)
+    return (
+      <Home
+        onOpened={() => setShowHome(false)}
+        onNewProject={() => {
+          setShowHome(false)
+          setCreating(true)
+        }}
+      />
+    )
   // The viewer's token comes from the URL; the owner's comes off the project itself.
   const commentToken = readOnly ? viewToken : project.shareToken
 
@@ -386,13 +437,13 @@ export default function App() {
         </button>
         {!readOnly && (
           <>
-            <button className="ghost icon only-wide" onClick={() => setShowProjects(true)} title="Projects: switch, duplicate, start a new one">
+            <button className="ghost icon only-wide" onClick={() => setShowHome(true)} title="Your choreographies: switch, share, start a new one">
               <i className="ph ph-folders i" />
             </button>
             <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
               <i className="ph ph-shield-check i" />
             </button>
-            <button className="ghost icon only-wide" onClick={() => setShowShare(true)} title="Share a view-only link">
+            <button className="ghost icon only-wide" onClick={() => setShowShare(true)} title="Share: add people who can edit, or a view-only link">
               <i className="ph ph-share-network i" />
             </button>
           </>
@@ -460,19 +511,9 @@ export default function App() {
         <ProjectMenu
           project={project}
           onClose={() => setShowMenu(false)}
-          onProjects={() => setShowProjects(true)}
+          onProjects={() => setShowHome(true)}
           onBackup={() => setShowBackup(true)}
           onShare={() => setShowShare(true)}
-        />
-      )}
-      {showProjects && (
-        <ProjectsModal
-          activeProjectId={project.id}
-          onClose={() => setShowProjects(false)}
-          onCreateNew={() => {
-            setShowProjects(false)
-            setCreating(true)
-          }}
         />
       )}
       {status && <div className="toast">{status}</div>}

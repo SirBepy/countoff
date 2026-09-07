@@ -29,6 +29,28 @@ const PALETTE = ['#7c5cff', '#3fb8b0', '#f0a63c', '#ff5d8f', '#5ec2ff', '#8fd44a
 
 export const nextColour = (people: Person[]) => PALETTE[people.length % PALETTE.length]
 
+/** A stable colour for anything identified by a string rather than by its place in a list,
+ *  such as a collaborator's account. Same palette the floor draws its pucks from, so one
+ *  person reads the same everywhere. */
+export function colourFor(seed: string) {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
+  return PALETTE[Math.abs(hash) % PALETTE.length]
+}
+
+/** Stable per-seed colours, de-conflicted across one list. `colourFor` hashes into eight
+ *  entries, so any two people in a roster collide about one time in eight, and two identical
+ *  pucks side by side read as one person twice rather than as two. */
+export function distinctColours(seeds: string[]) {
+  const used = new Set<string>()
+  return seeds.map((seed) => {
+    const wanted = colourFor(seed)
+    const colour = used.has(wanted) ? (PALETTE.find((c) => !used.has(c)) ?? wanted) : wanted
+    used.add(colour)
+    return colour
+  })
+}
+
 export function initialsFrom(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (!words.length) return '?'

@@ -70,20 +70,16 @@ async function main() {
     await page.goto(URL, { waitUntil: 'domcontentloaded' })
     await seedExtraProject(page, projA)
     await page.goto(URL, { waitUntil: 'networkidle' })
-    await page.waitForSelector('.drop', { timeout: 15000 })
+    await page.waitForSelector('.home', { timeout: 15000 })
 
-    check('a project sitting in IndexedDB with no active id lands on the empty state', await page.locator('.drop').isVisible())
+    check('a project sitting in IndexedDB with no active id lands on the home screen', await page.locator('.home').isVisible())
     check(
-      'the empty state offers a route to the project list',
-      await page.locator('button:has-text("Open an existing project")').isVisible(),
+      'the home screen lists it rather than asking for a file first',
+      await page.locator('.home-card:has-text("Project A")').isVisible(),
     )
-    await page.click('button:has-text("Open an existing project")')
-    await page.waitForSelector('.modal')
-    await page.waitForSelector('.result')
-    check('it opens the real Projects modal, not a new screen', await page.locator('.result:has-text("Project A")').isVisible())
-    await page.click('.result:has-text("Project A") button:has-text("Open")')
-    await page.waitForSelector('.sheet', { timeout: 5000 })
-    check('picking it from the empty state adopts it without creating a new project first', await page.locator('.sheet').isVisible())
+    await page.click('.home-card:has-text("Project A")')
+    await page.waitForSelector('.sheet', { timeout: 8000 })
+    check('picking it from the home screen adopts it without creating a new project first', await page.locator('.sheet').isVisible())
 
     // --- bug 3: sign-in state is visible on the empty state, not just implied by a button ---
     await page.evaluate(() => {
@@ -91,11 +87,15 @@ async function main() {
       localStorage.clear()
     })
     await page.goto(URL, { waitUntil: 'networkidle' })
-    await page.waitForSelector('.drop', { timeout: 15000 })
+    await page.waitForSelector('.home', { timeout: 15000 })
     check(
       'signed out shows the sign-in control, not a signed-in claim',
-      (await page.locator('button:has-text("Sign in and pull")').isVisible()) &&
-        (await page.locator('text=Signed in as').count()) === 0,
+      (await page.locator('.home-signin button:has-text("Sign in")').isVisible()) &&
+        (await page.locator('.home-account').count()) === 0,
+    )
+    check(
+      'and says what signing in is actually for',
+      (await page.textContent('.home-body')).includes('Sign in to see what people shared with you'),
     )
 
     // --- bug 4: play/pause survives switching between projects with real clicks ---
@@ -106,17 +106,17 @@ async function main() {
     await page.waitForTimeout(300)
     check('play starts the freshly booted project', !(await audioState(page)).paused)
 
-    await page.click('.appbar button[title^="Projects"]')
-    await page.waitForSelector('.modal')
-    await page.click('.result:has-text("Project B") button:has-text("Open")')
+    await page.click('.appbar button[title^="Your choreographies"]')
+    await page.waitForSelector('.home-card:has-text("Project B")')
+    await page.click('.home-card:has-text("Project B")')
     await page.waitForSelector('.sheet')
     await page.click('.bar-play')
     await page.waitForTimeout(300)
     check('play still works right after switching to another project', !(await audioState(page)).paused)
 
-    await page.click('.appbar button[title^="Projects"]')
-    await page.waitForSelector('.modal')
-    await page.click('.result:has-text("Project A") button:has-text("Open")')
+    await page.click('.appbar button[title^="Your choreographies"]')
+    await page.waitForSelector('.home-card:has-text("Project A")')
+    await page.click('.home-card:has-text("Project A")')
     await page.waitForSelector('.sheet')
     await page.click('.bar-play')
     await page.waitForTimeout(300)
