@@ -13,6 +13,7 @@
 @import './styles/setupCuts.css';
 @import './styles/setupBeats.css';
 @import './styles/setupLyrics.css';
+@import './styles/moveShapes.css';
 @import './styles/floor.css';
 @import './styles/movementTimeline.css';
 @import './styles/video.css';

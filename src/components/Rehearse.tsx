@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { movementLabel, orderedMovements, standingAt } from '../lib/floor'
+import { facingAt, movementLabel, orderedMovements, standingAt } from '../lib/floor'
 import { beatDuration, formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
 import { set, useStore } from '../lib/store'
@@ -37,6 +37,18 @@ export default function Rehearse({
     : walking.length > 0
       ? `${walking.map((p) => p.name).join(', ')} moving`
       : ''
+  // A half turn nobody has brought them back from. Read as one dancer this is the only
+  // instruction that matters, so it is phrased as one; read as everyone it is a roll
+  // call of who to go and fix.
+  const away = project.people.filter((p) => standingAt(project, p.id, time) && facingAt(project, p.id, time).away)
+  const owedLabel = me
+    ? away.some((p) => p.id === me.id)
+      ? 'You are facing away · a half turn brings you back'
+      : ''
+    : away.length > 0
+      ? `${away.map((p) => p.name).join(' + ')} still facing away`
+      : ''
+
   // Where this dancer has to be next, in the counts they are already counting. Their own
   // walk in force wins over one still ahead, since that is the one they are doing now.
   const myNextSpot = (() => {
@@ -125,7 +137,8 @@ export default function Rehearse({
         {project.people.length > 0 && (
           <div className="rehearse-floor">
             <div className={`rehearse-floor-name${walkingLabel ? '' : ' is-empty'}`}>{walkingLabel}</div>
-            <FloorStage project={project} time={time} editable={false} />
+            <FloorStage project={project} time={time} editable={false} moveLabels={false} />
+            <div className={`rehearse-owed${owedLabel ? '' : ' is-empty'}`}>{owedLabel}</div>
           </div>
         )}
         {hasVideo ? (

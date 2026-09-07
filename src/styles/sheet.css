@@ -47,6 +47,13 @@
   color: var(--text-dim);
   white-space: nowrap;
 }
+/* A chip that is telling you something is wrong rather than counting something. */
+.chip.warn {
+  color: var(--e2);
+  border-color: color-mix(in srgb, var(--e2) 40%, transparent);
+  background: color-mix(in srgb, var(--e2) 8%, transparent);
+  font-weight: 600;
+}
 .chip input {
   min-height: 26px;
   padding: 0 2px;

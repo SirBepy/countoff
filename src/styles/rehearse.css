@@ -65,6 +65,19 @@
 .rehearse-floor-name.is-empty {
   opacity: 0;
 }
+/* The one instruction a dancer left backwards actually needs, under the floor that
+   showed them they were. Reserved height, so it appearing never shifts the pucks. */
+.rehearse-owed {
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--e2);
+  min-height: 1.4em;
+  text-align: center;
+}
+.rehearse-owed.is-empty {
+  visibility: hidden;
+}
 /* The floor view sizes itself to fill a page; here it is a glance, so the whole
    thing including its pucks scales down rather than being re-styled. */
 .rehearse .stage {

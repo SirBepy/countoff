@@ -1,5 +1,14 @@
 export type MoveId = string
 
+/** A looping figure the dancer's puck draws while this move runs. It leaves nothing
+ *  behind when the block ends, which is the whole difference from `MoveTurn`. */
+export type MoveShape = 'wiggle' | 'bounce' | 'shake' | 'pulse' | 'sway' | 'drop' | 'reach' | 'step' | 'still'
+
+/** Degrees a move turns the dancer, positive clockwise. A multiple of 360 lands them
+ *  where they started; a half turn leaves them facing away until another turn brings
+ *  them round, which is why facing is derived from the whole run and never stored. */
+export type MoveTurn = 180 | -180 | 360 | -360
+
 export interface Move {
   id: MoveId
   name: string
@@ -10,6 +19,10 @@ export interface Move {
   builtin?: boolean
   /** Manual rail position from dragging to reorder; absent until the first drag. */
   order?: number
+  /** How the puck reads on the floor while this runs. Absent draws it still. */
+  shape?: MoveShape
+  /** Absent leaves the dancer facing where they already were. */
+  turn?: MoveTurn
 }
 
 export interface LyricLine {

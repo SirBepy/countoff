@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react'
 import { fillSelection } from '../lib/arrange'
+import { MOVE_SHAPES, MOVE_TURNS, SHAPE_META, turnKeepsFacing } from '../lib/moves'
 import { flash, getState, removeMove, set, upsertMove } from '../lib/store'
-import type { Move, Project } from '../lib/types'
+import type { Move, MoveShape, MoveTurn, Project } from '../lib/types'
 
 const BEAT_OPTIONS = [1, 2, 4, 8, 16]
+
+/** The chips run at a fixed 128 BPM rather than the open song's tempo: this is a picker,
+ *  and a shape chosen against a ballad would look like a different shape on the floor. */
+const DEMO_BEAT = 60 / 128
+
+const shapeDemo = (shape: MoveShape): React.CSSProperties =>
+  ({
+    background: 'var(--accent)',
+    '--ring': 'var(--accent)',
+    animationName: SHAPE_META[shape].cycle ? `mv-${shape}` : undefined,
+    animationDuration: `${SHAPE_META[shape].cycle * DEMO_BEAT}s`,
+    animationIterationCount: 'infinite',
+  }) as React.CSSProperties
+
+const turnDemo = (deg: MoveTurn): React.CSSProperties => ({
+  animationName: `mv-demo-turn-${deg > 0 ? 'r' : 'l'}${Math.abs(deg)}`,
+  animationDuration: turnKeepsFacing(deg) ? '2.4s' : '3.6s',
+  animationTimingFunction: 'ease-in-out',
+  animationIterationCount: 'infinite',
+})
 
 interface Props {
   project: Project
@@ -73,6 +94,62 @@ export default function MoveModal({ project, moveId, onClose }: Props) {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="field">
+            <label>Shape on the floor</label>
+            <div className="reads-pick">
+              {MOVE_SHAPES.map((shape) => (
+                <button
+                  key={shape}
+                  className={draft.shape === shape ? 'on' : ''}
+                  title={`Like ${SHAPE_META[shape].example}`}
+                  onClick={() => patch({ shape })}
+                >
+                  <span className="box">
+                    <span className={`disc sh-${shape}`} style={shapeDemo(shape)}>
+                      <i className="nose" />
+                    </span>
+                  </span>
+                  {SHAPE_META[shape].label}
+                </button>
+              ))}
+              <button className={draft.shape ? '' : 'on'} onClick={() => patch({ shape: undefined })}>
+                <span className="box none">nothing</span>
+                None
+              </button>
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Turn</label>
+            <div className="reads-pick">
+              {MOVE_TURNS.map(({ deg, label, hint }) => (
+                <button
+                  key={deg}
+                  className={`${turnKeepsFacing(deg) ? 'keeps' : ''}${draft.turn === deg ? ' on' : ''}`}
+                  title={hint}
+                  onClick={() => patch({ turn: deg })}
+                >
+                  <span className="box">
+                    <span className="turner" style={turnDemo(deg)}>
+                      <span className="disc" style={{ background: 'var(--accent)', '--ring': 'var(--accent)' } as React.CSSProperties}>
+                        <i className="nose" />
+                      </span>
+                    </span>
+                  </span>
+                  {label}
+                </button>
+              ))}
+              <button className={draft.turn ? '' : 'on'} onClick={() => patch({ turn: undefined })}>
+                <span className="box none">nothing</span>
+                None
+              </button>
+            </div>
+            <p className="hint">
+              A half turn leaves the dancer facing away until another turn brings them round. The floor and their lane in
+              the timeline both chase anyone still carrying one.
+            </p>
           </div>
 
           <div className="field">

@@ -1,0 +1,231 @@
+/* How a move reads as motion. Shared by the floor's pucks and by the pickers in the
+   move modal, so the chip you choose from and the dancer you see are the same figure.
+
+   Two different mechanisms on purpose. A SHAPE is a keyframe loop: it runs while its
+   block does and leaves nothing behind, so CSS can own it and the compositor can carry
+   it. A TURN is not an animation at all - the angle is derived from the playhead in
+   floor.ts the way a puck's cell already is - so all this file gives it is `.turner`,
+   the element the derived angle is written onto. That split is what lets a half turn
+   survive the counts after it and a scrubbed count show the true angle mid-turn. */
+
+@keyframes mv-wiggle {
+  0%,
+  100% {
+    transform: rotate(-14deg);
+  }
+  50% {
+    transform: rotate(14deg);
+  }
+}
+@keyframes mv-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  42% {
+    transform: translateY(-26%) scaleY(1.07);
+  }
+  72% {
+    transform: translateY(0) scaleY(0.92);
+  }
+}
+@keyframes mv-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-12%, 0);
+  }
+  40% {
+    transform: translate(12%, 0);
+  }
+  60% {
+    transform: translate(-8%, 0);
+  }
+  80% {
+    transform: translate(8%, 0);
+  }
+}
+@keyframes mv-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.24);
+  }
+}
+@keyframes mv-sway {
+  0%,
+  100% {
+    transform: translateX(-17%);
+  }
+  50% {
+    transform: translateX(17%);
+  }
+}
+@keyframes mv-drop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  52% {
+    transform: translateY(18%) scale(1.12, 0.8);
+  }
+}
+@keyframes mv-reach {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-17%) scale(1.08);
+  }
+}
+@keyframes mv-step {
+  0%,
+  24% {
+    transform: translateX(-19%);
+  }
+  50%,
+  74% {
+    transform: translateX(19%);
+  }
+  100% {
+    transform: translateX(-19%);
+  }
+}
+
+/* Name, duration and delay are set inline from the segment's own tempo, so a shape
+   slows with a 75% rehearse instead of running against the music. Only the curve is
+   the shape's own business, which is all that lives here. */
+.disc {
+  animation-timing-function: ease-in-out;
+}
+.disc.sh-bounce {
+  animation-timing-function: cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.disc.sh-shake {
+  animation-timing-function: linear;
+}
+.disc.sh-drop {
+  animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1);
+}
+.disc.sh-step {
+  animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1);
+}
+
+/* Turns rotate this wrapper rather than the disc, because the disc is where the shape
+   keyframes live and one element only has one transform. */
+.turner {
+  display: block;
+}
+
+/* Which way they are pointing. Without it a dancer facing away is only readable from
+   upside-down initials, which is a guess rather than a reading. */
+.disc {
+  position: relative;
+}
+.disc > .nose {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  margin-left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid var(--ring, var(--text));
+}
+
+/* A held pose is a choice, so it gets a ring. Drawing nothing would make the dancer
+   who is deliberately frozen look identical to one with no move set at all. */
+.disc.sh-still {
+  box-shadow:
+    0 0 0 2px var(--bg-1),
+    0 0 0 3px var(--ring, var(--text-dim));
+}
+
+/* Picker-only, and the one place a turn IS a keyframe. They exist so a chip can show
+   the difference its label claims: a half one lands upside down and sits there, a full
+   one carries on round to upright. The floor never uses these. */
+@keyframes mv-demo-turn-r180 {
+  0% {
+    transform: rotate(0deg);
+  }
+  35%,
+  100% {
+    transform: rotate(180deg);
+  }
+}
+@keyframes mv-demo-turn-l180 {
+  0% {
+    transform: rotate(0deg);
+  }
+  35%,
+  100% {
+    transform: rotate(-180deg);
+  }
+}
+@keyframes mv-demo-turn-r360 {
+  0% {
+    transform: rotate(0deg);
+  }
+  55%,
+  100% {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mv-demo-turn-l360 {
+  0% {
+    transform: rotate(0deg);
+  }
+  55%,
+  100% {
+    transform: rotate(-360deg);
+  }
+}
+
+/* The two pickers in Edit move. Chips animate in place, so a shape is chosen by
+   watching it rather than by decoding its name. */
+.reads-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 6px;
+}
+.reads-pick button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 8px 4px 7px;
+  border-radius: 10px;
+  font-size: 11.5px;
+}
+.reads-pick button.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #cdbcff;
+}
+/* A half turn is the only option with a consequence past its own counts, so its chip
+   already wears the amber the floor will chase it with later. */
+.reads-pick button.keeps.on {
+  border-color: var(--e2);
+  color: var(--e2);
+}
+.reads-pick .box {
+  height: 32px;
+  display: grid;
+  place-items: center;
+}
+.reads-pick .disc {
+  width: 26px;
+  height: 26px;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+}
+.reads-pick .box.none {
+  font-size: 10px;
+  color: var(--text-faint);
+}

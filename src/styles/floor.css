@@ -38,6 +38,7 @@
 .rail-person {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 5px 6px;
   border-radius: 7px;
@@ -63,9 +64,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Their own line under the name. A move name is long enough that sharing the row with
+   it crushed the person's name to nothing, and the name is the thing you scan for. */
 .rail-person .st {
+  order: 9;
+  flex-basis: 100%;
+  margin: -4px 0 0 32px;
   font-size: 10px;
-  color: var(--text-faint);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Survives the narrow layout that hides .st, because a turn nobody undid is a mistake
+   rather than a status. */
+.rail-person .turn-owed {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  font-size: 13px;
+  color: var(--e2);
 }
 .rail-person button {
   min-height: 26px;
@@ -290,6 +309,28 @@
 .puck.walking .nm {
   color: var(--text);
   font-weight: 600;
+}
+/* The move under the figure, so a shape you half-recognise always has a word on it. */
+.puck .mvn {
+  font-size: 9.5px;
+  font-weight: 700;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--bg);
+}
+/* A half turn nobody has undone yet, which is the one mistake this whole feature exists
+   to catch: it is drawn as a debt rather than as a state, and clears itself the moment
+   another turn brings them round. */
+.puck.facing-away .disc {
+  box-shadow:
+    0 0 0 3px var(--bg-1),
+    0 0 0 5px var(--e2);
+}
+.puck.facing-away .nm {
+  color: var(--e2);
+  font-weight: 700;
 }
 /* Reading the floor as one dancer. The rest stay on it, stepped back rather than removed,
    because a spot only means anything next to the people either side of it. */

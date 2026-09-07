@@ -229,6 +229,19 @@
   border-radius: 2px;
   opacity: 0.3;
 }
+/* Every stretch this dancer spends facing away, drawn along the bottom of their own
+   lane rather than in a lane of its own: it is a property of their run, and it has to
+   be visible long before the playhead reaches it or the half turn nobody undid is only
+   ever found in performance. */
+.mv-away {
+  position: absolute;
+  /* Tucked under the stint line rather than on the lane's bottom edge, where it read as
+     though it belonged to the dancer in the row below. */
+  top: 25px;
+  height: 3px;
+  background: var(--e2);
+  border-radius: 2px;
+}
 .mv-walk {
   position: absolute;
   top: 7px;

@@ -9,6 +9,8 @@ import {
   SIDES,
   WALK_MAX,
   beatAt,
+  doingAt,
+  facingAt,
   focusAt,
   freeCell,
   initialsFrom,
@@ -66,6 +68,10 @@ export default function Floor({ project }: { project: Project }) {
   const [chairMenu, setChairMenu] = useState<{ x: number; y: number } | null>(null)
   const [sideMenu, setSideMenu] = useState<{ personId: string; x: number; y: number } | null>(null)
   const [zoom, setZoom] = useState(1)
+  // A puck that will not hold still is a nuisance to aim a drag at, so the figures are
+  // one click away from off. Not persisted: it is a posture for the next minute of
+  // editing, not a preference about the project.
+  const [animate, setAnimate] = useState(true)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.personId)
   const { ref: chairEl, offset: chairOffset } = useMenuFit<HTMLDivElement>(chairMenu && 'chair')
   const { ref: sideMenuEl, offset: sideOffset } = useMenuFit<HTMLDivElement>(sideMenu?.personId)
@@ -98,6 +104,12 @@ export default function Floor({ project }: { project: Project }) {
     here &&
     project.movements.find((m) => m.personId === personId && m.segmentId === here.segment.id && m.beat === here.beat)
 
+  // Anyone left mid-number by a half turn nobody undid. Named in the bar rather than
+  // only on their puck, because the whole failure is not noticing.
+  const facingAway = animate
+    ? project.people.filter((p) => standingAt(project, p.id, time) && facingAt(project, p.id, time).away)
+    : []
+
   const menuPerson = menu && project.people.find((p) => p.id === menu.personId)
   const sideMenuOn = sideMenu && !!standingAt(project, sideMenu.personId, time)
 
@@ -116,7 +128,22 @@ export default function Floor({ project }: { project: Project }) {
         <span className="chip only-wide">
           <i className="ph ph-footprints i" /> {project.movements.length} movements
         </span>
+        {facingAway.length > 0 && (
+          <span className="chip warn" title="A half turn nobody has brought them back from">
+            <i className="ph ph-warning i" /> {facingAway.map((p) => p.name).join(' + ')}{' '}
+            {facingAway.length === 1 ? 'is' : 'are'} facing away
+          </span>
+        )}
         <div className="spacer" />
+        <button
+          className={`ghost icon${animate ? ' on' : ''}`}
+          aria-label="Toggle move animations"
+          aria-pressed={animate}
+          onClick={() => setAnimate(!animate)}
+          title={animate ? 'Stop the pucks moving while you aim a drag' : 'Show each move on the puck dancing it'}
+        >
+          <i className="ph ph-sparkle i" />
+        </button>
         <button className="ghost icon" onClick={() => setSetupOpen(true)} title="Floor size, walk length and who they face">
           <i className="ph ph-dots-three-vertical i" />
         </button>
@@ -137,6 +164,8 @@ export default function Floor({ project }: { project: Project }) {
 
           {project.people.map((person) => {
             const at = standingAt(project, person.id, time)
+            const move = at && animate ? doingAt(project, person.id, time)?.move : null
+            const away = at && animate && facingAt(project, person.id, time).away
             return (
               <div
                 key={person.id}
@@ -147,9 +176,14 @@ export default function Floor({ project }: { project: Project }) {
                   {person.initials}
                 </span>
                 <span className="nm">{person.name}</span>
+                {away && (
+                  <span className="turn-owed" title={`${person.name} is facing away, and needs another turn to come back`}>
+                    <i className="ph ph-arrow-u-up-left" />
+                  </span>
+                )}
                 {at ? (
                   <>
-                    <span className="st">{at.progress < 1 ? 'walking' : 'on'}</span>
+                    <span className="st">{at.progress < 1 ? 'walking' : (move?.name ?? 'on')}</span>
                     <button className="ghost icon" onClick={() => walk(person.id, null)} title="Walk off on this count">
                       <i className="ph ph-sign-out" />
                     </button>
@@ -266,6 +300,7 @@ export default function Floor({ project }: { project: Project }) {
           <FloorStage
             project={project}
             time={time}
+            animate={animate}
             onPick={setSelected}
             onFocusMenu={(x, y) => setChairMenu({ x, y })}
             onMenu={(personId, x, y) => setMenu({ personId, x, y })}

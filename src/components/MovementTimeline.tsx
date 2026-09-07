@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
-import { beatAt, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
+import { beatAt, facingAwayRuns, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
 import { beatDuration, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { beginGesture, endGesture, removeMovement, togglePin, updateMovement } from '../lib/store'
@@ -223,6 +223,15 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
                         key={n}
                         className="mv-hold"
                         style={{ left: pct(run.from), width: pct(run.to - run.from), background: person.colour }}
+                      />
+                    ))}
+                  {person &&
+                    facingAwayRuns(project, person.id).map((run, n) => (
+                      <span
+                        key={`away-${n}`}
+                        className="mv-away"
+                        style={{ left: pct(run.from), width: pct(run.to - run.from) }}
+                        title={`${person.name} is facing away from ${formatTime(run.from)}. Another turn brings them back.`}
                       />
                     ))}
                   {person &&
