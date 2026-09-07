@@ -88,22 +88,30 @@ function readStores(page) {
 }
 
 /** Matched on the exact name: "Original medley" is a substring of "Original medley copy",
- *  so a hasText filter would happily act on the wrong row. */
-const row = (page, name) =>
-  page.locator('.modal .result').filter({ has: page.locator('.move-name', { hasText: new RegExp(`^${name}$`) }) })
+ *  so a hasText filter would happily act on the wrong card. */
+const card = (page, name) =>
+  page.locator('.home-card').filter({ has: page.locator('.home-name', { hasText: new RegExp(`^${name}$`) }) })
 
-const rowButton = (page, name, title) => row(page, name).locator(`button[title="${title}"]`)
+/** Duplicate and delete moved behind a per-card menu when the home screen replaced the
+ *  projects modal, so reaching either is two clicks rather than one. */
+async function cardAction(page, name, label) {
+  await card(page, name).locator('.home-more').click()
+  // String hasText, not an anchored RegExp: each item is an icon plus a leading space
+  // before its label, and Playwright only normalises whitespace for the string form.
+  await page.locator('.home-menu button', { hasText: label }).click()
+}
 
-const rowOpen = (page, name) => row(page, name).getByRole('button', { name: 'Open' })
+/** The whole card is the open affordance now; there is no separate Open button. */
+const openCard = (page, name) => card(page, name).click()
 
 /** Waits past the read-delete-sweep behind every take delete, which no click awaits. */
 async function settle(page) {
   await page.waitForTimeout(700)
 }
 
-async function openProjects(page) {
-  await page.click('button[title^="Projects:"]')
-  await page.waitForSelector('.modal .result')
+async function goHome(page) {
+  await page.click('button[title^="Your choreographies"]')
+  await page.waitForSelector('.home-card:not(.new)')
 }
 
 /** Drops the open project's only take from the video screen's takes bin, and comes back. */
@@ -114,7 +122,7 @@ async function dropTakeFromBin(page) {
   await page.waitForFunction(() => document.querySelectorAll('.vs-take').length === 0)
   await settle(page)
   await page.click('button[title="Back to the sheet"]')
-  await page.waitForSelector('button[title^="Projects:"]')
+  await page.waitForSelector('button[title^="Your choreographies"]')
 }
 
 async function main() {
@@ -132,9 +140,9 @@ async function main() {
     const seeded = await readStores(page)
     check('both take files are on disk to begin with', seeded.takeKeys.length === 2, seeded.takeKeys.join(', '))
 
-    await openProjects(page)
-    await rowButton(page, 'Original medley', 'Duplicate').click()
-    await page.waitForSelector('.modal .result:nth-child(3)')
+    await goHome(page)
+    await cardAction(page, 'Original medley', 'Duplicate')
+    await page.waitForFunction(() => document.querySelectorAll('.home-card:not(.new)').length === 3)
     await settle(page)
 
     const copied = await readStores(page)
@@ -145,7 +153,7 @@ async function main() {
 
     // Todo 14: two projects share one file, so one of them dropping the take must not
     // empty the other's clips.
-    await rowOpen(page, 'Original medley copy').click()
+    await openCard(page, 'Original medley copy')
     await page.waitForSelector('button[title^="Video:"]')
     await dropTakeFromBin(page)
 
@@ -159,9 +167,9 @@ async function main() {
     )
 
     // Todo 15: a project nobody else shares with takes its files with it.
-    await openProjects(page)
-    await rowButton(page, 'Unrelated number', 'Delete').click()
-    await page.waitForFunction(() => document.querySelectorAll('.modal .result').length === 2)
+    await goHome(page)
+    await cardAction(page, 'Unrelated number', 'Delete')
+    await page.waitForFunction(() => document.querySelectorAll('.home-card:not(.new)').length === 2)
     await settle(page)
 
     const afterOtherGone = await readStores(page)
@@ -178,7 +186,9 @@ async function main() {
 
     // The guard has to be a guard, not a blanket refusal: the last project citing a
     // take drops it, and the file goes.
-    await rowOpen(page, 'Original medley').click()
+    // Already on the home screen: the delete above never left it, unlike the modal the
+    // projects list used to be, which had to be reopened per action.
+    await openCard(page, 'Original medley')
     await page.waitForSelector('button[title^="Video:"]')
     await dropTakeFromBin(page)
 
