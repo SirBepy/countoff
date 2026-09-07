@@ -107,89 +107,89 @@ export default function ShareModal({ project, onClose }: { project: Project; onC
 
           {tab === 'link' && (
             <>
-            <div className="hint">
-              <i className="ph ph-warning i" /> Anyone with this link can open this choreography and read every name in
-              the cast. They can comment, but never edit, and they need no account at all.
-            </div>
+              <div className="hint">
+                <i className="ph ph-warning i" /> Anyone with this link can open this choreography and read every name in
+                the cast. They can comment, but never edit, and they need no account at all.
+              </div>
 
-            {url ? (
-              <>
-                <div className="field">
-                  <label htmlFor="share-url">Link</label>
-                  <input id="share-url" readOnly value={url} onFocus={(e) => e.target.select()} />
-                </div>
-                <div className="row wrap">
-                  <button
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(url)
-                      setCopied(true)
-                    }}
-                  >
-                    <i className="ph ph-copy i" /> {copied ? 'Copied' : 'Copy link'}
-                  </button>
-                  <button onClick={() => void republish()} disabled={!!busy}>
-                    <i className="ph ph-arrows-clockwise i" /> Update now
-                  </button>
-                  {token && !token.includes('-') && (
-                    <button onClick={() => void rename()} disabled={!!busy}>
-                      <i className="ph ph-magic-wand i" /> Make it a word link
-                    </button>
-                  )}
-                  <button className="ghost" style={{ color: 'var(--danger)' }} onClick={() => void stop()} disabled={!!busy}>
-                    <i className="ph ph-trash i" /> Stop sharing
-                  </button>
-                </div>
-                <div className="faint">Every sync push rewrites the share, so viewers keep up with your edits.</div>
-
-                {/* One link each opens straight into that dancer's own view, which beats
-                    asking a room full of people to find themselves in a list. */}
-                {project.people.length > 0 && token && (
+              {url ? (
+                <>
                   <div className="field">
-                    <label>A link each</label>
-                    {project.people.map((p) => {
-                      const personUrl = shareUrl(token, p.id)
-                      return (
-                        <div key={p.id} className="cast-opt">
-                          <span className="d" style={{ background: p.colour }}>
-                            {p.initials}
-                          </span>
-                          <span className="nm">{p.name}</span>
-                          <button
-                            className="ghost"
-                            style={{ marginLeft: 'auto' }}
-                            title={personUrl}
-                            onClick={() => {
-                              void navigator.clipboard?.writeText(personUrl)
-                              setCopiedPerson(p.id)
-                            }}
-                          >
-                            <i className="ph ph-copy i" /> {copiedPerson === p.id ? 'Copied' : 'Copy'}
-                          </button>
-                        </div>
-                      )
-                    })}
-                    <div className="faint">Opens on their own moves and their own spot. The plain link above stays the whole-cast view.</div>
+                    <label htmlFor="share-url">Link</label>
+                    <input id="share-url" readOnly value={url} onFocus={(e) => e.target.select()} />
                   </div>
-                )}
-                {footage.total > 0 && (
-                  <div className="faint">
-                    <i className={`ph ${footage.done === footage.total ? 'ph-cloud-check' : 'ph-cloud-arrow-up'} i`} />{' '}
-                    {footage.done === footage.total
-                      ? `Footage is backed up, all ${footage.total} ${footage.total === 1 ? 'take' : 'takes'}`
-                      : `Backing up footage, ${footage.done} of ${footage.total}. Viewers see the no-clip plate for the rest.`}
+                  <div className="row wrap">
+                    <button
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(url)
+                        setCopied(true)
+                      }}
+                    >
+                      <i className="ph ph-copy i" /> {copied ? 'Copied' : 'Copy link'}
+                    </button>
+                    <button onClick={() => void republish()} disabled={!!busy}>
+                      <i className="ph ph-arrows-clockwise i" /> Update now
+                    </button>
+                    {token && !token.includes('-') && (
+                      <button onClick={() => void rename()} disabled={!!busy}>
+                        <i className="ph ph-magic-wand i" /> Make it a word link
+                      </button>
+                    )}
+                    <button className="ghost" style={{ color: 'var(--danger)' }} onClick={() => void stop()} disabled={!!busy}>
+                      <i className="ph ph-trash i" /> Stop sharing
+                    </button>
                   </div>
-                )}
-                {inFlight && <Bar value={takeUploads[inFlight.id]} />}
-              </>
-            ) : (
-              <button className="primary" onClick={() => void create()} disabled={!!busy}>
-                <i className="ph ph-link i" /> {status ?? 'Create a view-only link'}
-              </button>
-            )}
+                  <div className="faint">Every sync push rewrites the share, so viewers keep up with your edits.</div>
 
-            {status && url && <div className="faint">{status}...</div>}
-            {sent && sent.total > 0 && <Bar value={sent.done / sent.total} />}
-            {error && <div style={{ color: 'var(--danger)' }}>{error}</div>}
+                  {/* One link each opens straight into that dancer's own view, which beats
+                      asking a room full of people to find themselves in a list. */}
+                  {project.people.length > 0 && token && (
+                    <div className="field">
+                      <label>A link each</label>
+                      {project.people.map((p) => {
+                        const personUrl = shareUrl(token, p.id)
+                        return (
+                          <div key={p.id} className="cast-opt">
+                            <span className="d" style={{ background: p.colour }}>
+                              {p.initials}
+                            </span>
+                            <span className="nm">{p.name}</span>
+                            <button
+                              className="ghost"
+                              style={{ marginLeft: 'auto' }}
+                              title={personUrl}
+                              onClick={() => {
+                                void navigator.clipboard?.writeText(personUrl)
+                                setCopiedPerson(p.id)
+                              }}
+                            >
+                              <i className="ph ph-copy i" /> {copiedPerson === p.id ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                      <div className="faint">Opens on their own moves and their own spot. The plain link above stays the whole-cast view.</div>
+                    </div>
+                  )}
+                  {footage.total > 0 && (
+                    <div className="faint">
+                      <i className={`ph ${footage.done === footage.total ? 'ph-cloud-check' : 'ph-cloud-arrow-up'} i`} />{' '}
+                      {footage.done === footage.total
+                        ? `Footage is backed up, all ${footage.total} ${footage.total === 1 ? 'take' : 'takes'}`
+                        : `Backing up footage, ${footage.done} of ${footage.total}. Viewers see the no-clip plate for the rest.`}
+                    </div>
+                  )}
+                  {inFlight && <Bar value={takeUploads[inFlight.id]} />}
+                </>
+              ) : (
+                <button className="primary" onClick={() => void create()} disabled={!!busy}>
+                  <i className="ph ph-link i" /> {status ?? 'Create a view-only link'}
+                </button>
+              )}
+
+              {status && url && <div className="faint">{status}...</div>}
+              {sent && sent.total > 0 && <Bar value={sent.done / sent.total} />}
+              {error && <div style={{ color: 'var(--danger)' }}>{error}</div>}
             </>
           )}
         </div>
