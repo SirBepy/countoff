@@ -365,7 +365,16 @@ export default function App() {
         {whoAreYou}
       </>
     )
-  if (view === 'video') return <VideoScreen project={project} />
+  // The toast below lives inside the sheet's own return, so a view that returns early
+  // needs its own copy. The video screen raises flashes: it refuses a nudge that has no
+  // footage left to give.
+  if (view === 'video')
+    return (
+      <>
+        <VideoScreen project={project} />
+        {status && <div className="toast">{status}</div>}
+      </>
+    )
 
   const lyricSegment = project.segments.find((s) => s.id === lyricsFor)
   const marker = project.markers.find((m) => m.id === markerFor)
