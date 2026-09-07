@@ -97,8 +97,6 @@ export function useSyncStatus(): SyncStatus {
 /** The last library read, so the home screen can paint from cache while the fresh one lands. */
 export const getLibrary = (): LibraryEntry[] => library
 
-export const getRole = (id: string): Role | null => roles[id] ?? null
-
 /** Re-resolves what this account may do with the open project. A page load hands the app its
  * last project well before Firebase has restored the session, so the role read at boot is
  * null for everybody: without this a viewer reloads into the full editing UI, and only finds
