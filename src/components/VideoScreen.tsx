@@ -18,6 +18,7 @@ import {
   useStore,
 } from '../lib/store'
 import { dropTake, importTake } from '../lib/takes'
+import { useFollowPlayhead, useWheelZoom, useZoomAnchor } from '../lib/timeline'
 import {
   clipEnd,
   clipLength,
@@ -34,9 +35,8 @@ import type { Clip, Crop, Project, Take } from '../lib/types'
 import CastPicker from './CastPicker'
 import { formatPrecise, TimeField } from './TimeField'
 import VideoStage from './VideoStage'
+import ZoomSlider from './ZoomSlider'
 
-/** 1 fits the whole medley; the top end puts a couple of bars across the screen. */
-const ZOOM_MAX = 60
 /** A drag under this many pixels is a click, so tapping a clip selects instead of retiming it. */
 const DRAG_SLOP = 4
 /** Marks a bin drag as one of ours, so the file-upload overlay stays out of its way. */
@@ -67,6 +67,7 @@ export default function VideoScreen({ project }: { project: Project }) {
   const [draft, setDraft] = useState<Crop | null>(null)
   const [cropRatio, setCropRatio] = useState(16 / 9)
   const scroll = useRef<HTMLDivElement>(null)
+  const lane = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const cropArea = useRef<HTMLDivElement>(null)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu)
@@ -85,6 +86,10 @@ export default function VideoScreen({ project }: { project: Project }) {
   const menuTake = menuClip && project.takes.find((t) => t.id === menuClip.takeId)
   const cropTakeObj = cropTake ? (project.takes.find((t) => t.id === cropTake) ?? null) : null
   const cropSrc = cropTakeObj && takeSrc(cropTakeObj, takeUrls)
+
+  useZoomAnchor(scroll, '.vt-track', zoom, time, duration)
+  useFollowPlayhead(scroll, '.vt-track', time, duration, playing, zoom)
+  useWheelZoom(lane, zoom, setZoom)
 
   /** A cut needs a clip's worth of footage either side of it, or it makes a sliver. */
   const cuttable = (c: Clip) => time > c.songStart + MIN_CLIP && time < clipEnd(c) - MIN_CLIP
@@ -572,14 +577,7 @@ export default function VideoScreen({ project }: { project: Project }) {
         )}
       </div>
 
-      <div
-        className="vt"
-        onWheel={(e) => {
-          if (!e.ctrlKey && !e.metaKey) return
-          e.preventDefault()
-          setZoom(Math.max(1, Math.min(ZOOM_MAX, zoom * (e.deltaY < 0 ? 1.25 : 0.8))))
-        }}
-      >
+      <div className="vt" ref={lane}>
         <div className="vt-scroll" ref={scroll}>
           <div className="vt-inner" style={{ width: `calc(var(--who) + (100% - var(--who)) * ${zoom})` }}>
             <div className="vt-lane vt-ruler">
@@ -726,16 +724,20 @@ export default function VideoScreen({ project }: { project: Project }) {
       </div>
 
       <div className="vs-trans">
-        <button className="icon" onClick={() => audio.nudge(-5)}>
-          <i className="ph ph-rewind" />
-        </button>
-        <button className="primary icon" onClick={() => audio.toggle()}>
-          <i className={`ph ${playing ? 'ph-pause' : 'ph-play'}`} />
-        </button>
-        <button className="icon" onClick={() => audio.nudge(5)}>
-          <i className="ph ph-fast-forward" />
-        </button>
-        <span className="faint mono">{formatTime(time)}</span>
+        <span />
+        <span className="mid">
+          <button className="icon" onClick={() => audio.nudge(-5)}>
+            <i className="ph ph-rewind" />
+          </button>
+          <button className="primary icon" onClick={() => audio.toggle()}>
+            <i className={`ph ${playing ? 'ph-pause' : 'ph-play'}`} />
+          </button>
+          <button className="icon" onClick={() => audio.nudge(5)}>
+            <i className="ph ph-fast-forward" />
+          </button>
+          <span className="faint mono">{formatTime(time)}</span>
+        </span>
+        <ZoomSlider zoom={zoom} onZoom={setZoom} />
       </div>
 
       {menuClip && menu && (

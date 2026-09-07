@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { formatTime } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
+import { clampZoom } from '../lib/timeline'
 import {
   FLOOR_MAX,
   FLOOR_MIN,
@@ -38,11 +39,9 @@ import {
 import type { Project, Side } from '../lib/types'
 import FloorStage, { defaultFocusCell } from './FloorStage'
 import MovementTimeline from './MovementTimeline'
+import ZoomSlider from './ZoomSlider'
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
-
-/** 1 fits the whole medley; the top end puts a couple of bars across the screen. */
-const ZOOM_MAX = 60
 
 function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
@@ -329,21 +328,9 @@ export default function Floor({ project }: { project: Project }) {
             <span className="unit">counts</span>
           </span>
 
-          <span className="tl-field" title="Zoom the timeline. Ctrl or Cmd and scroll does it too">
+          <span className="tl-field" title="Zoom the timeline around the playhead. Ctrl or Cmd and scroll does it too">
             <span className="lbl">Zoom</span>
-            <span className="step">
-              <button className="ghost icon" onClick={() => setZoom(clamp(zoom / 1.6, 1, ZOOM_MAX))} disabled={zoom <= 1}>
-                <i className="ph ph-magnifying-glass-minus" />
-              </button>
-              <b>{zoom < 1.05 ? 'fit' : `${Math.round(zoom)}×`}</b>
-              <button
-                className="ghost icon"
-                onClick={() => setZoom(clamp(zoom * 1.6, 1, ZOOM_MAX))}
-                disabled={zoom >= ZOOM_MAX}
-              >
-                <i className="ph ph-magnifying-glass-plus" />
-              </button>
-            </span>
+            <ZoomSlider zoom={zoom} onZoom={setZoom} />
           </span>
 
           <div className="spacer" />
@@ -354,7 +341,7 @@ export default function Floor({ project }: { project: Project }) {
           time={time}
           playing={playing}
           zoom={zoom}
-          onZoom={(z) => setZoom(clamp(z, 1, ZOOM_MAX))}
+          onZoom={(z) => setZoom(clampZoom(z))}
           selectedId={selected}
           onSelect={setSelected}
         />

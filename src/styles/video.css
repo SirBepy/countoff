@@ -289,14 +289,24 @@
   border-left: none;
 }
 
+/* Three columns rather than a centred row: the zoom sits on the right and the transport
+   still reads as the middle of the bar, instead of being shoved left by it. */
 .vs-trans {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
   padding: 10px;
   border-top: 1px solid var(--line);
   padding-bottom: calc(10px + var(--safe-b));
+}
+.vs-trans .mid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vs-trans .zoomer {
+  justify-self: end;
 }
 .vs-trans button {
   min-height: var(--tap-sm);

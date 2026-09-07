@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
 import { beatAt, facingAwayRuns, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
 import { beatDuration, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { beginGesture, endGesture, removeMovement, togglePin, updateMovement } from '../lib/store'
+import { useFollowPlayhead, useWheelZoom, useZoomAnchor } from '../lib/timeline'
 import { placedBlocks } from '../lib/video'
 import type { Movement, Person, Project } from '../lib/types'
 
@@ -31,12 +32,11 @@ type Lane = { id: string; person: Person | null }
 
 /** A drag under this many pixels is a click, so tapping a block seeks instead of retiming it. */
 const DRAG_SLOP = 4
-/** Keeps the playhead this far off the edge before a follow scroll fires. */
-const FOLLOW_EDGE = 80
 
 export default function MovementTimeline({ project, time, playing, zoom, onZoom, selectedId, onSelect }: Props) {
   const duration = project.duration || 1
   const scroll = useRef<HTMLDivElement>(null)
+  const lane = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<MenuAt | null>(null)
   const { ref: menuEl, offset } = useMenuFit<HTMLDivElement>(menu?.movement.id)
   const pct = (t: number) => `${(t / duration) * 100}%`
@@ -48,17 +48,9 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
     return Math.max(0, Math.min(duration, ((clientX - track.left) / track.width) * duration))
   }
 
-  // Zoomed in, the playhead walks off the right edge within seconds; follow it while
-  // playing only, or a scrub would fight the scroll it just caused.
-  useEffect(() => {
-    const box = scroll.current
-    const track = box?.querySelector('.mv-track') as HTMLElement | null
-    if (!box || !track || !playing) return
-    const x = track.offsetLeft + track.offsetWidth * (time / duration)
-    if (x < box.scrollLeft + FOLLOW_EDGE || x > box.scrollLeft + box.clientWidth - FOLLOW_EDGE) {
-      box.scrollLeft = x - box.clientWidth / 2
-    }
-  }, [time, duration, playing, zoom])
+  useZoomAnchor(scroll, '.mv-track', zoom, time, duration)
+  useFollowPlayhead(scroll, '.mv-track', time, duration, playing, zoom)
+  useWheelZoom(lane, zoom, onZoom)
 
   function scrub(e: React.PointerEvent) {
     if (e.button === 2) return
@@ -132,11 +124,7 @@ export default function MovementTimeline({ project, time, playing, zoom, onZoom,
     <div
       className="mv"
       onContextMenu={(e) => e.preventDefault()}
-      onWheel={(e) => {
-        if (!e.ctrlKey && !e.metaKey) return
-        e.preventDefault()
-        onZoom(zoom * (e.deltaY < 0 ? 1.25 : 0.8))
-      }}
+      ref={lane}
     >
       <div className="mv-scroll" ref={scroll}>
         <div className="mv-inner" style={{ width: `calc(var(--who) + (100% - var(--who)) * ${zoom})` }}>

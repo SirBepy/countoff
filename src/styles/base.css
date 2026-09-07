@@ -143,6 +143,13 @@ input[type='range'] {
   accent-color: var(--accent);
   min-height: 0;
 }
+/* The zoom slider rides inside the same pill as its own +/- buttons, so it takes a fixed
+   width instead of the full-width every other input gets. */
+.zoomer input[type='range'] {
+  width: 108px;
+  flex: none;
+  margin: 0 4px;
+}
 input[type='number'] {
   -moz-appearance: textfield;
 }
