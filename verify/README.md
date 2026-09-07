@@ -23,6 +23,7 @@ node verify/setup-lyrics-probe.cjs [port]  # setup step 3 stops nagging a song m
 node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
 node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
 node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm
+node verify/collab-probe.cjs [port]   # the whole collaboration model against the REAL rules in the Firebase emulator: an owner's push, the song upload, invite by address, claiming it on the next sign-in, an outsider being refused, the join link, and a demotion landing - defaults to 42210, needs `firebase emulators:start --only auth,firestore,storage` running as well
 node verify/chair-probe.cjs [port]     # the focus chair's keyframes interpolate during playback, rescale with the floor, and don't move on a pre-keyframe project - defaults to 42213
 node verify/crop-probe.cjs [port]      # a take's crop renders correctly (pixel-sampled) on both the editor monitor and rehearse's fixed-ratio box - defaults to 5173
 node verify/runway-probe.cjs [port]    # the tracked 9-assertion probe: next song's moves, lyrics and counts show up on the runway ahead of the cut - defaults to 42211
@@ -41,6 +42,29 @@ projects of its own) and shoots the rehearse screen through a real play-through.
 A different, older 45-assertion probe also named `runway-probe.cjs` covered the floor mini-map; it
 has been rescued as `verify/movement-probe.cjs` above. The tracked `runway-probe.cjs` above is the
 9-assertion song-lookahead probe, not that one.
+
+## The collaboration probe needs a second server
+
+`collab-probe.cjs` is the only probe here that talks to Firebase. It runs against the emulator
+suite, never the real project, and it loads `firestore.rules` and `storage.rules` straight out of
+this repo, so a rules mistake fails it rather than reaching production:
+
+```
+firebase emulators:start --only auth,firestore,storage
+npm run dev -- --port 42210
+node verify/collab-probe.cjs 42210
+```
+
+The app only talks to the emulator when the URL carries `?emulator=1` AND the build is a dev
+build (`src/lib/firebase.ts`), so there is no path from a production bundle into it. That same
+branch is where `window.__testSignIn` and `window.__testGet` live: the first seeds a signed-in
+account without a Google popup, the second reads a document AS that account, which is the only
+way to assert what the rules actually allow rather than what an admin connection can see.
+
+**What a green run does not prove.** The emulator does not enforce indexes, so it cannot tell you
+whether the collection-group index in `firestore.indexes.json` is deployed. The library query
+(`collectionGroup('members').where('uid','==',...)`) needs it on the real project, and without it
+every account's library comes back empty with an index error in the console.
 
 ## Where a probe writes screenshots
 

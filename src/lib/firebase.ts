@@ -11,7 +11,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+import { connectFirestoreEmulator, doc, getDoc, getFirestore } from 'firebase/firestore'
 import { connectStorageEmulator, getStorage } from 'firebase/storage'
 
 // Set by the Android shell's WebViewClient, only on the site's own origin. Its signIn()
@@ -65,6 +65,14 @@ if (useEmulator) {
   Object.assign(window, {
     __testSignIn: (email: string, password: string) =>
       createUserWithEmailAndPassword(auth, email, password).catch(() => signInWithEmailAndPassword(auth, email, password)),
+    // Reads a document AS THE SIGNED-IN USER, so a probe can assert what the security rules
+    // actually allow rather than what an admin connection can see. A denial resolves rather
+    // than throws: "was this refused" is the assertion, not an error to handle.
+    __testGet: (path: string) =>
+      getDoc(doc(db, path)).then(
+        (snap) => (snap.exists() ? snap.data() : null),
+        (e: unknown) => ({ denied: String((e as { code?: string })?.code ?? e) }),
+      ),
   })
 }
 
