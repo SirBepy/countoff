@@ -16,6 +16,7 @@ import {
   type Take,
 } from './types'
 import { sameAudience, type Tagged } from './cast'
+import type { Role } from './collab'
 import { saveProject } from './db'
 import { snapshot } from './backup'
 
@@ -69,8 +70,14 @@ export interface UiState {
   /** A shared link opened by someone who has never said who they are, so the sheet offers
    *  the cast once. Never asked twice: "just watching" is an answer and is remembered. */
   askWhoAreYou: boolean
-  /** A /v/<token> share is open. Every mutation and every persist is refused. */
+  /** No mutation and no persist is allowed: a /v/<token> share, or a project this account
+   *  was only given a look at. */
   readOnly: boolean
+  /** Booted from a /v/<token> link rather than the library. Distinct from `readOnly`
+   *  because a signed-in viewer is read-only but still syncs; a share view never does. */
+  shareView: boolean
+  /** What this account may do with the open project. Null while it is local-only. */
+  role: Role | null
   /** Object URLs for takes whose file is on THIS device, keyed by take id. Out of the
    *  project for the same reason `audioUrl` is: a blob URL means nothing anywhere else. */
   takeUrls: Record<string, string>
@@ -123,6 +130,8 @@ const S: StoreSingleton = globalAny[HMR_KEY] ?? {
     viewAs: null,
     askWhoAreYou: false,
     readOnly: false,
+    shareView: false,
+    role: null,
     takeUrls: {},
     takeUploads: {},
   },

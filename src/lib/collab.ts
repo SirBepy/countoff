@@ -1,0 +1,423 @@
+import {
+  collection,
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore'
+import { db, getCurrentUser } from './firebase'
+import { randomWords, stripUndefined } from './share'
+import type { Project } from './types'
+
+export type Role = 'owner' | 'editor' | 'viewer'
+export type GrantableRole = 'editor' | 'viewer'
+
+export const canEdit = (role: Role | null | undefined) => role === 'owner' || role === 'editor'
+
+export interface ShareLink {
+  token: string
+  role: GrantableRole
+}
+
+/** Someone the owner named by address who has not signed in and claimed it yet. Kept on the
+ *  project rather than only under /invites so the share panel can list them without a
+ *  collection-group query the invitee alone is allowed to run. */
+export interface PendingInvite {
+  email: string
+  role: GrantableRole
+  at: number
+}
+
+/** The small half of a project: everything the library needs to draw a card, with the
+ *  choreography itself in a separate subdocument so listing ten projects is ten small reads
+ *  rather than ten whole medleys. */
+export interface ProjectMeta {
+  ownerUid: string
+  ownerName: string
+  ownerEmail: string
+  name: string
+  songs: number
+  placed: number
+  updatedAt: number
+  /** Whose write this was, so a live listener can ignore the echo of its own push. */
+  updatedBy: string
+  link: ShareLink | null
+  pending: PendingInvite[]
+  /** The song, uploaded once so a collaborator on another machine is not stuck. */
+  audioUrl: string | null
+  audioKey: string | null
+  audioName: string
+}
+
+export interface Member {
+  uid: string
+  role: Role
+  email: string
+  name: string
+  at: number
+}
+
+/** One card on the home screen: the project's own metadata plus what this account may do
+ *  with it, which lives on the member document rather than the project. */
+export interface LibraryEntry extends ProjectMeta {
+  id: string
+  role: Role
+  /** The roster, so a card can show who else is on it without a second round of queries
+   *  once the home screen has already rendered. */
+  members: Member[]
+}
+
+const CONTENT_DOC = 'project'
+
+export const metaRef = (pid: string) => doc(db, 'projects', pid)
+export const contentRef = (pid: string) => doc(db, 'projects', pid, 'content', CONTENT_DOC)
+const membersCol = (pid: string) => collection(db, 'projects', pid, 'members')
+const memberRef = (pid: string, uid: string) => doc(db, 'projects', pid, 'members', uid)
+const linkRef = (token: string) => doc(db, 'links', token)
+const invitesCol = (email: string) => collection(db, 'invites', email, 'for')
+const inviteRef = (email: string, pid: string) => doc(db, 'invites', email, 'for', pid)
+
+/** Addresses are compared and keyed lowercased, because the token Google hands back is not
+ *  guaranteed to carry the same case the owner typed into the share panel. */
+export const emailKey = (email: string) => email.trim().toLowerCase()
+
+/** Identifies THIS TAB, not this account. A live listener has to drop the echo of its own
+ *  push while still adopting a write the same person made on their phone, and a uid cannot
+ *  tell those two apart. */
+export const WRITER_ID = crypto.randomUUID()
+
+interface ContentDoc {
+  data: Project
+  updatedAt: number
+  writerId: string
+}
+
+function requireUser() {
+  const user = getCurrentUser()
+  if (!user) throw new Error('Sign in first')
+  return user
+}
+
+const displayName = (user: { displayName: string | null; email: string | null }) =>
+  user.displayName ?? user.email ?? 'Someone'
+
+/** The fields derived from the choreography itself, so a card can say "5 songs, 214 placed"
+ *  without reading the whole document. */
+const derived = (project: Project) => ({
+  name: project.name,
+  songs: project.segments.length,
+  placed: project.blocks.length,
+})
+
+// -- reading ---------------------------------------------------------------------------
+
+/** Null covers both "no such project" and "not yours to see", because the rules cannot tell
+ *  a caller those apart without leaking which project ids exist: reading a document you are
+ *  not a member of is a denial, not an empty result. Every caller wants the same answer to
+ *  both - there is nothing here for you - and the writes that follow are denied on their
+ *  own merits rather than on this read. */
+export async function readMeta(pid: string): Promise<ProjectMeta | null> {
+  const snap = await getDoc(metaRef(pid)).catch(() => null)
+  return snap?.exists() ? (snap.data() as ProjectMeta) : null
+}
+
+export async function readContent(pid: string): Promise<Project | null> {
+  const snap = await getDoc(contentRef(pid))
+  return snap.exists() ? (snap.data() as ContentDoc).data : null
+}
+
+export async function readMyRole(pid: string): Promise<Role | null> {
+  const user = getCurrentUser()
+  if (!user) return null
+  const snap = await getDoc(memberRef(pid, user.uid))
+  return snap.exists() ? (snap.data() as Member).role : null
+}
+
+export const listMembers = async (pid: string): Promise<Member[]> =>
+  (await getDocs(membersCol(pid))).docs.map((d) => d.data() as Member)
+
+/** Every project this account is in, owned or shared. One collection-group query answers it;
+ *  scanning /projects is denied outright, which is why the member document carries `uid` as
+ *  a field as well as being named by it. */
+export async function listLibrary(): Promise<LibraryEntry[]> {
+  const user = getCurrentUser()
+  if (!user) return []
+  const memberships = await getDocs(query(collectionGroup(db, 'members'), where('uid', '==', user.uid)))
+  const entries = await Promise.all(
+    memberships.docs.map(async (m): Promise<LibraryEntry | null> => {
+      const pid = m.ref.parent.parent?.id
+      if (!pid) return null
+      // A project the owner deleted leaves the member document behind for a moment; a card
+      // pointing at nothing is worse than one fewer card.
+      const meta = await readMeta(pid).catch(() => null)
+      if (!meta) return null
+      const members = await listMembers(pid).catch(() => [])
+      return { ...meta, id: pid, role: (m.data() as Member).role, members }
+    }),
+  )
+  return entries.filter((e): e is LibraryEntry => e !== null).sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/** Fires on every write to the choreography, this tab's own included. The caller is given
+ *  `writerId` so it can drop its own echo rather than adopt what it just sent. */
+export function subscribeContent(
+  pid: string,
+  cb: (project: Project, updatedAt: number, writerId: string) => void,
+): () => void {
+  return onSnapshot(contentRef(pid), (snap) => {
+    if (!snap.exists()) return
+    const content = snap.data() as ContentDoc
+    cb(content.data, content.updatedAt, content.writerId)
+  })
+}
+
+// -- writing ---------------------------------------------------------------------------
+
+/** Order matters and is enforced by the rules: the project document names the owner, the
+ *  owner's member document is what every later permission check reads, and only then does
+ *  the choreography have somewhere it is allowed to land. */
+export async function createProjectDoc(project: Project): Promise<void> {
+  const user = requireUser()
+  const meta: ProjectMeta = {
+    ownerUid: user.uid,
+    ownerName: displayName(user),
+    ownerEmail: user.email ?? '',
+    ...derived(project),
+    updatedAt: project.updatedAt,
+    updatedBy: user.uid,
+    link: null,
+    pending: [],
+    audioUrl: null,
+    audioKey: null,
+    audioName: project.audioName,
+  }
+  await setDoc(metaRef(project.id), meta)
+  await setDoc(memberRef(project.id, user.uid), {
+    uid: user.uid,
+    role: 'owner',
+    email: user.email ?? '',
+    name: displayName(user),
+    at: Date.now(),
+  } satisfies Member)
+  await writeContent(project.id, project)
+}
+
+const writeContent = (pid: string, project: Project) =>
+  setDoc(contentRef(pid), {
+    data: stripUndefined(project),
+    updatedAt: project.updatedAt,
+    writerId: WRITER_ID,
+  } satisfies ContentDoc)
+
+/** The push path. Updates rather than replaces the project document, so an editor's write
+ *  leaves `link` and `pending` byte-identical: the rules refuse the write otherwise, and
+ *  that refusal is the only thing stopping an editor from granting access. */
+export async function writeProjectDoc(project: Project): Promise<void> {
+  const user = requireUser()
+  if (!(await readMeta(project.id))) return createProjectDoc(project)
+  await updateDoc(metaRef(project.id), {
+    ...derived(project),
+    updatedAt: project.updatedAt,
+    updatedBy: user.uid,
+    audioName: project.audioName,
+  })
+  await writeContent(project.id, project)
+}
+
+/** Sweeps a project off the service: content, roster, link and invites before the document
+ *  that grants the permission to delete any of them. */
+export async function deleteProjectDoc(pid: string): Promise<void> {
+  const meta = await readMeta(pid)
+  if (!meta) return
+  await deleteDoc(contentRef(pid)).catch(() => {})
+  for (const invite of meta.pending) await deleteDoc(inviteRef(emailKey(invite.email), pid)).catch(() => {})
+  if (meta.link) await deleteDoc(linkRef(meta.link.token)).catch(() => {})
+  for (const member of await listMembers(pid)) {
+    if (member.role !== 'owner') await deleteDoc(memberRef(pid, member.uid)).catch(() => {})
+  }
+  await deleteDoc(memberRef(pid, meta.ownerUid)).catch(() => {})
+  await deleteDoc(metaRef(pid))
+}
+
+// -- people ----------------------------------------------------------------------------
+
+/** Names someone by address. The invite document is what lets them claim the role later,
+ *  and the copy on the project is what lets the owner see they are still pending. */
+export async function inviteByEmail(pid: string, rawEmail: string, role: GrantableRole): Promise<void> {
+  const user = requireUser()
+  const email = emailKey(rawEmail)
+  if (!email.includes('@')) throw new Error('That does not look like an email address')
+  if (email === emailKey(user.email ?? '')) throw new Error('You already have this one')
+  const meta = await readMeta(pid)
+  if (!meta) throw new Error('Share this project from a device that has synced it first')
+
+  await setDoc(inviteRef(email, pid), { role, projectId: pid, projectName: meta.name, ownerName: meta.ownerName, at: Date.now() })
+  const pending = [...meta.pending.filter((p) => emailKey(p.email) !== email), { email, role, at: Date.now() }]
+  await updateDoc(metaRef(pid), { pending, updatedBy: user.uid })
+}
+
+export async function revokeInvite(pid: string, rawEmail: string): Promise<void> {
+  const user = requireUser()
+  const email = emailKey(rawEmail)
+  const meta = await readMeta(pid)
+  if (!meta) return
+  await deleteDoc(inviteRef(email, pid)).catch(() => {})
+  await updateDoc(metaRef(pid), { pending: meta.pending.filter((p) => emailKey(p.email) !== email), updatedBy: user.uid })
+}
+
+/** Changes what someone already in the project may do. An outstanding invite for the same
+ *  address is re-pointed too, or a person who has not signed in yet would claim the old role. */
+export async function setMemberRole(pid: string, member: Member, role: GrantableRole): Promise<void> {
+  await updateDoc(memberRef(pid, member.uid), { role })
+  const invite = await getDoc(inviteRef(emailKey(member.email), pid))
+  if (invite.exists()) await updateDoc(inviteRef(emailKey(member.email), pid), { role })
+}
+
+export async function removeMember(pid: string, member: Member): Promise<void> {
+  await deleteDoc(memberRef(pid, member.uid))
+  await deleteDoc(inviteRef(emailKey(member.email), pid)).catch(() => {})
+}
+
+/** Leaving is the one thing a viewer may do to the roster, and it is their own row. */
+export async function leaveProject(pid: string): Promise<void> {
+  const user = requireUser()
+  await deleteDoc(memberRef(pid, user.uid))
+}
+
+// -- the link --------------------------------------------------------------------------
+
+// Six words out of 471 is ~53 bits. The view-only link settles for four because guessing it
+// costs a look; guessing this one costs the choreography.
+const LINK_WORDS = 6
+
+/** Turns link access on, changes what it grants, or turns it off. The token survives a role
+ *  change so a link already handed out keeps working, which is the whole reason to change a
+ *  role rather than mint a new link. */
+export async function setLinkRole(pid: string, role: GrantableRole | null): Promise<ShareLink | null> {
+  const user = requireUser()
+  const meta = await readMeta(pid)
+  if (!meta) throw new Error('Share this project from a device that has synced it first')
+
+  if (!role) {
+    if (meta.link) await deleteDoc(linkRef(meta.link.token)).catch(() => {})
+    await updateDoc(metaRef(pid), { link: null, updatedBy: user.uid })
+    return null
+  }
+
+  const token = meta.link?.token ?? randomWords(LINK_WORDS)
+  const link: ShareLink = { token, role }
+  // The link document lands first: the member-create rule proves the token against the
+  // project, but the joiner cannot find the project without this one resolving.
+  await setDoc(linkRef(token), { projectId: pid, role, ownerUid: user.uid })
+  await updateDoc(metaRef(pid), { link, updatedBy: user.uid })
+  return link
+}
+
+/** A collaborator link. Prefixed, so it can never be mistaken for the view-only token that
+ *  has always ridden bare in the hash. */
+export const joinUrl = (token: string) => `${location.origin}${location.pathname}#join/${token}`
+
+const JOIN_IN_HASH = /^#\/?join\/([A-Za-z0-9][A-Za-z0-9_-]*)$/
+
+export const joinTokenFromUrl = (hash: string): string | null => hash.match(JOIN_IN_HASH)?.[1] ?? null
+
+export interface ResolvedLink {
+  projectId: string
+  role: GrantableRole
+}
+
+export async function resolveLink(token: string): Promise<ResolvedLink | null> {
+  const snap = await getDoc(linkRef(token))
+  return snap.exists() ? (snap.data() as ResolvedLink) : null
+}
+
+/** Writes the member document that IS the access grant, proving the link by writing its
+ *  token back: the rules compare it against the project's own copy, which nobody without
+ *  the link can read. Already a member is a success, not an error - the usual case is
+ *  someone opening the same link a second time. */
+export async function joinViaLink(token: string): Promise<string> {
+  const user = requireUser()
+  const resolved = await resolveLink(token)
+  if (!resolved) throw new Error('That link does not point at anything')
+  const existing = await getDoc(memberRef(resolved.projectId, user.uid))
+  if (existing.exists()) return resolved.projectId
+  await setDoc(memberRef(resolved.projectId, user.uid), {
+    uid: user.uid,
+    role: resolved.role,
+    email: user.email ?? '',
+    name: displayName(user),
+    at: Date.now(),
+    token,
+  })
+  return resolved.projectId
+}
+
+/** Turns every invite waiting on this address into real membership. Run on every sign-in:
+ *  an invite written while someone was signed out is the whole point of the mechanism.
+ *  The member document lands before the invite is cleared, because the rules read the
+ *  invite to authorise the member. */
+export async function claimInvites(): Promise<string[]> {
+  const user = getCurrentUser()
+  if (!user?.email) return []
+  const email = emailKey(user.email)
+  const invites = await getDocs(invitesCol(email)).catch(() => null)
+  if (!invites) return []
+  const joined: string[] = []
+  for (const invite of invites.docs) {
+    const pid = invite.id
+    const role = (invite.data() as { role: Role }).role
+    try {
+      const existing = await getDoc(memberRef(pid, user.uid))
+      if (!existing.exists()) {
+        await setDoc(memberRef(pid, user.uid), {
+          uid: user.uid,
+          role,
+          email: user.email,
+          name: displayName(user),
+          at: Date.now(),
+        } satisfies Member)
+      }
+      await deleteDoc(invite.ref).catch(() => {})
+      joined.push(pid)
+    } catch (e) {
+      // One withdrawn invite must not stop the rest from landing.
+      console.error('could not claim invite', pid, e)
+    }
+  }
+  return joined
+}
+
+// -- the one-time move -----------------------------------------------------------------
+
+const MIGRATED_KEY = 'countoff.collab.migrated'
+
+/** Lifts the pre-collaboration library at users/{uid}/projects into /projects, where a
+ *  document can have more than one editor. The originals are deliberately left in place:
+ *  they cost nothing and they are the only copy an older build of the app can still read. */
+export async function migrateLegacyProjects(): Promise<number> {
+  const user = getCurrentUser()
+  if (!user) return 0
+  const key = `${MIGRATED_KEY}.${user.uid}`
+  if (localStorage.getItem(key)) return 0
+  let moved = 0
+  try {
+    const legacy = await getDocs(collection(db, 'users', user.uid, 'projects'))
+    for (const docSnap of legacy.docs) {
+      if (await readMeta(docSnap.id)) continue
+      await createProjectDoc(docSnap.data() as Project)
+      moved++
+    }
+    localStorage.setItem(key, String(Date.now()))
+  } catch (e) {
+    // Leaving the flag unset means the next sign-in tries again, which is the right
+    // failure: the old documents are still there and nothing has been lost.
+    console.error('legacy project migration failed', e)
+  }
+  return moved
+}

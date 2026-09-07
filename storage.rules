@@ -17,6 +17,22 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
+    // The song a collaborative project is built on. Storage rules cannot read Firestore, so
+    // membership is unenforceable here: the guard is the same one takes rely on, an
+    // unguessable download token that only the project document hands out. The key segment
+    // is random rather than the project id, so knowing a project id reveals no path.
+    match /songs/{uid}/{key} {
+      allow read: if true;
+
+      // 100MB clears a 20-minute medley at 320kbps with room to spare, and bounds the bill.
+      allow create, update: if request.auth != null
+                            && request.auth.uid == uid
+                            && request.resource.size <= 100 * 1024 * 1024
+                            && request.resource.contentType.matches('audio/.*');
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
     match /{rest=**} {
       allow read, write: if false;
     }

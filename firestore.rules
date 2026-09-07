@@ -3,7 +3,148 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // A project document is private to the account that owns it.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Google hands back a verified address, and it is the only identifier the owner of a
+    // project actually knows about the person being invited: a uid is not something you type.
+    function hasEmail() {
+      return signedIn() && request.auth.token.email is string;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function metaOf(pid) {
+      return get(/databases/$(database)/documents/projects/$(pid));
+    }
+
+    function memberPath(pid, uid) {
+      return /databases/$(database)/documents/projects/$(pid)/members/$(uid);
+    }
+
+    function isMember(pid) {
+      return signedIn() && exists(memberPath(pid, request.auth.uid));
+    }
+
+    // Every caller guards this behind isMember() first, because get() on a missing
+    // document is an error and an error is a denial with a far less obvious cause.
+    function myRole(pid) {
+      return get(memberPath(pid, request.auth.uid)).data.role;
+    }
+
+    function canWrite(pid) {
+      return isMember(pid) && myRole(pid) in ['owner', 'editor'];
+    }
+
+    function isOwner(pid) {
+      return isMember(pid) && myRole(pid) == 'owner';
+    }
+
+    function invitePath(pid) {
+      return /databases/$(database)/documents/invites/$(myEmail())/for/$(pid);
+    }
+
+    function invited(pid) {
+      return hasEmail() && exists(invitePath(pid));
+    }
+
+    // A collaborative project. The choreography itself is NOT in this document: it lives in
+    // the `content` subdocument below, so drawing the library costs one small read each
+    // rather than downloading every project in it.
+    match /projects/{pid} {
+      allow get: if isMember(pid);
+      // The library is found by querying the `members` collection group, never by scanning
+      // this collection, so there is no legitimate list of every project on the service.
+      allow list: if false;
+
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.updatedBy == request.auth.uid;
+
+      // Who may share is the one power an editor does not get: `link` and `pending` are the
+      // access-control fields, and an editor rewriting them would be granting access.
+      allow update: if canWrite(pid)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.updatedBy == request.auth.uid
+                    && (isOwner(pid)
+                        || (request.resource.data.link == resource.data.link
+                            && request.resource.data.pending == resource.data.pending));
+
+      allow delete: if isOwner(pid);
+
+      // The choreography document, written on every sync push.
+      match /content/{docId} {
+        allow read: if isMember(pid);
+        allow write: if canWrite(pid);
+      }
+
+      // A member document is only ever written by the person it names: the owner knows an
+      // invitee's email, never their uid, so granting access has to be a claim, not a grant.
+      match /members/{memberUid} {
+        // Your own row is always readable, present or not. Firestore denies rather than
+        // empties a get() no rule allows, so without this half "am I in this project" is
+        // an error instead of a no, and every caller has to treat those the same anyway.
+        allow read: if isMember(pid) || (signedIn() && request.auth.uid == memberUid);
+
+        allow create: if signedIn()
+                      && request.auth.uid == memberUid
+                      && request.resource.data.uid == memberUid
+                      && (
+                           // The owner bootstrapping their own membership on a new project.
+                           (metaOf(pid).data.ownerUid == request.auth.uid
+                            && request.resource.data.role == 'owner')
+                           // Someone the owner invited by address, claiming the role given.
+                           || (invited(pid)
+                               && request.resource.data.role == get(invitePath(pid)).data.role)
+                           // Someone holding the link, proving it by writing the token back.
+                           || (metaOf(pid).data.link != null
+                               && request.resource.data.token == metaOf(pid).data.link.token
+                               && request.resource.data.role == metaOf(pid).data.link.role)
+                         );
+
+        // The owner's own row is frozen: demoting it would lock everybody out of a project
+        // nobody can then re-share, and there is no support desk to undo that.
+        allow update: if isOwner(pid)
+                      && resource.data.role != 'owner'
+                      && request.resource.data.uid == resource.data.uid;
+
+        allow delete: if resource.data.role != 'owner'
+                      && (isOwner(pid) || request.auth.uid == memberUid);
+      }
+    }
+
+    // How someone finds out they were added before they have ever opened the project. Keyed
+    // by lowercased address, which is what the owner typed and what the token carries back.
+    match /invites/{email}/for/{pid} {
+      // The invitee, to find it; the owner, to re-point or withdraw one they wrote.
+      allow read: if (hasEmail() && myEmail() == email) || isOwner(pid);
+      allow create, update: if isOwner(pid) && request.resource.data.role in ['editor', 'viewer'];
+      // The invitee clears their own the moment they claim it; the owner can withdraw one.
+      allow delete: if isOwner(pid) || (hasEmail() && myEmail() == email);
+    }
+
+    // Resolves a share link to the project it opens. Public read for the same reason
+    // /shares/{token} is: the unguessable token in the path is the whole guard.
+    match /links/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if signedIn()
+                            && request.resource.data.ownerUid == request.auth.uid
+                            && isOwner(request.resource.data.projectId);
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Every member document, reachable as a collection group so one query answers "which
+    // projects am I in". The filter it demands is the same one the client sends.
+    match /{path=**}/members/{memberUid} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // The pre-collaboration home for a project, private to the account that owns it. Kept
+    // readable so the one-time move into /projects can find them; nothing writes here now.
     match /users/{uid}/projects/{projectId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }

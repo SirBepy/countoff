@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://generic-sirbepy-project.firebaseapp.com",
+      "https://generic-sirbepy-project.web.app",
+      "https://sirbepy.github.io",
+      "http://localhost:42210"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Content-Length"]
+  }
+]

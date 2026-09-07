@@ -8,6 +8,9 @@ tsconfig.tsbuildinfo
 *.local
 public/test-track.wav
 
+# The emulator suite writes these beside firebase.json on every run.
+*-debug.log
+
 android/.gradle/
 android/local.properties
 android/**/build/

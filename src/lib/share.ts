@@ -49,11 +49,15 @@ function pickWord(): string {
   return SHARE_WORDS[buf[0] % SHARE_WORDS.length]
 }
 
+/** ~8.9 bits a word out of 471. Four is the view-only default; an edit link asks for six,
+ *  because guessing one there costs the choreography rather than a look at it. */
+export const randomWords = (count: number) => Array.from({ length: count }, pickWord).join('-')
+
 /** Four words out of 471 is ~35 bits, not the 128 the old hex token carried, so the
  *  clash that used to be unthinkable gets checked for instead of overwriting a share. */
 export async function newShareToken(): Promise<string> {
   for (let i = 0; i < 6; i++) {
-    const token = Array.from({ length: 4 }, pickWord).join('-')
+    const token = randomWords(4)
     if (!(await getDoc(shareRef(token))).exists()) return token
   }
   throw new Error('Could not find a free link name, try again')
