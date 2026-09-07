@@ -9,6 +9,10 @@ Built to plan a wedding flashmob.
 
 ## What it does
 
+**The library.** The app opens on everything you can reach: what you own, and what people have
+shared with you, with who else is on each one and whether you can edit it. A new choreography is the
+first tile.
+
 **Beat grid.** Tempo is detected from the audio; you confirm the downbeat with one tap. BPM and the
 "1" are both editable, because a detector that is 0.3 BPM out will drift a four-minute song.
 
@@ -55,11 +59,27 @@ crosses rather than snapping everyone into place on the beat.
 **Rehearsing.** Full-screen mode shows the current move large, the lyric above it, an 8-count pulse
 and what comes next. Loop a section, turn on the click, slow to 60% without the pitch dropping.
 
+**Working with other people.** Sign in and a project can have more than one person on it. Add
+someone by email address and it is in their library the next time they sign in with it, whether or
+not they had an account when you added them. Or turn on a link and hand that out instead: opening it
+signs them in and puts the project in their library, same as an invite. Each person is an editor or
+a view-only reader, and the owner can change that or take it back at any time. Edits show up on
+everyone's screen within a second or two.
+
+It is not Google Docs underneath: the whole choreography is one document, so two people dragging the
+same block in the same few seconds means the slower drag is lost. In practice people work at
+different times, and an edit that arrives while yours is still unsaved surfaces as a conflict you
+resolve rather than a silent overwrite.
+
+The view-only share link is a separate, older thing and still works exactly as it did: no account,
+no edit, comments welcome. Both live in the Share panel, one tab each.
+
 **Your data.** Everything lives in the browser by default. Storage is marked persistent so the
 browser will not evict it, a version history is kept automatically, and the whole project exports to
-a single file. Sign in with Google and your choreographies follow you between devices. The song
-itself never leaves the machine it is on, so every device picks the audio file once; the same panel
-swaps it in without disturbing a single count.
+a single file. Sign in with Google and your choreographies follow you between devices, the song
+included: it is uploaded once per project, because someone you add to a choreography cannot plan to
+a track they do not have. The audio still never leaves the device for a project you keep to
+yourself and never sign in for.
 
 ## On a phone
 
@@ -71,7 +91,8 @@ lock-screen controls. The Android APK does not: it is a WebView shell with no me
 locking the screen stops playback. Use the home-screen install if you need to rehearse pocketed.
 
 Storage is per browser and per address, so a project built at `localhost` will not appear on the
-hosted URL. Move between them with Export backup and Restore from file, then re-pick the song.
+hosted URL unless you are signed in on both. Signed out, move between them with Export backup and
+Restore from file, then re-pick the song.
 
 ## Running it
 
