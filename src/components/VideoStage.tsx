@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
-import { clipAt } from '../lib/video'
+import { clipAt, warmTakes } from '../lib/video'
 import type { Project } from '../lib/types'
 
 /** Past this the footage is visibly off the count, so seek instead of easing it back. */
@@ -36,6 +36,15 @@ export default function VideoStage({ project, time, playing, rate, children }: P
   const target = showing?.srcTime ?? 0
   const crop = showing?.take.crop
   const ratio = crop ? (nativeRatio * crop.w) / crop.h : nativeRatio
+
+  // Once a second rather than once a frame: `time` advances every animation frame, and
+  // which takes are coming up cannot change faster than the song does. The take on screen
+  // is dropped from the list, since the element below already owns it.
+  const second = Math.floor(time)
+  const warm = useMemo(
+    () => warmTakes(project, second, takeUrls, viewAs).filter((w) => w.takeId !== showing?.take.id),
+    [project, second, takeUrls, viewAs, showing?.take.id],
+  )
 
   // The crop rect maps onto the frame by scaling the video up by 1/w, 1/h and pulling
   // it back by the crop's own offset, so only that rect ever lands inside the box.
@@ -94,6 +103,21 @@ export default function VideoStage({ project, time, playing, rate, children }: P
           <span>{project.takes.length ? 'No clip on this count' : 'No footage yet'}</span>
         </div>
       )}
+      {/* The cuts still to come, buffering out of sight and parked on the frame each one
+          opens with. Sized rather than hidden: a display:none video is free to decode
+          nothing, which is the one thing these are here to do. */}
+      {warm.map((w) => (
+        <video
+          key={w.takeId}
+          className="vstage-warm"
+          src={w.src}
+          muted
+          playsInline
+          preload="auto"
+          aria-hidden
+          onLoadedMetadata={(e) => (e.currentTarget.currentTime = w.at)}
+        />
+      ))}
       {children}
     </div>
   )

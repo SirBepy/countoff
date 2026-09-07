@@ -20,9 +20,11 @@ export interface Showing {
   srcTime: number
 }
 
-/** Where the footage is. An uploaded take carries its own url; a file held on this
- *  device resolves to an object URL in UI state, the way the song's own url does. */
-export const takeSrc = (take: Take, local: Record<string, string>): string | undefined => take.url ?? local[take.id]
+/** Where the footage is. A copy on this device wins over the uploaded one: they are the
+ *  same film, and the local blob costs no round trip per seek. A viewer's download
+ *  promotes itself into `local` the moment it lands, so a share moves onto this path
+ *  partway through its first viewing rather than only on the next one. */
+export const takeSrc = (take: Take, local: Record<string, string>): string | undefined => local[take.id] ?? take.url
 
 /** Which clip covers an audio time. A take with no footage reachable here is skipped
  *  rather than mounted as a broken element.
@@ -52,6 +54,42 @@ export function clipAt(
     if (found) return found
   }
   return null
+}
+
+export interface Warm {
+  takeId: string
+  src: string
+  /** Where this take next cuts in, so an element parks on that frame rather than its first. */
+  at: number
+}
+
+/** How many takes are kept buffering ahead of the playhead. Three covers the next couple
+ *  of cuts without leaving a phone decoding the whole medley at once. */
+const WARM_TAKES = 3
+
+/**
+ * The takes about to be needed, in the order they cut in. Mounted early and left to
+ * buffer, a cut reaches footage the browser already holds instead of starting a fetch at
+ * the moment the frame is due. Counts from the current instant, so it is already warming
+ * the opening cut while the song sits at zero.
+ */
+export function warmTakes(
+  project: Project,
+  time: number,
+  local: Record<string, string>,
+  viewAs: string | null = null,
+): Warm[] {
+  const warm: Warm[] = []
+  for (const clip of orderedClips(project)) {
+    if (clipEnd(clip) <= time || !isFor(project, clip, viewAs)) continue
+    if (warm.some((w) => w.takeId === clip.takeId)) continue
+    const take = project.takes.find((t) => t.id === clip.takeId)
+    const src = take && takeSrc(take, local)
+    if (!src) continue
+    warm.push({ takeId: clip.takeId, src, at: clip.srcIn })
+    if (warm.length === WARM_TAKES) break
+  }
+  return warm
 }
 
 /** Seconds of song with footage over them, counting overlaps once. */

@@ -37,7 +37,9 @@ export async function importTake(file: File): Promise<Take | null> {
  */
 export async function attachTakes(project: Project): Promise<void> {
   for (const take of project.takes) {
-    if (take.url) continue
+    // Attached even when the take carries an uploaded url. Sharing a project sets that
+    // url, and reading past it meant the owner streamed their own footage back out of
+    // Storage while the file sat on this disk; `takeSrc` prefers the local copy.
     const blob = await loadTakeFile(take.id)
     if (blob) setTakeUrl(take.id, URL.createObjectURL(blob))
   }
@@ -60,9 +62,16 @@ export async function attachSharedTakes(project: Project, previous?: Project): P
           return { ...take, url: undefined }
         }
       }
+      // Live, not just next session: `takeSrc` prefers this copy, so the moment it lands
+      // every remaining seek and every cut back to this take reads off the disk instead
+      // of asking Storage for another range. Swapping the source under a clip already on
+      // screen costs one reload of a local blob, against a session of round trips.
       void fetch(take.url)
         .then((r) => r.blob())
-        .then((blob) => saveTakeFile(take.id, blob))
+        .then(async (blob) => {
+          await saveTakeFile(take.id, blob)
+          setTakeUrl(take.id, URL.createObjectURL(blob))
+        })
         .catch(() => {})
       return take
     }),
