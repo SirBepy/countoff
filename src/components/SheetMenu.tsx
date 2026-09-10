@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { tagLabel } from '../lib/cast'
+import { rangesOverlap } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { addComment, duplicateBlock, removeBlocks, restackBlock, set, setBlockCast, uid, useStore } from '../lib/store'
 import { isComment, type Project } from '../lib/types'
@@ -49,8 +50,7 @@ export default function SheetMenu({ project, onEditMove }: Props) {
         (b) =>
           b.id !== tagging.id &&
           b.segmentId === tagging.segmentId &&
-          b.startBeat < tagging.startBeat + tagging.beats &&
-          b.startBeat + b.beats > tagging.startBeat,
+          rangesOverlap(b.startBeat, b.startBeat + b.beats, tagging.startBeat, tagging.startBeat + tagging.beats),
       )}
       onSave={(ids) => {
         setBlockCast(tagging.id, ids)

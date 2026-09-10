@@ -25,7 +25,7 @@ import { requestPersistence } from './lib/backup'
 import { joinTokenFromUrl, readMyRole } from './lib/collab'
 import { getActiveProjectId, loadProject, migrateKeySpace, migrateProject } from './lib/db'
 import { attachAudio } from './lib/openProject'
-import { beatToTime, segmentAt, timeToBeat } from './lib/grid'
+import { beatToTime, rangesOverlap, segmentAt, timeToBeat } from './lib/grid'
 import { splitSongAt } from './lib/markers'
 import { loadShare, sharePersonFromUrl, shareTokenFromUrl } from './lib/share'
 import { attachSharedTakes, attachTakes } from './lib/takes'
@@ -256,8 +256,12 @@ export default function App() {
         const doomed = project.blocks.filter(
           (b) =>
             b.segmentId === selection.segmentId &&
-            b.startBeat < selection.startBeat + selection.beats &&
-            b.startBeat + b.beats > selection.startBeat,
+            rangesOverlap(
+              b.startBeat,
+              b.startBeat + b.beats,
+              selection.startBeat,
+              selection.startBeat + selection.beats,
+            ),
         )
         removeBlocks(doomed.map((b) => b.id))
       } else if (e.key === 's') {

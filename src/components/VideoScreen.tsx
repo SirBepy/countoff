@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { tagLabel, taggedPeople } from '../lib/cast'
 import { beatAt, orderedMovements, stints } from '../lib/floor'
-import { beatDuration, beatToTime, formatTime, segmentEnd } from '../lib/grid'
+import { beatDuration, beatToTime, formatTime, rangesOverlap, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import {
   addClip,
@@ -771,7 +771,7 @@ export default function VideoScreen({ project }: { project: Project }) {
           )}–${formatTime(clipEnd(castClip))}`}
           value={castClip.for ?? []}
           overlapping={clips.filter(
-            (c) => c.id !== castClip.id && c.songStart < clipEnd(castClip) && clipEnd(c) > castClip.songStart,
+            (c) => c.id !== castClip.id && rangesOverlap(c.songStart, clipEnd(c), castClip.songStart, clipEnd(castClip)),
           )}
           onSave={(ids) => {
             setClipCast(castClip.id, ids)

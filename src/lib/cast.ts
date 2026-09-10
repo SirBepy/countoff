@@ -1,3 +1,4 @@
+import { rangesOverlap } from './grid'
 import { isComment, type Block, type Person, type Project } from './types'
 
 /**
@@ -72,7 +73,8 @@ export interface SheetBlock extends Block {
 const plain = (b: Block): SheetBlock => ({ ...b, key: b.id, clipped: false, clash: false })
 
 const overlaps = (a: Block, b: Block) =>
-  a.segmentId === b.segmentId && a.startBeat < b.startBeat + b.beats && a.startBeat + a.beats > b.startBeat
+  a.segmentId === b.segmentId &&
+  rangesOverlap(a.startBeat, a.startBeat + a.beats, b.startBeat, b.startBeat + b.beats)
 
 /**
  * The blocks one viewer sees. In the general view that is every block unchanged. For a

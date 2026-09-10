@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { beatToTime, formatTime } from '../lib/grid'
+import { beatToTime, formatTime, rangesOverlap } from '../lib/grid'
 import { markAt, splitSongAt } from '../lib/markers'
 import { nowState } from '../lib/now'
 import { removeBlocks, set, useStore } from '../lib/store'
@@ -26,8 +26,7 @@ export default function BottomBar({ project, onNewSegment }: { project: Project;
     ? project.blocks.filter(
         (b) =>
           b.segmentId === selection.segmentId &&
-          b.startBeat < selection.startBeat + selection.beats &&
-          b.startBeat + b.beats > selection.startBeat,
+          rangesOverlap(b.startBeat, b.startBeat + b.beats, selection.startBeat, selection.startBeat + selection.beats),
       )
     : []
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
 import { sheetBlocks, tagLabel, taggedPeople, type SheetBlock } from '../lib/cast'
-import { beatToTime, countsInRow, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
+import { beatToTime, countsInRow, rangesOverlap, rowCount, segmentEnd, timeToBeat } from '../lib/grid'
 import { addLyricAt, lyricsBetween } from '../lib/lrc'
 import { movementLabel } from '../lib/floor'
 import { MARKER_COLOUR } from '../lib/markers'
@@ -30,7 +30,8 @@ function assignLanes(blocks: SheetBlock[]) {
   return lane
 }
 
-const overlapsRange = (b: SheetBlock, from: number, to: number) => b.startBeat < to && b.startBeat + b.beats > from
+const overlapsRange = (b: SheetBlock, from: number, to: number) =>
+  rangesOverlap(b.startBeat, b.startBeat + b.beats, from, to)
 
 interface Props {
   project: Project
@@ -153,7 +154,8 @@ function SheetRow({ project, segment, row, end, nowBeat, blocks: segBlocks, lane
       )
   const active = nowBeat !== null && nowBeat >= rowStart && nowBeat < rowEnd
   const currentCount = active ? Math.floor(nowBeat! - rowStart) : -1
-  const rowSelected = !!selection && selection.startBeat < rowEnd && selection.startBeat + selection.beats > rowStart
+  const rowSelected =
+    !!selection && rangesOverlap(selection.startBeat, selection.startBeat + selection.beats, rowStart, rowEnd)
   const rowLanes = blocks.reduce((n, b) => Math.max(n, (lanes.get(b.key) ?? 0) + 1), 1)
   const el = useRef<HTMLDivElement>(null)
   const follow = useStore((s) => s.follow)

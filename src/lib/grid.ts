@@ -34,6 +34,11 @@ export function countsInRow(seg: Segment, row: number, end: number) {
   return Math.max(0, Math.min(seg.countsPerRow, visible))
 }
 
+/** Half-open interval overlap: true when [aStart, aEnd) and [bStart, bEnd) share a point. */
+export function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number) {
+  return aStart < bEnd && aEnd > bStart
+}
+
 /** Blocks belonging to one segment, in beat order. */
 export function blocksInSegment(project: Project, segmentId: string): Block[] {
   return project.blocks.filter((b) => b.segmentId === segmentId).sort((a, b) => a.startBeat - b.startBeat)
