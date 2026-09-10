@@ -107,6 +107,8 @@ function SongBeatCard({ segment, index, segments, duration, buffer, playhead, pr
         end={end}
         bpm={segment.bpm}
         anchor={segment.anchor}
+        proposedBpm={proposal?.measurable ? proposal.bpm : undefined}
+        proposedAnchor={proposal?.measurable ? proposal.phase : undefined}
         playhead={playhead}
         onSeek={(t) => audio.seek(t)}
       />

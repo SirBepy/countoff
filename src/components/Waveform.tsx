@@ -9,6 +9,12 @@ interface WaveformProps {
   end: number
   bpm: number
   anchor: number
+  /** An un-accepted detection reading. While set, this is the grid drawn in accent
+   *  colour (todo 32: the stored grid is what's currently applied, not what the dev
+   *  is being asked to judge) - the stored grid still draws too, dimmed, so Accept's
+   *  effect is visible rather than the old grid just disappearing. */
+  proposedBpm?: number
+  proposedAnchor?: number
   /** Absolute audio time, or null to hide the playhead. Only drawn inside [start, end]. */
   playhead: number | null
   onSeek?: (time: number) => void
@@ -34,7 +40,19 @@ function withAlpha(hex: string, alpha: number): string {
  * Peak extraction is its own thing here, tuned for a picture, not for the
  * autocorrelation onset envelope in bpm.ts - reusable independent of that module.
  */
-export default function Waveform({ buffer, start, end, bpm, anchor, playhead, onSeek, height = 96 }: WaveformProps) {
+export default function Waveform({
+  buffer,
+  start,
+  end,
+  bpm,
+  anchor,
+  proposedBpm,
+  proposedAnchor,
+  playhead,
+  onSeek,
+  height = 96,
+}: WaveformProps) {
+  const hasProposal = proposedBpm != null && isFinite(proposedBpm) && proposedBpm > 0 && proposedAnchor != null && isFinite(proposedAnchor)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pxPerSecond, setPxPerSecond] = useState(60)
@@ -57,6 +75,9 @@ export default function Waveform({ buffer, start, end, bpm, anchor, playhead, on
     const styles = getComputedStyle(document.documentElement)
     const dimColor = styles.getPropertyValue('--text-dim').trim() || '#98a1b8'
     const accent = styles.getPropertyValue('--accent').trim() || '#7c5cff'
+    // --e2 (amber) is already this app's "attention, not yet committed" colour on
+    // the energy dots elsewhere - reused here instead of a new hardcoded value.
+    const proposalColor = styles.getPropertyValue('--e2').trim() || '#f0a63c'
     // --line is tuned for a border against the lighter panel background, not this
     // near-black canvas, so a beat tick in that colour was nearly invisible; a
     // translucent text-dim reads clearly while still losing to the downbeat's accent.
@@ -94,19 +115,21 @@ export default function Waveform({ buffer, start, end, bpm, anchor, playhead, on
       ctx.stroke()
     }
 
-    // Ticks off the segment's OWN stored anchor/bpm, never the pending proposal -
-    // only an Accept click ever moves these, matching the never-silent-overwrite rule.
-    if (bpm > 0 && isFinite(bpm) && isFinite(anchor)) {
-      const beat = beatDuration(bpm)
-      const firstN = Math.ceil((start - anchor) / beat)
+    // Ticks off a grid's own anchor/bpm. `downColor`/`otherColor` let the caller
+    // pick stored-vs-proposed styling; an Accept click is still the only thing
+    // that ever moves `bpm`/`anchor` themselves, matching the never-silent-overwrite rule.
+    const drawGrid = (gridBpm: number, gridAnchor: number, downColor: string, otherColor: string, lineWidth: number) => {
+      if (!(gridBpm > 0) || !isFinite(gridBpm) || !isFinite(gridAnchor)) return
+      const beat = beatDuration(gridBpm)
+      const firstN = Math.ceil((start - gridAnchor) / beat)
       for (let n = firstN; ; n++) {
-        const t = anchor + n * beat
+        const t = gridAnchor + n * beat
         if (t >= end) break
         if (t >= start) {
           const x = (t - start) * pxPerSecond
           const isDown = ((n % 4) + 4) % 4 === 0
-          ctx.strokeStyle = isDown ? accent : tickColor
-          ctx.lineWidth = isDown ? 2 : 1
+          ctx.strokeStyle = isDown ? downColor : otherColor
+          ctx.lineWidth = isDown ? lineWidth + 1 : lineWidth
           ctx.beginPath()
           ctx.moveTo(x, 0)
           ctx.lineTo(x, height)
@@ -114,7 +137,24 @@ export default function Waveform({ buffer, start, end, bpm, anchor, playhead, on
         }
       }
     }
-  }, [buffer, start, end, bpm, anchor, pxPerSecond, width, height])
+
+    // Todo 32: while a proposal is pending, the grid the dev is being asked to judge
+    // is the PROPOSED one - drawing the stored grid instead made Accept/reject a blind
+    // choice against a picture of something else. Both draw when a proposal is live:
+    // stored fades to near-invisible, proposed takes the accent/amber so the delta
+    // Accept would make is visible, not just the end state.
+    if (hasProposal) {
+      drawGrid(bpm, anchor, withAlpha(dimColor, 0.25), withAlpha(dimColor, 0.15), 1)
+      drawGrid(proposedBpm as number, proposedAnchor as number, accent, proposalColor, 1)
+    } else {
+      drawGrid(bpm, anchor, accent, tickColor, 1)
+    }
+
+    const drawnBpm = hasProposal ? (proposedBpm as number) : bpm
+    const drawnAnchor = hasProposal ? (proposedAnchor as number) : anchor
+    canvas.dataset.drawnBpm = String(drawnBpm)
+    canvas.dataset.drawnAnchor = String(drawnAnchor)
+  }, [buffer, start, end, bpm, anchor, hasProposal, proposedBpm, proposedAnchor, pxPerSecond, width, height])
 
   const playheadX = playhead != null && playhead >= start && playhead <= end ? (playhead - start) * pxPerSecond : null
 

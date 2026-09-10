@@ -104,6 +104,30 @@ async function main() {
       JSON.stringify({ bpm: seg2Before?.bpm, anchor: seg2Before?.anchor }),
     )
 
+    // Todo 32: while a proposal sits un-accepted, the waveform's own grid must
+    // track the PROPOSED tempo, not the stored one - otherwise Accept/reject is a
+    // blind choice made against a picture of something else. Waveform.tsx exposes
+    // what it actually drew via data-drawn-bpm/data-drawn-anchor so this can be
+    // asserted without pixel-scanning the canvas.
+    const drawnWithProposal = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('.beats-card')]
+      return cards.map((c) => {
+        const canvas = c.querySelector('canvas')
+        const proposalMono = c.querySelector('.beats-proposal-row .mono')?.textContent || ''
+        const m = /^([\d.]+) BPM/.exec(proposalMono)
+        return {
+          drawnBpm: canvas?.dataset.drawnBpm ? Number(canvas.dataset.drawnBpm) : null,
+          proposedBpm: m ? Number(m[1]) : null,
+        }
+      })
+    })
+    const song1Drawn = drawnWithProposal[0]
+    check(
+      'a proposal on screen redraws the grid at the proposed tempo, not the stored one',
+      song1Drawn.proposedBpm != null && song1Drawn.drawnBpm === song1Drawn.proposedBpm && song1Drawn.drawnBpm !== APPROVED_BPM_1,
+      JSON.stringify(song1Drawn),
+    )
+
     // Nudge song 1's grid (anchor) and tempo (bpm) via the manual controls - the
     // only two knobs the decided design allows.
     const cards = page.locator('.beats-card')
