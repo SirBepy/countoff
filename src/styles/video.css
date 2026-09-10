@@ -14,15 +14,23 @@
 .vstage.is-gap {
   background: repeating-linear-gradient(135deg, var(--bg-1), var(--bg-1) 10px, var(--bg) 10px, var(--bg) 20px);
 }
-/* The cuts still to come, buffering out of sight. Held in the layout at a pixel rather
-   than display:none: a video that is never rendered is free to decode nothing, which is
-   the one thing these exist to do. */
+/* The clip on screen and the cuts still to come are each an element of their own inside
+   a wrapper, so a cut is a wrapper's class changing under an element that already holds
+   its frame, never a reload. The ones waiting sit at a pixel rather than display:none: a
+   video that is never rendered is free to decode nothing, which is the one thing they
+   exist to do. */
+.vstage-on {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
 .vstage-warm {
   position: absolute;
   left: 0;
   top: 0;
   width: 1px;
   height: 1px;
+  overflow: hidden;
   opacity: 0;
   pointer-events: none;
 }

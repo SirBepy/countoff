@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
-import { clipAt, warmTakes } from '../lib/video'
-import type { Project } from '../lib/types'
+import { clipAt, warmClips } from '../lib/video'
+import type { Project, Take } from '../lib/types'
 
 /** Past this the footage is visibly off the count, so seek instead of easing it back. */
 const HARD_DRIFT = 0.3
@@ -20,55 +20,63 @@ interface Props {
   children?: React.ReactNode
 }
 
+/** One element of the pool: the clip on screen, or a cut still to come parked on its frame. */
+interface Slot {
+  clipId: string
+  take: Take
+  src: string
+  /** Where the element is parked from its own load event. */
+  at: number
+  local: boolean
+  on: boolean
+}
+
 /**
  * The footage, slaved to the audio. It is always muted: the song is already playing,
  * and a take filmed in the room carries the same music a beat or two out.
+ *
+ * Every clip in the pool has its own element, keyed by clip, and a cut is the next
+ * clip's wrapper becoming the visible one. The element behind it was mounted a cut
+ * earlier and parked on its opening frame, so nothing loads, seeks or decodes at the
+ * moment the song crosses the cut. Swapping one element's src instead cost every cut a
+ * reload, even from footage the browser already held.
  */
 export default function VideoStage({ project, time, playing, rate, children }: Props) {
-  const el = useRef<HTMLVideoElement>(null)
+  const els = useRef(new Map<string, HTMLVideoElement>())
   // Dance footage is as often shot portrait as landscape, and the layout wants the box
   // to fit the film rather than letterbox it, so the real ratio drives the CSS.
   const [nativeRatio, setNativeRatio] = useState(16 / 9)
   const takeUrls = useStore((s) => s.takeUrls)
   const viewAs = useStore((s) => s.viewAs)
   const showing = clipAt(project, time, takeUrls, viewAs)
-  const src = showing?.src
   const target = showing?.srcTime ?? 0
   const crop = showing?.take.crop
   const ratio = crop ? (nativeRatio * crop.w) / crop.h : nativeRatio
 
   // Once a second rather than once a frame: `time` advances every animation frame, and
-  // which takes are coming up cannot change faster than the song does.
+  // which clips are coming up cannot change faster than the song does.
   const second = Math.floor(time)
   const warm = useMemo(
-    () => warmTakes(project, second, takeUrls, viewAs, showing?.take.id),
-    [project, second, takeUrls, viewAs, showing?.take.id],
+    () => warmClips(project, second, takeUrls, viewAs, showing?.clip.id),
+    [project, second, takeUrls, viewAs, showing?.clip.id],
   )
 
-  // The crop rect maps onto the frame by scaling the video up by 1/w, 1/h and pulling
-  // it back by the crop's own offset, so only that rect ever lands inside the box.
-  const cropStyle: React.CSSProperties | undefined = crop
-    ? {
-        position: 'absolute',
-        width: `${100 / crop.w}%`,
-        height: `${100 / crop.h}%`,
-        left: `${(-100 * crop.x) / crop.w}%`,
-        top: `${(-100 * crop.y) / crop.h}%`,
-      }
-    : undefined
-
-  // Assigning currentTime before the element has metadata is dropped on the floor,
-  // so a fresh source is seeked from its own load event rather than from the frame loop.
-  useEffect(() => {
-    const v = el.current
-    if (v && src) v.load()
-  }, [src])
+  const slots: Slot[] = [
+    ...(showing
+      ? [{ clipId: showing.clip.id, take: showing.take, src: showing.src, at: target, local: showing.take.id in takeUrls, on: true }]
+      : []),
+    ...warm.flatMap((w) => {
+      const take = project.takes.find((t) => t.id === w.takeId)
+      return take ? [{ clipId: w.clipId, take, src: w.src, at: w.at, local: w.local, on: false }] : []
+    }),
+  ]
 
   // No dependency array on purpose: `time` advances every animation frame while the
   // song plays, and this is the correction that keeps the two elements together.
   useEffect(() => {
-    const v = el.current
-    if (!v || !src || v.readyState === 0) return
+    for (const [id, v] of els.current) if (id !== showing?.clip.id && !v.paused) v.pause()
+    const v = showing && els.current.get(showing.clip.id)
+    if (!v || v.readyState === 0) return
     if (playing && v.paused) void v.play().catch(() => {})
     if (!playing && !v.paused) v.pause()
     // A seek still in flight reports its own target as currentTime, so a slow link reads
@@ -82,49 +90,63 @@ export default function VideoStage({ project, time, playing, rate, children }: P
     else v.playbackRate = rate
   })
 
-  // Rehearse holds .vstage to a fixed 9/16 box, so the crop rect's own shape has to
-  // come from a wrapper sized to IT, not from whatever shape .vstage happens to be.
-  const onMeta = () => {
-    const v = el.current
-    if (!v) return
-    v.currentTime = target
-    if (v.videoWidth && v.videoHeight) setNativeRatio(v.videoWidth / v.videoHeight)
+  // A cut onto an element that already has its metadata fires no load event, so the
+  // box's ratio is read off it here rather than only in onMeta.
+  useEffect(() => {
+    const v = showing && els.current.get(showing.clip.id)
+    if (v?.videoWidth && v.videoHeight) setNativeRatio(v.videoWidth / v.videoHeight)
+  }, [showing?.clip.id])
+
+  // Assigning currentTime before the element has metadata is dropped on the floor, so
+  // each element is parked from its own load event: the one on screen on the song's
+  // instant, a waiting one on the frame its cut opens with. Rehearse holds .vstage to a
+  // fixed 9/16 box, so a crop rect's own shape comes from a wrapper sized to IT.
+  const onMeta = (v: HTMLVideoElement, slot: Slot) => {
+    v.currentTime = slot.at
+    if (slot.on && v.videoWidth && v.videoHeight) setNativeRatio(v.videoWidth / v.videoHeight)
   }
 
   return (
     <div className={`vstage${showing ? '' : ' is-gap'}`} style={{ '--ar': ratio } as React.CSSProperties}>
-      {src ? (
-        crop ? (
-          <div className="vstage-crop" style={{ aspectRatio: ratio }}>
-            <video ref={el} className="vstage-el" src={src} muted playsInline preload="auto" style={cropStyle} onLoadedMetadata={onMeta} />
-          </div>
-        ) : (
-          <video ref={el} className="vstage-el" src={src} muted playsInline preload="auto" onLoadedMetadata={onMeta} />
-        )
-      ) : (
+      {!showing && (
         <div className="vstage-gap">
           <i className="ph ph-film-slate" />
           <span>{project.takes.length ? 'No clip on this count' : 'No footage yet'}</span>
         </div>
       )}
-      {/* The cuts still to come, buffering out of sight and parked on the frame each one
-          opens with. Sized rather than hidden: a display:none video is free to decode
-          nothing, which is the one thing these are here to do. A remote take asks for its
-          metadata only, and the seek below fetches the one region its cut opens on: with
-          preload="auto" Chrome pulls the whole file, and a paused warm-up downloading
-          megabytes is what starved the clip actually playing. */}
-      {warm.map((w) => (
-        <video
-          key={w.takeId}
-          className="vstage-warm"
-          src={w.src}
-          muted
-          playsInline
-          preload={w.local ? 'auto' : 'metadata'}
-          aria-hidden
-          onLoadedMetadata={(e) => (e.currentTarget.currentTime = w.at)}
-        />
-      ))}
+      {slots.map((slot) => {
+        const c = slot.on ? slot.take.crop : undefined
+        // The crop rect maps onto the frame by scaling the video up by 1/w, 1/h and pulling
+        // it back by the crop's own offset, so only that rect ever lands inside the box.
+        const cropStyle: React.CSSProperties | undefined = c
+          ? {
+              position: 'absolute',
+              width: `${100 / c.w}%`,
+              height: `${100 / c.h}%`,
+              left: `${(-100 * c.x) / c.w}%`,
+              top: `${(-100 * c.y) / c.h}%`,
+            }
+          : undefined
+        return (
+          <div key={slot.clipId} className={slot.on ? (c ? 'vstage-crop' : 'vstage-on') : 'vstage-warm'} style={c ? { aspectRatio: ratio } : undefined}>
+            {/* A take this device does not hold asks for its metadata only, and the park
+                above fetches the one region its cut opens on: with preload="auto" Chrome
+                pulls the whole file, and a paused warm-up downloading megabytes is what
+                starved the clip actually playing. */}
+            <video
+              ref={(v) => (v ? els.current.set(slot.clipId, v) : els.current.delete(slot.clipId))}
+              className="vstage-el"
+              src={slot.src}
+              muted
+              playsInline
+              preload={slot.on || slot.local ? 'auto' : 'metadata'}
+              aria-hidden={!slot.on}
+              style={cropStyle}
+              onLoadedMetadata={(e) => onMeta(e.currentTarget, slot)}
+            />
+          </div>
+        )
+      })}
       {children}
     </div>
   )
