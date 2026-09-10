@@ -56,6 +56,9 @@ const PROJECT = {
     { id: 'c2', takeId: TAKE_B, songStart: 20, srcIn: 1, srcOut: 3.5 },
     { id: 'c3', takeId: TAKE_A, songStart: 30, srcIn: 1.5, srcOut: 3.5 },
     { id: 'c4', takeId: TAKE_C, songStart: 40, srcIn: 1, srcOut: 6 },
+    // Two cuts into one take, far enough apart that one parked frame cannot serve both.
+    { id: 'c5', takeId: TAKE_A, songStart: 50, srcIn: 2.5, srcOut: 3.5 },
+    { id: 'c6', takeId: TAKE_A, songStart: 55, srcIn: 0.5, srcOut: 3 },
   ],
   floor: { cols: 11, rows: 7 },
   walkCounts: 8,
@@ -166,16 +169,25 @@ async function main() {
 
     const stage = () =>
       page.evaluate(() => {
-        const main = document.querySelector('.vstage .vstage-el')
-        const warm = [...document.querySelectorAll('.vstage .vstage-warm')]
+        const main = document.querySelector('.vstage :not(.vstage-warm) > .vstage-el')
+        const warm = [...document.querySelectorAll('.vstage .vstage-warm > .vstage-el')]
         const desc = (v) => ({
           src: v.getAttribute('src'),
           ready: v.readyState,
           at: Number(v.currentTime.toFixed(2)),
           preload: v.getAttribute('preload'),
+          // A mark left on the element itself, so a cut can be told from a reload.
+          tag: v.__probe || null,
         })
-        return { src: main ? main.getAttribute('src') : null, ready: main ? main.readyState : -1, warm: warm.map(desc) }
+        return { src: main ? main.getAttribute('src') : null, ready: main ? main.readyState : -1, tag: main ? main.__probe || null : null, warm: warm.map(desc) }
       })
+    // Marks the element currently waiting, so the cut can prove it is the same node.
+    const tagWarm = (tag) =>
+      page.evaluate((tag) => {
+        const v = document.querySelector('.vstage .vstage-warm > .vstage-el')
+        if (v) v.__probe = tag
+        return !!v
+      }, tag)
 
     try {
       await seedProject(page, URL, { project: PROJECT, audioBytes: silentWav(60) })
@@ -228,14 +240,21 @@ async function main() {
         JSON.stringify(first.warm.map((w) => w.ready)),
       )
       await page.screenshot({ path: path.join(dir, 'rehearse-first-cut.png') })
+      await tagWarm('parked-for-c2')
 
-      // The cut itself: the element that takes over must already have its frames.
+      // The cut itself: the element that takes over must already have its frames, and it
+      // must BE the element that was parked, not a fresh load of the same file.
       await park(21)
       const second = await stage()
       check(
         'the cut lands on footage that is ready, not on an element still loading',
         second.ready >= 2 && second.src !== first.src,
         `readyState ${second.ready}`,
+      )
+      check(
+        'the cut shows the very element that was parked, not a reload of its file',
+        second.tag === 'parked-for-c2',
+        `main tag ${second.tag}`,
       )
       await page.screenshot({ path: path.join(dir, 'rehearse-second-cut.png') })
 
@@ -276,6 +295,25 @@ async function main() {
         `${duringCut} range requests during the cut (${remoteRequests.slice(warmedWith).join(', ')})`,
       )
       await page.screenshot({ path: path.join(dir, 'rehearse-remote-cut.png') })
+
+      // Two cuts into one take: the second gets its own element parked on its own frame,
+      // rather than the one on screen seeking across the file at the cut.
+      await park(50.5)
+      const sameTake = await stage()
+      const parkedNext = sameTake.warm[0]
+      check(
+        'a second cut into the take on screen gets its own element, parked on its own frame',
+        !!parkedNext && parkedNext.src === sameTake.src && Math.abs(parkedNext.at - 0.5) < 0.1 && parkedNext.ready >= 2,
+        parkedNext ? `warm at ${parkedNext.at} readyState ${parkedNext.ready}, same file ${parkedNext.src === sameTake.src}` : 'nothing warm',
+      )
+      await tagWarm('parked-for-c6')
+      await park(55.5)
+      const sameTakeCut = await stage()
+      check(
+        'a cut inside one take lands on the parked element with its frame ready',
+        sameTakeCut.tag === 'parked-for-c6' && sameTakeCut.ready >= 2,
+        `main tag ${sameTakeCut.tag} readyState ${sameTakeCut.ready}`,
+      )
 
       check(
         'nothing was fetched from the uploaded url while the file was on this device',
