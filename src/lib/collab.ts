@@ -7,12 +7,14 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore'
 import { db, getCurrentUser } from './firebase'
 import { randomWords, stripUndefined } from './share'
+import { deleteSong } from './songFile'
 import type { Project } from './types'
 
 export type Role = 'owner' | 'editor' | 'viewer'
@@ -235,6 +237,12 @@ export async function writeProjectDoc(project: Project): Promise<void> {
 export async function deleteProjectDoc(pid: string): Promise<void> {
   const meta = await readMeta(pid)
   if (!meta) return
+  // The song lives in Storage, not in anything swept below, and `audioKey` is only readable
+  // while `meta` is still alive - so it goes first, and its own failure (already missing,
+  // denied) is swallowed here too rather than trusted to `deleteSong`'s internals, so a
+  // storage hiccup can never abort the Firestore sweep that follows. A project that fails to
+  // delete because its audio was already gone is worse than one leaked object.
+  await deleteSong(meta.audioKey).catch(() => {})
   await deleteDoc(contentRef(pid)).catch(() => {})
   for (const invite of meta.pending) await deleteDoc(inviteRef(emailKey(invite.email), pid)).catch(() => {})
   if (meta.link) await deleteDoc(linkRef(meta.link.token)).catch(() => {})
@@ -248,27 +256,46 @@ export async function deleteProjectDoc(pid: string): Promise<void> {
 // -- people ----------------------------------------------------------------------------
 
 /** Names someone by address. The invite document is what lets them claim the role later,
- *  and the copy on the project is what lets the owner see they are still pending. */
+ *  and the copy on the project is what lets the owner see they are still pending.
+ *
+ *  The read and the write run inside one `runTransaction`, so two invites fired without
+ *  awaiting each other cannot both compute their new `pending` array from the same stale
+ *  read and have the second clobber the first: Firestore re-runs a transaction whose read
+ *  version was invalidated by another commit, so the second invite's `filter`-then-append
+ *  sees the first invite already sitting in `pending`. `arrayUnion` was the cheaper option
+ *  but cannot express this function's existing "replace this address's pending invite with
+ *  a different role" behaviour (the `filter` below), so it would have had to drop that case
+ *  to fix the race - a transaction fixes the race without touching that behaviour. The rules
+ *  are unaffected either way: `isOwner(pid)` already exempts the owner's write from the
+ *  pending-unchanged check a transaction or a plain update would both still have to satisfy. */
 export async function inviteByEmail(pid: string, rawEmail: string, role: GrantableRole): Promise<void> {
   const user = requireUser()
   const email = emailKey(rawEmail)
   if (!email.includes('@')) throw new Error('That does not look like an email address')
   if (email === emailKey(user.email ?? '')) throw new Error('You already have this one')
-  const meta = await readMeta(pid)
-  if (!meta) throw new Error('Share this project from a device that has synced it first')
 
-  await setDoc(inviteRef(email, pid), { role, projectId: pid, projectName: meta.name, ownerName: meta.ownerName, at: Date.now() })
-  const pending = [...meta.pending.filter((p) => emailKey(p.email) !== email), { email, role, at: Date.now() }]
-  await updateDoc(metaRef(pid), { pending, updatedBy: user.uid })
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(metaRef(pid)).catch(() => null)
+    if (!snap?.exists()) throw new Error('Share this project from a device that has synced it first')
+    const meta = snap.data() as ProjectMeta
+    tx.set(inviteRef(email, pid), { role, projectId: pid, projectName: meta.name, ownerName: meta.ownerName, at: Date.now() })
+    const pending = [...meta.pending.filter((p) => emailKey(p.email) !== email), { email, role, at: Date.now() }]
+    tx.update(metaRef(pid), { pending, updatedBy: user.uid })
+  })
 }
 
+/** Same race, same fix, as `inviteByEmail` above: the read that decides what survives in
+ *  `pending` has to be the one the write is checked against. */
 export async function revokeInvite(pid: string, rawEmail: string): Promise<void> {
   const user = requireUser()
   const email = emailKey(rawEmail)
-  const meta = await readMeta(pid)
-  if (!meta) return
-  await deleteDoc(inviteRef(email, pid)).catch(() => {})
-  await updateDoc(metaRef(pid), { pending: meta.pending.filter((p) => emailKey(p.email) !== email), updatedBy: user.uid })
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(metaRef(pid)).catch(() => null)
+    if (!snap?.exists()) return
+    const meta = snap.data() as ProjectMeta
+    tx.delete(inviteRef(email, pid))
+    tx.update(metaRef(pid), { pending: meta.pending.filter((p) => emailKey(p.email) !== email), updatedBy: user.uid })
+  })
 }
 
 /** Changes what someone already in the project may do. An outstanding invite for the same

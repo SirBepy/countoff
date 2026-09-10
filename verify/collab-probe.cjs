@@ -19,6 +19,11 @@ const { withBrowser, desktopContext, seedProject, silentWav, screenshotDir, crea
 const PORT = process.argv[2] || 42210
 const URL = `http://localhost:${PORT}/?emulator=1`
 const FIRESTORE = 'http://127.0.0.1:8080/v1/projects/generic-sirbepy-project/databases/(default)/documents'
+// Todo 40: the storage emulator's own JSON API, mirrored the same way FIRESTORE above
+// mirrors Firestore's - real object metadata, no admin token needed because
+// storage.rules already grants `songs/{uid}/{key}` a public read.
+const STORAGE_OBJECT = (key) =>
+  `http://127.0.0.1:9199/v0/b/generic-sirbepy-project.firebasestorage.app/o/${encodeURIComponent(key)}`
 
 // The auth emulator accepts anything here, and the accounts it makes live exactly as long
 // as the emulator process does, so this is a required argument rather than a credential.
@@ -43,6 +48,23 @@ const PROJECT = {
   ],
   blocks: [{ id: 'b1', segmentId: 's1', moveId: 'step-touch', startBeat: 0, beats: 2 }],
   moves: [{ id: 'step-touch', name: 'Step touch', beats: 2, energy: 1 }],
+  markers: [],
+  updatedAt: Date.now(),
+}
+
+// Todo 14: a second, wholly unrelated project. Every id inside it (project id, segment,
+// block, move) is distinct from PROJECT's own, so any assertion comparing the two catches
+// a leak in either direction rather than passing by coincidence on a shared name.
+const PROJECT2 = {
+  id: 'collab-probe-project-two',
+  name: 'Collab probe second project',
+  audioName: 'probe2.wav',
+  duration: 8,
+  segments: [
+    { id: 't1', name: 'Song 2', start: 0, bpm: 100, anchor: 0, transitionIn: 0, countsPerRow: 8, lyrics: [], fit: { offset: 0, scale: 1 } },
+  ],
+  blocks: [{ id: 'b2', segmentId: 't1', moveId: 'clap-solo', startBeat: 0, beats: 4 }],
+  moves: [{ id: 'clap-solo', name: 'Clap solo', beats: 4, energy: 1 }],
   markers: [],
   updatedAt: Date.now(),
 }
@@ -78,6 +100,14 @@ function plain(fields) {
 
 const admin = async (docPath) => plain(await adminRaw(docPath))
 
+/** 200 while the object is there, 404 once it is gone. Any other status is a probe bug
+ *  (wrong bucket, emulator down) rather than an answer either way, so it throws. */
+async function songObjectStatus(key) {
+  const res = await fetch(STORAGE_OBJECT(key))
+  if (res.status !== 200 && res.status !== 404) throw new Error(`storage read ${key}: HTTP ${res.status}`)
+  return res.status
+}
+
 const signIn = (page, who) => page.evaluate((w) => window.__testSignIn(w.email, w.pass), who)
 const ruleRead = (page, docPath) => page.evaluate((p) => window.__testGet(p), docPath)
 
@@ -108,6 +138,9 @@ async function freshPage(browser) {
   // Every failure in this file is a rules denial somewhere; without the console line the
   // probe only ever reports "timed out" and says nothing about which write was refused.
   page.on('console', (m) => m.type() === 'error' && console.log('  [console]', m.text().slice(0, 300)))
+  // Todo 40's delete goes through Home.tsx's window.confirm(); Playwright dismisses an
+  // unhandled dialog, which would silently no-op the delete instead of running it.
+  page.on('dialog', (d) => void d.accept())
   return page
 }
 
@@ -144,6 +177,21 @@ const closeModal = async (page) => {
   const x = await page.$('.modal header button.icon')
   if (x) await x.click()
   await page.waitForTimeout(200)
+}
+
+async function goHome(page) {
+  await page.click('button[title^="Your choreographies"]')
+  await page.waitForSelector('.home-card:not(.new)', { timeout: 15000 })
+}
+
+/** Matched on the exact name, or "Collab probe medley" would also hit-test the second
+ *  project's card once its name is a substring of the first's. */
+const homeCard = (page, name) =>
+  page.locator('.home-card').filter({ has: page.locator('.home-name', { hasText: new RegExp(`^${name}$`) }) })
+
+async function deleteFromHome(page, name) {
+  await homeCard(page, name).locator('.home-more').click()
+  await page.locator('.home-menu button', { hasText: 'Delete' }).click()
 }
 
 async function run(browser) {
@@ -189,6 +237,58 @@ async function run(browser) {
   check('the song is uploaded once so a collaborator can hear it', !!withSong.audioUrl, String(withSong.audioUrl).slice(0, 70))
   check('and its storage key is random rather than the project id', !String(withSong.audioKey).includes(PROJECT.id), withSong.audioKey)
 
+  // --- todo 14: a second project must stay separate from the first ---------------------
+  // The regression the GitHub transport was fixed for on 2026-08-29: opening and syncing
+  // one project must never overwrite another. Only ever proven against that old transport;
+  // this is the first time it runs against Firestore.
+  const d = (pages.owner2 = await freshPage(browser))
+  await seedProject(d, URL, { project: PROJECT2, audioBytes: silentWav(8) })
+  await signIn(d, OWNER)
+
+  const meta2 = await waitFor('the second project document', () => admin(`projects/${PROJECT2.id}`))
+  check('a second, distinct project pushes independently of the first', !!meta2, meta2 && meta2.name)
+
+  const content2 = await waitFor('the second project content document', () => admin(`projects/${PROJECT2.id}/content/project`))
+  check(
+    "the second project's content carries its own choreography, not the first's",
+    content2.data?.blocks?.[0]?.moveId === PROJECT2.moves[0].id,
+    JSON.stringify(content2.data?.blocks),
+  )
+
+  const metaAfterSecondPush = await admin(`projects/${PROJECT.id}`)
+  check(
+    "pushing the second project leaves the first project's meta document untouched",
+    metaAfterSecondPush.name === PROJECT.name && metaAfterSecondPush.audioName === PROJECT.audioName,
+    JSON.stringify({ name: metaAfterSecondPush.name, audioName: metaAfterSecondPush.audioName }),
+  )
+
+  const contentAfterSecondPush = await admin(`projects/${PROJECT.id}/content/project`)
+  check(
+    "pushing the second project leaves the first project's content subdocument untouched",
+    contentAfterSecondPush.data?.blocks?.[0]?.moveId === PROJECT.moves[0].id,
+    JSON.stringify(contentAfterSecondPush.data?.blocks),
+  )
+
+  // A fresh device that has never seen either project pulls both rather than one clobbering
+  // the other in the home library, and opening the second one lands on the second one.
+  const e = (pages.ownerPull = await freshPage(browser))
+  await e.goto(URL, { waitUntil: 'networkidle' })
+  await e.waitForSelector('.home', { timeout: 15000 })
+  await signIn(e, OWNER)
+  await e.waitForSelector('.home-card:not(.new)', { timeout: 25000 })
+  await e.waitForTimeout(1200)
+  const pulledLibrary = (await e.textContent('.home-body')).replace(/\s+/g, ' ')
+  check(
+    "a fresh device pulls both of the owner's projects",
+    pulledLibrary.includes(PROJECT.name) && pulledLibrary.includes(PROJECT2.name),
+    pulledLibrary.slice(0, 220),
+  )
+
+  await homeCard(e, PROJECT2.name).click()
+  await e.waitForSelector('.counts, .setup-flow, .setup', { timeout: 25000 })
+  const pulledState = await openState(e)
+  check('pulling the second project opens the second project, never the first', pulledState?.projectId === PROJECT2.id, JSON.stringify(pulledState))
+
   // --- inviting somebody by address ---------------------------------------------------
   await openSharePeople(a)
   await a.fill('#share-email', MATE.email)
@@ -201,6 +301,43 @@ async function run(browser) {
   check('inviting by address writes an invite the invitee can find', invite.role === 'editor', invite.role)
   const pending = (await admin(`projects/${PROJECT.id}`)).pending
   check('the owner sees them listed as pending', pending.length === 1, JSON.stringify(pending))
+  await closeModal(a)
+
+  // --- todo 41: two invites fired without awaiting each other must both survive --------
+  // A second, independent signed-in session of the SAME owner account, so the two writes
+  // below are genuinely concurrent (two separate SDK connections) rather than two clicks
+  // serialised by one page's own `busy` state, which a single page's share panel enforces
+  // and would never race no matter how fast the clicks land.
+  const owner2 = (pages.owner2ndSession = await freshPage(browser))
+  await owner2.goto(URL, { waitUntil: 'networkidle' })
+  await owner2.waitForSelector('.home', { timeout: 15000 })
+  await signIn(owner2, OWNER)
+  await owner2.waitForSelector('.home-card:not(.new)', { timeout: 25000 })
+  await homeCard(owner2, PROJECT.name).click()
+  await owner2.waitForSelector('.counts, .setup-flow, .setup', { timeout: 25000 })
+  await openSharePeople(owner2)
+  await openSharePeople(a)
+
+  const RACE_1 = 'race1@countoff.test'
+  const RACE_2 = 'race2@countoff.test'
+  await a.fill('#share-email', RACE_1)
+  await owner2.fill('#share-email', RACE_2)
+  // Neither click awaits the other's round trip before firing: this is the read-modify-write
+  // window the bug lived in.
+  await Promise.all([a.click('.modal .content button.primary'), owner2.click('.modal .content button.primary')])
+  await a.waitForTimeout(1500)
+
+  const racedPending = await waitFor('both raced invites landing in pending', async () => {
+    const current = (await admin(`projects/${PROJECT.id}`)).pending
+    return current.length >= 3 ? current : null
+  })
+  const racedEmails = racedPending.map((p) => p.email)
+  check(
+    'two invites fired without awaiting each other both survive, neither drops the other',
+    racedEmails.includes(RACE_1) && racedEmails.includes(RACE_2),
+    JSON.stringify(racedEmails),
+  )
+  await closeModal(owner2)
   await closeModal(a)
 
   // --- the invitee signs in and the project is simply there ---------------------------
@@ -283,6 +420,20 @@ async function run(browser) {
   check('a demoted account re-opens as a viewer', demoted?.role === 'viewer', JSON.stringify(demoted))
   check('and a viewer is read-only', demoted?.readOnly === true, String(demoted?.readOnly))
   await b.screenshot({ path: path.join(shots, '6-demoted-to-viewer.png') })
+
+  // --- todo 40: deleting a project reclaims its song from Storage ---------------------
+  // Last, deliberately: this ends PROJECT's life, and everything above still reads it.
+  const beforeDelete = await songObjectStatus(withSong.audioKey)
+  check('the uploaded song is really in Storage before the project is deleted', beforeDelete === 200, String(beforeDelete))
+
+  await goHome(a)
+  await deleteFromHome(a, PROJECT.name)
+
+  const afterDelete = await waitFor('the song object to leave Storage', async () => {
+    const status = await songObjectStatus(withSong.audioKey)
+    return status === 404 ? status : null
+  })
+  check('deleting the project also deletes its song from Storage', afterDelete === 404, String(afterDelete))
 
   } catch (e) {
     await dumpAll(e.message)
