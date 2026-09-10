@@ -6,6 +6,16 @@ at top-level `verify/` on purpose, not `.claude/verify/`: `.claude/` is a direct
 gitignore wholesale, and burying the anti-gitignore-loss harness there would repeat the exact bug
 this exists to fix.
 
+## Running the whole suite
+
+`npm run verify` (or `node verify/run-all.cjs [--port N]`) runs every probe below in one
+command, serially, against whatever dev server(s) and Firebase emulator are already up.
+It discovers probes from disk and reads each one's default port straight out of this
+file's own run-list, so it can't drift from the list the way a hand-written script would.
+A probe whose server isn't reachable (or, for `collab-probe.cjs`, whose Firebase emulator
+isn't reachable) is reported SKIPPED with the reason, never silently dropped. Pass/fail is
+decided from each probe's exit code only. See `verify/run-all.cjs` for the exact rules.
+
 ## Running a probe
 
 The dev server must already be running (`npm run dev`, or via `/supervised-run`). Then:
