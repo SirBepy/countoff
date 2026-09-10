@@ -61,32 +61,39 @@ export interface Warm {
   src: string
   /** Where this take next cuts in, so an element parks on that frame rather than its first. */
   at: number
+  /** Read off this device. A remote one shares the viewer's link with the clip on screen. */
+  local: boolean
 }
 
-/** How many takes are kept buffering ahead of the playhead. Three covers the next couple
- *  of cuts without leaving a phone decoding the whole medley at once. */
-const WARM_TAKES = 3
+/** How many takes are kept buffering ahead of the playhead. One: each warm element is a
+ *  second stream on the same link as the footage on screen and a second decoder on the
+ *  phone, and three of them left a viewer on mobile data with a frozen clip while the
+ *  cuts after it downloaded. */
+const WARM_TAKES = 1
 
 /**
  * The takes about to be needed, in the order they cut in. Mounted early and left to
  * buffer, a cut reaches footage the browser already holds instead of starting a fetch at
  * the moment the frame is due. Counts from the current instant, so it is already warming
- * the opening cut while the song sits at zero.
+ * the opening cut while the song sits at zero. `showing` is the take on screen, skipped
+ * before the count is taken: the element playing it already owns it, and with one slot
+ * it would otherwise fill that slot and leave the actual next cut cold.
  */
 export function warmTakes(
   project: Project,
   time: number,
   local: Record<string, string>,
   viewAs: string | null = null,
+  showing?: string,
 ): Warm[] {
   const warm: Warm[] = []
   for (const clip of orderedClips(project)) {
     if (clipEnd(clip) <= time || !isFor(project, clip, viewAs)) continue
-    if (warm.some((w) => w.takeId === clip.takeId)) continue
+    if (clip.takeId === showing || warm.some((w) => w.takeId === clip.takeId)) continue
     const take = project.takes.find((t) => t.id === clip.takeId)
     const src = take && takeSrc(take, local)
     if (!src) continue
-    warm.push({ takeId: clip.takeId, src, at: clip.srcIn })
+    warm.push({ takeId: clip.takeId, src, at: clip.srcIn, local: clip.takeId in local })
     if (warm.length === WARM_TAKES) break
   }
   return warm

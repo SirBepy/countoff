@@ -38,11 +38,10 @@ export default function VideoStage({ project, time, playing, rate, children }: P
   const ratio = crop ? (nativeRatio * crop.w) / crop.h : nativeRatio
 
   // Once a second rather than once a frame: `time` advances every animation frame, and
-  // which takes are coming up cannot change faster than the song does. The take on screen
-  // is dropped from the list, since the element below already owns it.
+  // which takes are coming up cannot change faster than the song does.
   const second = Math.floor(time)
   const warm = useMemo(
-    () => warmTakes(project, second, takeUrls, viewAs).filter((w) => w.takeId !== showing?.take.id),
+    () => warmTakes(project, second, takeUrls, viewAs, showing?.take.id),
     [project, second, takeUrls, viewAs, showing?.take.id],
   )
 
@@ -70,12 +69,17 @@ export default function VideoStage({ project, time, playing, rate, children }: P
   useEffect(() => {
     const v = el.current
     if (!v || !src || v.readyState === 0) return
+    if (playing && v.paused) void v.play().catch(() => {})
+    if (!playing && !v.paused) v.pause()
+    // A seek still in flight reports its own target as currentTime, so a slow link reads
+    // as drift a frame later and a second seek would abort the fetch the first one started.
+    // Repeated every frame, that is footage that never lands: the range request is cancelled
+    // every 0.3s of song. The correction waits for the seek to finish and then measures again.
+    if (v.seeking) return
     const drift = target - v.currentTime
     if (Math.abs(drift) > HARD_DRIFT) v.currentTime = target
     else if (playing && Math.abs(drift) > SOFT_DRIFT) v.playbackRate = rate * (1 + Math.sign(drift) * NUDGE)
     else v.playbackRate = rate
-    if (playing && v.paused) void v.play().catch(() => {})
-    if (!playing && !v.paused) v.pause()
   })
 
   // Rehearse holds .vstage to a fixed 9/16 box, so the crop rect's own shape has to
@@ -105,7 +109,10 @@ export default function VideoStage({ project, time, playing, rate, children }: P
       )}
       {/* The cuts still to come, buffering out of sight and parked on the frame each one
           opens with. Sized rather than hidden: a display:none video is free to decode
-          nothing, which is the one thing these are here to do. */}
+          nothing, which is the one thing these are here to do. A remote take asks for its
+          metadata only, and the seek below fetches the one region its cut opens on: with
+          preload="auto" Chrome pulls the whole file, and a paused warm-up downloading
+          megabytes is what starved the clip actually playing. */}
       {warm.map((w) => (
         <video
           key={w.takeId}
@@ -113,7 +120,7 @@ export default function VideoStage({ project, time, playing, rate, children }: P
           src={w.src}
           muted
           playsInline
-          preload="auto"
+          preload={w.local ? 'auto' : 'metadata'}
           aria-hidden
           onLoadedMetadata={(e) => (e.currentTarget.currentTime = w.at)}
         />
