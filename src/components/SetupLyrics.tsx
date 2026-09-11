@@ -1,32 +1,10 @@
 import { useState } from 'react'
 import { audio } from '../lib/audio'
+import { computeFit, type CalPoint } from '../lib/fit'
 import { segmentEnd } from '../lib/grid'
 import { parseLrc, parsePlain, shiftLyrics } from '../lib/lrc'
 import { flash, uid, updateSegment } from '../lib/store'
 import type { LyricLine, Project, Segment } from '../lib/types'
-
-interface CalPoint {
-  lineId: string
-  srcTime: number
-  time: number
-}
-
-/** Same two-point solve as LyricsModal's Calibrate tab: scale from the ratio of
- * placed-time gap to source-time gap, offset from anchoring point A. LyricsModal
- * is off limits to restructure here (the sheet still owns it), so this is a lift
- * of the logic, not a shared import. */
-function computeFit(a: CalPoint, b: CalPoint): { offset: number; scale: number } | { error: string } {
-  if (a.lineId === b.lineId) return { error: 'Tap two different lines to calibrate.' }
-  const dSrc = b.srcTime - a.srcTime
-  if (Math.abs(dSrc) < 1e-6) return { error: 'Those two lines share the same source time. Pick lines further apart in the song.' }
-  const scale = (b.time - a.time) / dSrc
-  if (!Number.isFinite(scale) || scale < 0.5 || scale > 2) {
-    return { error: `That works out to a ${Number.isFinite(scale) ? scale.toFixed(2) : '?'}x scale, unlikely to be right. Check you tapped the correct line.` }
-  }
-  const offset = a.time - a.srcTime * scale
-  if (!Number.isFinite(offset)) return { error: 'Could not compute a fit from those points.' }
-  return { offset, scale }
-}
 
 /**
  * One song's lyric intake: paste, per-line timing, and a two-tap fit - the same
