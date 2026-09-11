@@ -100,11 +100,43 @@ function plain(fields) {
 
 const admin = async (docPath) => plain(await adminRaw(docPath))
 
+/** Every document in a collection, via the same admin bypass `adminRaw` uses. Shared by
+ *  `wipe()` and the defect-C guard below, which needs to find a member row by its role or
+ *  email rather than a uid nothing here already knows. */
+async function listAdmin(relative) {
+  const res = await fetch(`${FIRESTORE}/${relative}?pageSize=300`, { headers: { Authorization: 'Bearer owner' } })
+  return res.ok ? ((await res.json()).documents ?? []) : []
+}
+
 /** 200 while the object is there, 404 once it is gone. Any other status is a probe bug
  *  (wrong bucket, emulator down) rather than an answer either way, so it throws. */
 async function songObjectStatus(key) {
   const res = await fetch(STORAGE_OBJECT(key))
   if (res.status !== 200 && res.status !== 404) throw new Error(`storage read ${key}: HTTP ${res.status}`)
+  return res.status
+}
+
+// Todo 54: the auth emulator's own REST sign-in, mirroring what the SDK does over the wire,
+// so a delete attempt made with this token is checked against the real security rules
+// rather than skipped the way `adminRaw`'s `Bearer owner` bypass is. Returns the uid
+// alongside the token: `res.ok` only proves the emulator answered 200, not that the token
+// resolved to the account the caller asked for, and a rule denial for the wrong reason
+// (an empty or mismatched token) would still read as a 403 to `userDeleteStatus` below.
+async function realIdToken(who) {
+  const res = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=probe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: who.email, password: who.pass, returnSecureToken: true }),
+  })
+  if (!res.ok) throw new Error(`REST sign-in for ${who.email}: HTTP ${res.status}`)
+  const body = await res.json()
+  return { idToken: body.idToken, uid: body.localId }
+}
+
+/** A rules-enforced delete attempt, as the signed-in user rather than the admin bypass: the
+ *  status code IS the assertion, not an error to unwrap. */
+async function userDeleteStatus(idToken, docPath) {
+  const res = await fetch(`${FIRESTORE}/${docPath}`, { method: 'DELETE', headers: { Authorization: `Bearer ${idToken}` } })
   return res.status
 }
 
@@ -146,22 +178,18 @@ async function freshPage(browser) {
 
 /** Clean state per run, or the second run reads the first run's roster. */
 async function wipe() {
-  const list = async (collection) => {
-    const res = await fetch(`${FIRESTORE}/${collection}?pageSize=300`, { headers: { Authorization: 'Bearer owner' } })
-    return res.ok ? ((await res.json()).documents ?? []) : []
-  }
   const drop = (relative) =>
     fetch(`${FIRESTORE}/${relative}`, { method: 'DELETE', headers: { Authorization: 'Bearer owner' } })
   const relative = (doc) => doc.name.split('/documents/')[1]
 
-  for (const project of await list('projects')) {
+  for (const project of await listAdmin('projects')) {
     const base = relative(project)
     // Deleting a document does not delete its subcollections, so the known ones go by name.
-    for (const child of ['content', 'members']) for (const kid of await list(`${base}/${child}`)) await drop(relative(kid))
+    for (const child of ['content', 'members']) for (const kid of await listAdmin(`${base}/${child}`)) await drop(relative(kid))
     await drop(base)
   }
-  for (const link of await list('links')) await drop(relative(link))
-  for (const invitee of await list('invites')) for (const kid of await list(`${relative(invitee)}/for`)) await drop(relative(kid))
+  for (const link of await listAdmin('links')) await drop(relative(link))
+  for (const invitee of await listAdmin('invites')) for (const kid of await listAdmin(`${relative(invitee)}/for`)) await drop(relative(kid))
 }
 
 async function openSharePeople(page) {
@@ -236,6 +264,31 @@ async function run(browser) {
   })
   check('the song is uploaded once so a collaborator can hear it', !!withSong.audioUrl, String(withSong.audioUrl).slice(0, 70))
   check('and its storage key is random rather than the project id', !String(withSong.audioKey).includes(PROJECT.id), withSong.audioKey)
+
+  // --- todo 54: the owner's own row must stay undeletable while the project lives ------
+  // firestore.rules:108-109 says removing the owner row while the project still exists
+  // would lock everyone out of a project nobody can then re-share. This is the regression
+  // guard on the delete rule touched below: proven with a real rules-enforced request, not
+  // the admin bypass `adminRaw` uses, so a widened rule that reopens this would be caught.
+  const ownerAuth = await realIdToken(OWNER)
+  check(
+    'the REST sign-in for the owner returned a usable bearer token',
+    typeof ownerAuth.idToken === 'string' && ownerAuth.idToken.length > 0,
+    JSON.stringify(typeof ownerAuth.idToken),
+  )
+  check(
+    "the REST sign-in resolved to the SAME uid the SDK is using, not a denial for the wrong reason",
+    ownerAuth.uid === meta.ownerUid,
+    JSON.stringify({ rest: ownerAuth.uid, sdk: meta.ownerUid }),
+  )
+  const blockedDeleteStatus = await userDeleteStatus(ownerAuth.idToken, `projects/${PROJECT.id}/members/${meta.ownerUid}`)
+  check(
+    "the owner's own member row cannot be deleted while its project still exists",
+    blockedDeleteStatus === 403,
+    String(blockedDeleteStatus),
+  )
+  const ownerRowSurvivesAttempt = await admin(`projects/${PROJECT.id}/members/${meta.ownerUid}`)
+  check('that refused delete left the row untouched', ownerRowSurvivesAttempt?.role === 'owner', JSON.stringify(ownerRowSurvivesAttempt))
 
   // --- todo 14: a second project must stay separate from the first ---------------------
   // The regression the GitHub transport was fixed for on 2026-08-29: opening and syncing
@@ -376,6 +429,34 @@ async function run(browser) {
   check('an account nobody invited is refused the project outright', !!strangerRead?.denied, JSON.stringify(strangerRead))
   check('and sees nothing of it in their library', !(await c.textContent('.home-body')).includes(PROJECT.name))
 
+  // --- todo 54 defect C: the member-delete rule's isOwner-or-self clause is load-bearing ---
+  // The GUEST account above has no relationship to this project - not invited, not a member -
+  // which is exactly what the vacuous-403 hole in the old guard never tested. Run before the
+  // link section: GUEST joins as an editor down there, which would make it a member and no
+  // longer the stranger this check needs.
+  const mateMemberDoc = (await listAdmin(`projects/${PROJECT.id}/members`)).find(
+    (d) => plain(d.fields).email === MATE.email.toLowerCase(),
+  )
+  const mateUid = mateMemberDoc.name.split('/').pop()
+  const guestAuth = await realIdToken(GUEST)
+  check(
+    'the REST sign-in for the guest also returned a usable bearer token',
+    typeof guestAuth.idToken === 'string' && guestAuth.idToken.length > 0,
+    JSON.stringify(typeof guestAuth.idToken),
+  )
+  const strangerDeleteStatus = await userDeleteStatus(guestAuth.idToken, `projects/${PROJECT.id}/members/${mateUid}`)
+  check(
+    "a signed-in account with no relationship to the project cannot delete another member's row",
+    strangerDeleteStatus === 403,
+    String(strangerDeleteStatus),
+  )
+  const mateRowSurvivesStrangerAttempt = await admin(`projects/${PROJECT.id}/members/${mateUid}`)
+  check(
+    "that refused delete left the mate's row untouched",
+    mateRowSurvivesStrangerAttempt?.role === 'editor',
+    JSON.stringify(mateRowSurvivesStrangerAttempt),
+  )
+
   // --- the link, and what it grants ---------------------------------------------------
   await openSharePeople(a)
   await a.selectOption('#share-link-role', 'editor')
@@ -434,6 +515,24 @@ async function run(browser) {
     return status === 404 ? status : null
   })
   check('deleting the project also deletes its song from Storage', afterDelete === 404, String(afterDelete))
+
+  // --- todo 54: the owner's own member row must not survive the project it belonged to ---
+  // `null` is the success value here, not a truthy one, so this polls directly rather than
+  // through `waitFor` (which treats a falsy probe result as "not yet").
+  const ownerRowGoneAfterDelete = await (async () => {
+    const until = Date.now() + 40000
+    for (;;) {
+      const row = await admin(`projects/${PROJECT.id}/members/${meta.ownerUid}`)
+      if (row === null) return { gone: true }
+      if (Date.now() > until) return { gone: false, row }
+      await new Promise((r) => setTimeout(r, 500))
+    }
+  })()
+  check(
+    "deleting the project also deletes the owner's own member row",
+    ownerRowGoneAfterDelete.gone === true,
+    JSON.stringify(ownerRowGoneAfterDelete),
+  )
 
   } catch (e) {
     await dumpAll(e.message)

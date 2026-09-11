@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { deleteProjectDoc, leaveProject, listLibrary, type LibraryEntry, type Member, type Role } from '../lib/collab'
+import { OwnerRowStrandedError, deleteProjectDoc, leaveProject, listLibrary, type LibraryEntry, type Member, type Role } from '../lib/collab'
 import { deleteProject, duplicateProject, listProjects, loadProjectById, saveProjectRecord } from '../lib/db'
 import { signInWithGoogle, signOutUser } from '../lib/firebase'
 import { colourFor, distinctColours, initialsFrom } from '../lib/floor'
@@ -173,7 +173,10 @@ export default function Home({ onNewProject, onOpened }: { onNewProject: () => v
       ? `Delete "${card.name}"?${card.shared ? ' Everyone you shared it with loses it too.' : ''} This cannot be undone.`
       : `Leave "${card.name}"? You can get back in with a new invite.`
     if (!confirm(question)) return
-    if (card.role === 'owner') await deleteProjectDoc(card.id).catch(() => flash('Could not remove it from the cloud'))
+    if (card.role === 'owner')
+      await deleteProjectDoc(card.id).catch((e: unknown) =>
+        flash(e instanceof OwnerRowStrandedError ? 'Removed, but a leftover trace of it did not clear' : 'Could not remove it from the cloud'),
+      )
     else if (card.role) await leaveProject(card.id).catch(() => flash('Could not leave that project'))
     await deleteProject(card.id)
     void refresh(null)

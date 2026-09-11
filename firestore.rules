@@ -111,7 +111,14 @@ service cloud.firestore {
                       && resource.data.role != 'owner'
                       && request.resource.data.uid == resource.data.uid;
 
-        allow delete: if resource.data.role != 'owner'
+        // Deleting the owner row is refused for the same reason, with one exception: once
+        // the project document is gone there is nothing left to be locked out of, and
+        // `deleteProjectDoc` needs a way to sweep that row too. The `!exists` check below
+        // reads the project document directly rather than through `metaOf`, which is only
+        // used by the member-create rule above. `isOwner`, the other half of this same
+        // delete rule, never touches the project document at all: it resolves entirely
+        // through `isMember`/`myRole` against the MEMBER path (lines 28-36).
+        allow delete: if (resource.data.role != 'owner' || !exists(/databases/$(database)/documents/projects/$(pid)))
                       && (isOwner(pid) || request.auth.uid == memberUid);
       }
     }
