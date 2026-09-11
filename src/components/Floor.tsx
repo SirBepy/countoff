@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
+import { doingAt, facingAt } from '../lib/facing'
 import { formatTime } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { clampZoom } from '../lib/timeline'
@@ -10,8 +11,6 @@ import {
   SIDES,
   WALK_MAX,
   beatAt,
-  doingAt,
-  facingAt,
   focusAt,
   freeCell,
   initialsFrom,

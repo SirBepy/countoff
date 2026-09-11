@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
-import { beatAt, facingAwayRuns, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
+import { facingAwayRuns } from '../lib/facing'
+import { beatAt, movementLabel, orderedMovements, SIDE_META, SIDES, stints } from '../lib/floor'
 import { beatDuration, formatTime, segmentEnd } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { beginGesture, endGesture, removeMovement, togglePin, updateMovement } from '../lib/store'

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { beatAt, centreCol, doingAt, facingAt, focusAt, frontRow, occupantAt, standingAt } from '../lib/floor'
+import { doingAt, facingAt } from '../lib/facing'
+import { beatAt, centreCol, focusAt, frontRow, occupantAt, standingAt } from '../lib/floor'
 import { beatDuration, beatToTime } from '../lib/grid'
 import { shapeCycle } from '../lib/moves'
 import { beginGesture, endGesture, flash, placeFocusKey, placeMovement, setFocus, useStore } from '../lib/store'

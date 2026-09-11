@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { facingAt, movementLabel, orderedMovements, standingAt } from '../lib/floor'
+import { facingAt } from '../lib/facing'
+import { movementLabel, orderedMovements, standingAt } from '../lib/floor'
 import { beatDuration, formatTime } from '../lib/grid'
 import { nowState } from '../lib/now'
 import { set, useStore } from '../lib/store'
