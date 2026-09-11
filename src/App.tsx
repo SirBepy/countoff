@@ -352,6 +352,10 @@ export default function App() {
 
   // Offered on whichever screen the link happened to open on, so it is never missed.
   const whoAreYou = askWhoAreYou ? <WhoAreYou project={project} /> : null
+  // One definition, joined onto every view below (including the sheet's own return
+  // further down), so a flash raised anywhere reaches the screen instead of only the
+  // views that happened to carry their own copy of this markup.
+  const toast = status ? <div className="toast">{status}</div> : null
 
   if (view === 'rehearse')
     return (
@@ -359,24 +363,31 @@ export default function App() {
         <Rehearse project={project} commentToken={commentToken} onComments={() => setShowComments(true)} />
         {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
         {whoAreYou}
+        {toast}
       </>
     )
-  if (view === 'setup') return <SetupFlow project={project} />
+  if (view === 'setup')
+    return (
+      <>
+        <SetupFlow project={project} />
+        {whoAreYou}
+        {toast}
+      </>
+    )
   if (view === 'floor')
     return (
       <>
         <Floor project={project} />
         {whoAreYou}
+        {toast}
       </>
     )
-  // The toast below lives inside the sheet's own return, so a view that returns early
-  // needs its own copy. The video screen raises flashes: it refuses a nudge that has no
-  // footage left to give.
   if (view === 'video')
     return (
       <>
         <VideoScreen project={project} />
-        {status && <div className="toast">{status}</div>}
+        {whoAreYou}
+        {toast}
       </>
     )
 
@@ -384,156 +395,159 @@ export default function App() {
   const marker = project.markers.find((m) => m.id === markerFor)
 
   return (
-    <div className="app">
-      <div className="appbar">
-        <div className="brand only-wide">
-          <span className="dot" /> Countoff
-        </div>
-        {readOnly ? (
-          <span className="app-title only-narrow">
-            <span className="name">{project.name}</span>
-          </span>
-        ) : (
-          <button className="app-title only-narrow" onClick={() => setShowMenu(true)} title="Project name, setup, projects and backups">
-            <span className="name">{project.name}</span>
-            <i className="ph ph-caret-down" />
-          </button>
-        )}
-        {readOnly ? (
-          <span className="project-name only-wide">{project.name}</span>
-        ) : (
-          <input
-            className="project-name only-wide"
-            value={project.name}
-            onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
-          />
-        )}
-        <span className="chip only-wide">
-          <i className="ph ph-list-numbers i" /> {project.blocks.length} placed
-        </span>
-        <span className="chip only-wide">
-          <i className="ph ph-flag i" /> {plural(project.segments.length, 'song')}, {plural(project.markers.length, 'mark')}
-        </span>
-        <div className="spacer only-wide" />
-        <span className="faint only-wide" style={{ fontSize: 11 }}>
-          <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
-        </span>
-        <div className="setup-picker only-wide" role="group" aria-label="Song setup steps">
-          {(
-            [
-              ['cuts', 'Cuts'],
-              ['beats', 'Beats'],
-              ['lyrics', 'Lyrics'],
-            ] as const
-          ).map(([step, label]) => (
-            <button
-              key={step}
-              className="setup-picker-chip"
-              onClick={() => set({ view: 'setup', setupStep: step }, false)}
-              title={`Setup: ${label.toLowerCase()}`}
-            >
-              {label}
+    <>
+      <div className="app">
+        <div className="appbar">
+          <div className="brand only-wide">
+            <span className="dot" /> Countoff
+          </div>
+          {readOnly ? (
+            <span className="app-title only-narrow">
+              <span className="name">{project.name}</span>
+            </span>
+          ) : (
+            <button className="app-title only-narrow" onClick={() => setShowMenu(true)} title="Project name, setup, projects and backups">
+              <span className="name">{project.name}</span>
+              <i className="ph ph-caret-down" />
             </button>
-          ))}
-        </div>
-        <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
-          <i className="ph ph-users-three i" />
-        </button>
-        {!readOnly && (
-          <button className="ghost icon only-wide" onClick={() => set({ view: 'video' }, false)} title="Video: lay your footage over the song">
-            <i className="ph ph-film-strip i" />
-          </button>
-        )}
-        <ViewAs project={project} compact={!isDesktop} />
-        <button
-          className={`ghost icon only-wide${hideCast ? ' on' : ''}`}
-          onClick={toggleHideCast}
-          title={hideCast ? "Show the cast's cues on the sheet" : "Hide the cast's cues on the sheet"}
-        >
-          <i className={`ph ${hideCast ? 'ph-eye-closed' : 'ph-eye'} i`} />
-        </button>
-        {!readOnly && (
-          <>
-            <button className="ghost icon only-wide" onClick={() => setShowHome(true)} title="Your choreographies: switch, share, start a new one">
-              <i className="ph ph-folders i" />
-            </button>
-            <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
-              <i className="ph ph-shield-check i" />
-            </button>
-            <button className="ghost icon only-wide" onClick={() => setShowShare(true)} title="Share: add people who can edit, or a view-only link">
-              <i className="ph ph-share-network i" />
-            </button>
-          </>
-        )}
-        {commentToken && (
-          <button className="ghost icon" onClick={() => setShowComments(true)} title="Comments on the shared link">
-            <i className="ph ph-chat-circle-text i" />
-          </button>
-        )}
-        {readOnly ? (
-          <span className="chip">
-            <i className="ph ph-eye i" /> View only
-          </span>
-        ) : (
-          <>
-            <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-              <i className="ph ph-arrow-counter-clockwise i" />
-            </button>
-            <button className="ghost icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-              <i className="ph ph-arrow-clockwise i" />
-            </button>
-          </>
-        )}
-      </div>
-
-      {!isDesktop && <SongStrip project={project} />}
-
-      <div className="body">
-        {libraryOpen && <div className="rail-scrim" onPointerDown={() => set({ libraryOpen: false }, false)} />}
-        <aside className={`rail${libraryOpen ? ' open' : ''}`}>
-          <MoveLibrary project={project} onEditMove={setMoveFor} />
-        </aside>
-
-        <main className="main">
-          {isDesktop && (
-            <SongMap
-              project={project}
-              selectedSegmentId={segmentId}
-              onSelectSegment={setSegmentId}
-              onEditMarker={setMarkerFor}
+          )}
+          {readOnly ? (
+            <span className="project-name only-wide">{project.name}</span>
+          ) : (
+            <input
+              className="project-name only-wide"
+              value={project.name}
+              onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
             />
           )}
-          <div className="scroll" ref={scrollRef} onScroll={(e) => setSheetScrollTop(e.currentTarget.scrollTop)}>
-            <Sheet
-              project={project}
-              selectedSegmentId={segmentId}
-              onSelectSegment={setSegmentId}
-              onEditLyrics={setLyricsFor}
-              onEditMarker={setMarkerFor}
-              onEditMove={setMoveFor}
-            />
+          <span className="chip only-wide">
+            <i className="ph ph-list-numbers i" /> {project.blocks.length} placed
+          </span>
+          <span className="chip only-wide">
+            <i className="ph ph-flag i" /> {plural(project.segments.length, 'song')}, {plural(project.markers.length, 'mark')}
+          </span>
+          <div className="spacer only-wide" />
+          <span className="faint only-wide" style={{ fontSize: 11 }}>
+            <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
+          </span>
+          <div className="setup-picker only-wide" role="group" aria-label="Song setup steps">
+            {(
+              [
+                ['cuts', 'Cuts'],
+                ['beats', 'Beats'],
+                ['lyrics', 'Lyrics'],
+              ] as const
+            ).map(([step, label]) => (
+              <button
+                key={step}
+                className="setup-picker-chip"
+                onClick={() => set({ view: 'setup', setupStep: step }, false)}
+                title={`Setup: ${label.toLowerCase()}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        </main>
+          <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
+            <i className="ph ph-users-three i" />
+          </button>
+          {!readOnly && (
+            <button className="ghost icon only-wide" onClick={() => set({ view: 'video' }, false)} title="Video: lay your footage over the song">
+              <i className="ph ph-film-strip i" />
+            </button>
+          )}
+          <ViewAs project={project} compact={!isDesktop} />
+          <button
+            className={`ghost icon only-wide${hideCast ? ' on' : ''}`}
+            onClick={toggleHideCast}
+            title={hideCast ? "Show the cast's cues on the sheet" : "Hide the cast's cues on the sheet"}
+          >
+            <i className={`ph ${hideCast ? 'ph-eye-closed' : 'ph-eye'} i`} />
+          </button>
+          {!readOnly && (
+            <>
+              <button className="ghost icon only-wide" onClick={() => setShowHome(true)} title="Your choreographies: switch, share, start a new one">
+                <i className="ph ph-folders i" />
+              </button>
+              <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
+                <i className="ph ph-shield-check i" />
+              </button>
+              <button className="ghost icon only-wide" onClick={() => setShowShare(true)} title="Share: add people who can edit, or a view-only link">
+                <i className="ph ph-share-network i" />
+              </button>
+            </>
+          )}
+          {commentToken && (
+            <button className="ghost icon" onClick={() => setShowComments(true)} title="Comments on the shared link">
+              <i className="ph ph-chat-circle-text i" />
+            </button>
+          )}
+          {readOnly ? (
+            <span className="chip">
+              <i className="ph ph-eye i" /> View only
+            </span>
+          ) : (
+            <>
+              <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+                <i className="ph ph-arrow-counter-clockwise i" />
+              </button>
+              <button className="ghost icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+                <i className="ph ph-arrow-clockwise i" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {!isDesktop && <SongStrip project={project} />}
+
+        <div className="body">
+          {libraryOpen && <div className="rail-scrim" onPointerDown={() => set({ libraryOpen: false }, false)} />}
+          <aside className={`rail${libraryOpen ? ' open' : ''}`}>
+            <MoveLibrary project={project} onEditMove={setMoveFor} />
+          </aside>
+
+          <main className="main">
+            {isDesktop && (
+              <SongMap
+                project={project}
+                selectedSegmentId={segmentId}
+                onSelectSegment={setSegmentId}
+                onEditMarker={setMarkerFor}
+              />
+            )}
+            <div className="scroll" ref={scrollRef} onScroll={(e) => setSheetScrollTop(e.currentTarget.scrollTop)}>
+              <Sheet
+                project={project}
+                selectedSegmentId={segmentId}
+                onSelectSegment={setSegmentId}
+                onEditLyrics={setLyricsFor}
+                onEditMarker={setMarkerFor}
+                onEditMove={setMoveFor}
+              />
+            </div>
+          </main>
+        </div>
+
+        <BottomBar project={project} onNewSegment={setSegmentId} />
+
+        {lyricSegment && <LyricsModal project={project} segment={lyricSegment} onClose={() => setLyricsFor(null)} />}
+        {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
+        {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
+        {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}
+        {showShare && <ShareModal project={project} onClose={() => setShowShare(false)} />}
+        {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
+        {showMenu && (
+          <ProjectMenu
+            project={project}
+            onClose={() => setShowMenu(false)}
+            onProjects={() => setShowHome(true)}
+            onBackup={() => setShowBackup(true)}
+            onShare={() => setShowShare(true)}
+          />
+        )}
       </div>
-
-      <BottomBar project={project} onNewSegment={setSegmentId} />
-
-      {lyricSegment && <LyricsModal project={project} segment={lyricSegment} onClose={() => setLyricsFor(null)} />}
-      {moveFor && <MoveModal project={project} moveId={moveFor} onClose={() => setMoveFor(null)} />}
-      {marker && <MarkerModal marker={marker} onClose={() => setMarkerFor(null)} />}
-      {showBackup && <BackupModal project={project} onClose={() => setShowBackup(false)} />}
-      {showShare && <ShareModal project={project} onClose={() => setShowShare(false)} />}
-      {showComments && commentToken && <CommentsModal token={commentToken} onClose={() => setShowComments(false)} />}
-      {showMenu && (
-        <ProjectMenu
-          project={project}
-          onClose={() => setShowMenu(false)}
-          onProjects={() => setShowHome(true)}
-          onBackup={() => setShowBackup(true)}
-          onShare={() => setShowShare(true)}
-        />
-      )}
-      {status && <div className="toast">{status}</div>}
-    </div>
+      {whoAreYou}
+      {toast}
+    </>
   )
 }

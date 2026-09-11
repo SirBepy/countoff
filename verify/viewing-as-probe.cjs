@@ -62,6 +62,16 @@ const PROJECT = {
 
 const { check, report } = createChecklist()
 
+// Dynamic import of the live store module, same trick as share-probe.cjs: dev-server
+// module URLs carry a cache-busting query the source string does not, so the import
+// specifier has to be read back off the served App.tsx rather than hardcoded.
+const STORE_CALL = (body) =>
+  `(async () => {
+     const appSrc = await (await fetch('/src/App.tsx')).text()
+     const mod = await import(appSrc.match(/"([^"]*lib\\/store\\.ts[^"]*)"/)[1])
+     ${body}
+   })()`
+
 /** Names and geometry of the blocks drawn on one sheet row, in counts. */
 const rowBlocks = (page, row) =>
   page.evaluate((row) => {
@@ -209,6 +219,33 @@ async function main() {
       back.length === 1 && back[0].name === 'Macarena arms' && back[0].counts === 8,
       JSON.stringify(back),
     )
+    // --- todo 38: an unanswered share offers the chooser on every view, not just rehearse and floor ---
+    // Simulates what adoptShare + the project-switch effect leave behind for someone who
+    // opened a share and never answered: askWhoAreYou true, no stored viewAs. Driving a
+    // real /v/<token> boot would need a live share doc in the emulator; calling the store
+    // directly isolates the App.tsx rendering gap this todo is actually about.
+    const store = (body) => page.evaluate(STORE_CALL(body))
+    await store(`mod.set({ viewAs: null, askWhoAreYou: true }, false)`)
+    await store(`mod.set({ view: 'setup' }, false)`)
+    await page.waitForTimeout(200)
+    check('the chooser is offered on the setup view, which used to lack it', await page.locator('.cast-picker').isVisible())
+
+    // Answering it there is the same store call the sheet's own chooser makes.
+    await page.evaluate(() => {
+      const picker = document.querySelector('.cast-picker')
+      const hit = [...picker.querySelectorAll('.cast-opt')].find((b) => b.textContent.includes('Bruno Horvat'))
+      hit.click()
+    })
+    await page.waitForTimeout(150)
+    await store(`mod.set({ view: 'sheet' }, false)`)
+    await page.waitForTimeout(200)
+    check(
+      'answering on the setup view is reflected on the sheet, which used to lack the chooser too',
+      (await page.textContent('.view-as'))?.includes('Bruno'),
+      await page.textContent('.view-as').catch(() => 'no control'),
+    )
+    check('once answered, the chooser does not ask again', (await page.locator('.cast-picker').count()) === 0)
+
     await ctx.close()
   })
   report()

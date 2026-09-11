@@ -17,6 +17,16 @@ const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const SHOTS = path.join(__dirname, '..', '.for_bepy', 'screenshots', process.env.CLAUDE_CODE_SESSION_ID || 'floor-movements')
 
+// Dynamic import of the live store module, same trick as share-probe.cjs: dev-server
+// module URLs carry a cache-busting query the source string does not, so the import
+// specifier has to be read back off the served App.tsx rather than hardcoded.
+const STORE_CALL = (body) =>
+  `(async () => {
+     const appSrc = await (await fetch('/src/App.tsx')).text()
+     const mod = await import(appSrc.match(/"([^"]*lib\\/store\\.ts[^"]*)"/)[1])
+     ${body}
+   })()`
+
 /* Two whole-cast snapshots, which is what every project saved before today looks like:
    Ana holds her cell across both, Bruno moves, Iva walks off at the second. */
 const OLD_SHAPE = {
@@ -121,6 +131,19 @@ async function main() {
     check('the topbar Floor button opens the floor view', true)
     check('the cast rail lists everyone without opening a modal', (await page.locator('.rail-person').count()) === 3)
     check('the timeline draws one lane per person', (await page.locator('.mv-lane:not(.mv-ruler):not(.moves)').count()) === 3)
+
+    // Todo 44: Floor.tsx and FloorStage.tsx both call flash() on this view, but App.tsx
+    // used to return the floor branch before ever reaching the toast markup, so the
+    // message reached the store and died there. Calling flash() directly through the
+    // store isolates the App.tsx rendering gap from whichever gesture happens to raise it.
+    const store = (body) => page.evaluate(STORE_CALL(body))
+    await store(`mod.flash('probe flash on the floor view')`)
+    await page.waitForTimeout(150)
+    check(
+      'a flash raised on the floor view actually draws a toast',
+      (await page.locator('.toast').textContent().catch(() => '')) === 'probe flash on the floor view',
+    )
+    await page.waitForTimeout(2600)
 
     // Past the first snapshot, so the migrated positions are the ones on screen.
     await seek(page, AT)
