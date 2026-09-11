@@ -25,6 +25,7 @@ import {
   coveredSeconds,
   fitClip,
   MIN_CLIP,
+  minSrcIn,
   orderedClips,
   placedBlocks,
   roomAt,
@@ -235,7 +236,7 @@ export default function VideoScreen({ project }: { project: Project }) {
       if (how === 'in') {
         // Head trim cannot pass the tail, and cannot ask for footage before the file starts.
         const room = clipLength(c) - MIN_CLIP
-        const shift = Math.max(-Math.min(c.srcIn, c.songStart), Math.min(maybeSnap(c.songStart + delta) - c.songStart, room))
+        const shift = Math.max(minSrcIn(c) - c.srcIn, Math.min(maybeSnap(c.songStart + delta) - c.songStart, room))
         return updateClip(c.id, { songStart: c.songStart + shift, srcIn: c.srcIn + shift }, key)
       }
       const limit = Math.min(source ? source.duration : Infinity, c.srcIn + roomAt(project, c.songStart, c.id))
@@ -260,7 +261,7 @@ export default function VideoScreen({ project }: { project: Project }) {
     const room = Math.min(source.duration, c.srcIn + roomAt(project, c.songStart, c.id))
     return {
       songStart: { min: 0, max: Math.max(0, duration - clipLength(c)) },
-      srcIn: { min: Math.max(0, c.srcIn - c.songStart), max: c.srcOut - MIN_CLIP },
+      srcIn: { min: minSrcIn(c), max: c.srcOut - MIN_CLIP },
       srcOut: { min: c.srcIn + MIN_CLIP, max: Math.max(c.srcOut, room) },
     }
   }

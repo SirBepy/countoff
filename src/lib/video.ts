@@ -128,6 +128,13 @@ export function slipRoom(clip: Clip, take: Take, by: number): number {
   return Math.max(-clip.srcIn, Math.min(by, take.duration - clip.srcOut))
 }
 
+/** How far a head trim can pull `srcIn` back: capped by the take's own first frame and by
+ *  the song's zero, whichever comes first. The one definition both the drag handle and the
+ *  typed field read, so a future change to the rule cannot land on one and miss the other. */
+export function minSrcIn(clip: Clip): number {
+  return Math.max(0, clip.srcIn - clip.songStart)
+}
+
 /** Trims a take down to whatever gap it is being dropped into, or null if there is none. */
 export function fitClip(project: Project, take: Take, songStart: number, id: string): Clip | null {
   const room = Math.min(roomAt(project, songStart), take.duration)

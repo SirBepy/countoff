@@ -39,12 +39,21 @@ const PROJECT = {
   markers: [],
   people: [],
   movements: [],
-  takes: [{ id: TAKE_ID, name: 'full-run take 2.webm', duration: 12, bytes: 240000 }],
+  takes: [
+    { id: TAKE_ID, name: 'full-run take 2.webm', duration: 12, bytes: 240000 },
+    // Long enough that `headBound` can sit ahead of its own songStart, which `TAKE_ID`'s
+    // 12s can't: that gap is what makes the head-trim floor land away from zero.
+    { id: 'take-wide', name: 'wide shot.webm', duration: 90, bytes: 500000 },
+  ],
   // `edit` is the clip every field is driven through; `atStart` sits on the take's first
   // frame, which is the only way to reach the slip clamp without hundreds of clicks.
+  // `headBound` sits after both on the song (its songStart must sort last so index-based
+  // `select()` calls above still land on `edit`/`atStart`), with srcIn ahead of songStart
+  // by 3s so the head-trim floor is a real number, not the trivial 0 case.
   clips: [
     { id: 'edit', takeId: TAKE_ID, songStart: 20, srcIn: 3, srcOut: 8 },
     { id: 'atStart', takeId: TAKE_ID, songStart: 40, srcIn: 0, srcOut: 3 },
+    { id: 'headBound', takeId: 'take-wide', songStart: 42, srcIn: 45, srcOut: 49 },
   ],
   floor: { cols: 6, rows: 4 },
   walkCounts: 8,
@@ -170,6 +179,38 @@ async function main() {
         'syncing past the start of the take is refused rather than silently clamped',
         near(clamped?.srcIn, 0) && near(clamped?.srcOut, 3) && /no footage/i.test(toast),
         `srcIn ${clamped?.srcIn}, toast "${toast.trim()}"`,
+      )
+
+      // 7. The head-trim floor (`minSrcIn`) is one definition read by both the drag handle
+      //    and the typed field. Drag first to whatever floor the handle finds on its own,
+      //    then type an out-of-range value into From: if the field computed a different
+      //    floor, this second step would move the clip again instead of leaving it put.
+      await select(2)
+      const beforeBound = await clipOf('headBound')
+      const inHandle = page.locator('.vt-clip').nth(2).locator('.h.l')
+      const handleBox = await inHandle.boundingBox()
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(handleBox.x - 4000, handleBox.y + handleBox.height / 2, { steps: 8 })
+      await page.mouse.up()
+      await page.waitForTimeout(400)
+      const dragBound = await clipOf('headBound')
+      check(
+        'dragging the head handle all the way left stops at the take\'s first frame',
+        near(dragBound?.srcIn, 3) && near(dragBound?.songStart, 0),
+        dragBound && `srcIn ${beforeBound?.srcIn} -> ${dragBound.srcIn}, songStart ${beforeBound?.songStart} -> ${dragBound.songStart}`,
+      )
+
+      // `headBound`'s songStart just dropped to 0 by the drag above, ahead of `edit` and
+      // `atStart` on the lane, so `select(2)` would now grab the wrong clip: it is already
+      // selected from the drag's own pointerdown, so the inspector already reads it.
+      await page.locator('.vs-insp .f input').nth(1).fill('0:00.000')
+      await page.keyboard.press('Enter')
+      const typedBound = await clipOf('headBound')
+      check(
+        'typing below the floor into From lands on the same srcIn and songStart the drag already found',
+        near(typedBound?.srcIn, dragBound?.srcIn) && near(typedBound?.songStart, dragBound?.songStart),
+        typedBound && `srcIn ${typedBound.srcIn}, songStart ${typedBound.songStart}`,
       )
     } catch (e) {
       // Report whatever already ran: a mid-probe throw is a failure worth seeing in
