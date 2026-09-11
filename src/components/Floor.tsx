@@ -5,8 +5,6 @@ import { formatTime } from '../lib/grid'
 import { useMenuFit } from '../lib/menuFit'
 import { clampZoom } from '../lib/timeline'
 import {
-  FLOOR_MAX,
-  FLOOR_MIN,
   SIDE_META,
   SIDES,
   WALK_MAX,
@@ -26,23 +24,21 @@ import {
   placeMovement,
   removeGroup,
   removeMovement,
-  removePerson,
   set,
-  setFloorSize,
-  setFocus,
   setWalkCounts,
   uid,
   updateGroup,
-  updatePerson,
 } from '../lib/store'
 import type { Project, Side } from '../lib/types'
-import FloorStage, { defaultFocusCell } from './FloorStage'
+import CastModal from './CastModal'
+import FloorSetupModal from './FloorSetupModal'
+import FloorStage from './FloorStage'
 import MovementTimeline from './MovementTimeline'
 import ZoomSlider from './ZoomSlider'
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
 
-function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
+export function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
     <span className="step">
       <button className="ghost icon" onClick={() => onChange(clamp(value - 1, min, max))} disabled={value <= min}>
@@ -75,7 +71,6 @@ export default function Floor({ project }: { project: Project }) {
   const { ref: sideMenuEl, offset: sideOffset } = useMenuFit<HTMLDivElement>(sideMenu?.personId)
 
   const here = beatAt(project, time)
-  const floor = project.floor
 
   /** Every edit lands on the count under the playhead, which is the whole flow. */
   function walk(personId: string, to: { col: number; row: number } | null, side?: Side) {
@@ -437,145 +432,9 @@ export default function Floor({ project }: { project: Project }) {
         </>
       )}
 
-      {setupOpen && (
-        <div className="modal-back" onPointerDown={(e) => e.target === e.currentTarget && setSetupOpen(false)}>
-          <div className="modal">
-            <header>
-              <i className="ph ph-grid-four i" />
-              Floor
-              <div className="spacer" />
-              <button className="ghost icon" onClick={() => setSetupOpen(false)}>
-                <i className="ph ph-x" />
-              </button>
-            </header>
+      {setupOpen && <FloorSetupModal project={project} onClose={() => setSetupOpen(false)} />}
 
-            <div className="content">
-              <div className="field">
-                <label>How big the floor is</label>
-                <div className="row">
-                  <Stepper
-                    value={floor.cols}
-                    min={FLOOR_MIN}
-                    max={FLOOR_MAX}
-                    onChange={(cols) => setFloorSize({ ...floor, cols })}
-                  />
-                  <span className="faint">across</span>
-                  <Stepper
-                    value={floor.rows}
-                    min={FLOOR_MIN}
-                    max={FLOOR_MAX}
-                    onChange={(rows) => setFloorSize({ ...floor, rows })}
-                  />
-                  <span className="faint">deep</span>
-                </div>
-              </div>
-
-              <div className="field">
-                <label>Everyone faces</label>
-                <div className="focus-pick">
-                  <button
-                    className={project.focus.kind === 'audience' ? 'on' : ''}
-                    onClick={() => setFocus({ kind: 'audience' })}
-                  >
-                    <i className="ph ph-users i" /> A crowd
-                  </button>
-                  <button
-                    className={project.focus.kind === 'person' ? 'on' : ''}
-                    onClick={() => setFocus({ kind: 'person', name: '', ...defaultFocusCell(floor) })}
-                  >
-                    <i className="ph ph-armchair i" /> One person
-                  </button>
-                </div>
-              </div>
-
-              {project.focus.kind === 'person' && (
-                <div className="field">
-                  <label>Who they are dancing to</label>
-                  <input
-                    value={project.focus.name}
-                    placeholder="The bride"
-                    onChange={(e) =>
-                      project.focus.kind === 'person' && setFocus({ ...project.focus, name: e.target.value }, 'focus-name')
-                    }
-                  />
-                </div>
-              )}
-            </div>
-
-            <footer>
-              <button className="primary" onClick={() => setSetupOpen(false)}>
-                Done
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
-
-      {castOpen && (
-        <div className="modal-back" onPointerDown={(e) => e.target === e.currentTarget && setCastOpen(false)}>
-          <div className="modal">
-            <header>
-              <i className="ph ph-user-list i" />
-              Cast
-              <div className="spacer" />
-              <button className="ghost icon" onClick={() => setCastOpen(false)}>
-                <i className="ph ph-x" />
-              </button>
-            </header>
-
-            <div className="content">
-              {project.people.map((person) => (
-                <div key={person.id} className="cast-row">
-                  <input
-                    className="ini"
-                    value={person.initials}
-                    maxLength={2}
-                    style={{ background: person.colour }}
-                    onChange={(e) => updatePerson(person.id, { initials: e.target.value.toUpperCase() }, `ini-${person.id}`)}
-                  />
-                  <input
-                    value={person.name}
-                    onChange={(e) => updatePerson(person.id, { name: e.target.value }, `name-${person.id}`)}
-                  />
-                  <input
-                    type="color"
-                    value={person.colour}
-                    onChange={(e) => updatePerson(person.id, { colour: e.target.value }, `colour-${person.id}`)}
-                  />
-                  <select
-                    value={person.side ?? ''}
-                    title="Their default wing, until one entrance or exit overrides it"
-                    onChange={(e) =>
-                      updatePerson(person.id, { side: (e.target.value || undefined) as Side | undefined }, `side-${person.id}`)
-                    }
-                  >
-                    <option value="">Auto</option>
-                    {SIDES.map((side) => (
-                      <option key={side} value={side}>
-                        {SIDE_META[side].label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="ghost icon"
-                    onClick={() => removePerson(person.id)}
-                    title="Remove, and take their whole path with them"
-                  >
-                    <i className="ph ph-trash i" />
-                  </button>
-                </div>
-              ))}
-              {!project.people.length && <p className="hint">Nobody yet. Add the people who are dancing.</p>}
-            </div>
-
-            <footer>
-              <button className="primary" onClick={() => setCastOpen(false)}>
-                Done
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
+      {castOpen && <CastModal project={project} onClose={() => setCastOpen(false)} />}
     </div>
   )
 }

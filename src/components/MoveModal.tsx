@@ -10,6 +10,11 @@ const BEAT_OPTIONS = [1, 2, 4, 8, 16]
  *  and a shape chosen against a ballad would look like a different shape on the floor. */
 const DEMO_BEAT = 60 / 128
 
+// Rhymes with `ShapedDisc`'s style in FloorStage.tsx but stays separate: this uses
+// `--accent` not the person's colour, a fixed `DEMO_BEAT` not the segment's real BPM,
+// and has no `animationDelay` at all because a picker chip has no beat to phase-lock
+// to. A shared helper would need an unused parameter on one side to cover that last
+// axis, which is worse than the repetition (todo 47).
 const shapeDemo = (shape: MoveShape): React.CSSProperties =>
   ({
     background: 'var(--accent)',

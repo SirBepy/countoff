@@ -36,6 +36,11 @@ function ShapedDisc({
   return (
     <span
       className={`disc${shape ? ` sh-${shape}` : ''}`}
+      // Rhymes with `shapeDemo` in MoveModal.tsx but stays separate: colour comes from
+      // the person not `--accent`, duration is the segment's real BPM not a fixed demo
+      // beat, and delay phase-locks to the block's start where the picker chip has no
+      // beat to lock to at all. A shared helper would need an unused parameter on one
+      // side to cover that last axis, which is worse than the repetition (todo 47).
       style={
         {
           background: person.colour,
