@@ -4,10 +4,10 @@ import SetupCuts from './SetupCuts'
 import SetupBeats from './SetupBeats'
 import SetupLyrics from './SetupLyrics'
 
-const STEPS = ['cuts', 'beats', 'lyrics'] as const
-type Step = (typeof STEPS)[number]
+export const STEPS = ['cuts', 'beats', 'lyrics'] as const
+export type Step = (typeof STEPS)[number]
 
-const STEP_LABEL: Record<Step, string> = {
+export const STEP_LABEL: Record<Step, string> = {
   cuts: 'Cuts',
   beats: 'Beats',
   lyrics: 'Lyrics',

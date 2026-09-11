@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import AppBar from './components/AppBar'
 import BackupModal from './components/BackupModal'
 import CommentsModal from './components/CommentsModal'
 import BottomBar from './components/BottomBar'
@@ -19,7 +20,7 @@ import ShareLoading from './components/ShareLoading'
 import ShareModal from './components/ShareModal'
 import SongStrip from './components/SongStrip'
 import VideoScreen from './components/VideoScreen'
-import ViewAs, { WhoAreYou } from './components/ViewAs'
+import { WhoAreYou } from './components/ViewAs'
 import { audio } from './lib/audio'
 import { requestPersistence } from './lib/backup'
 import { joinTokenFromUrl, readMyRole } from './lib/collab'
@@ -43,14 +44,10 @@ import {
   removeBlocks,
   set,
   setSheetScrollTop,
-  toggleHideCast,
   undo,
-  updateProject,
   useStore,
 } from './lib/store'
 import { pullNow, scheduleSync, watchProject } from './lib/syncEngine'
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 // Read once: a share link never changes while the tab is open, and the whole app
 // boots differently when it is present.
@@ -66,9 +63,6 @@ export default function App() {
   const view = useStore((s) => s.view)
   const status = useStore((s) => s.status)
   const libraryOpen = useStore((s) => s.libraryOpen)
-  const canUndo = useStore((s) => s.canUndo)
-  const canRedo = useStore((s) => s.canRedo)
-  const hideCast = useStore((s) => s.hideCast)
   const readOnly = useStore((s) => s.readOnly)
   const askWhoAreYou = useStore((s) => s.askWhoAreYou)
   const [booted, setBooted] = useState(false)
@@ -397,106 +391,15 @@ export default function App() {
   return (
     <>
       <div className="app">
-        <div className="appbar">
-          <div className="brand only-wide">
-            <span className="dot" /> Countoff
-          </div>
-          {readOnly ? (
-            <span className="app-title only-narrow">
-              <span className="name">{project.name}</span>
-            </span>
-          ) : (
-            <button className="app-title only-narrow" onClick={() => setShowMenu(true)} title="Project name, setup, projects and backups">
-              <span className="name">{project.name}</span>
-              <i className="ph ph-caret-down" />
-            </button>
-          )}
-          {readOnly ? (
-            <span className="project-name only-wide">{project.name}</span>
-          ) : (
-            <input
-              className="project-name only-wide"
-              value={project.name}
-              onChange={(e) => updateProject({ name: e.target.value }, 'project-name')}
-            />
-          )}
-          <span className="chip only-wide">
-            <i className="ph ph-list-numbers i" /> {project.blocks.length} placed
-          </span>
-          <span className="chip only-wide">
-            <i className="ph ph-flag i" /> {plural(project.segments.length, 'song')}, {plural(project.markers.length, 'mark')}
-          </span>
-          <div className="spacer only-wide" />
-          <span className="faint only-wide" style={{ fontSize: 11 }}>
-            <kbd>Space</kbd> play · <kbd>S</kbd>ong · <kbd>R</kbd>ehearse
-          </span>
-          <div className="setup-picker only-wide" role="group" aria-label="Song setup steps">
-            {(
-              [
-                ['cuts', 'Cuts'],
-                ['beats', 'Beats'],
-                ['lyrics', 'Lyrics'],
-              ] as const
-            ).map(([step, label]) => (
-              <button
-                key={step}
-                className="setup-picker-chip"
-                onClick={() => set({ view: 'setup', setupStep: step }, false)}
-                title={`Setup: ${label.toLowerCase()}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button className="ghost icon only-wide" onClick={() => set({ view: 'floor' }, false)} title="Floor: who is dancing when, and where they stand">
-            <i className="ph ph-users-three i" />
-          </button>
-          {!readOnly && (
-            <button className="ghost icon only-wide" onClick={() => set({ view: 'video' }, false)} title="Video: lay your footage over the song">
-              <i className="ph ph-film-strip i" />
-            </button>
-          )}
-          <ViewAs project={project} compact={!isDesktop} />
-          <button
-            className={`ghost icon only-wide${hideCast ? ' on' : ''}`}
-            onClick={toggleHideCast}
-            title={hideCast ? "Show the cast's cues on the sheet" : "Hide the cast's cues on the sheet"}
-          >
-            <i className={`ph ${hideCast ? 'ph-eye-closed' : 'ph-eye'} i`} />
-          </button>
-          {!readOnly && (
-            <>
-              <button className="ghost icon only-wide" onClick={() => setShowHome(true)} title="Your choreographies: switch, share, start a new one">
-                <i className="ph ph-folders i" />
-              </button>
-              <button className="ghost icon only-wide" onClick={() => setShowBackup(true)} title="Backups, export, storage protection">
-                <i className="ph ph-shield-check i" />
-              </button>
-              <button className="ghost icon only-wide" onClick={() => setShowShare(true)} title="Share: add people who can edit, or a view-only link">
-                <i className="ph ph-share-network i" />
-              </button>
-            </>
-          )}
-          {commentToken && (
-            <button className="ghost icon" onClick={() => setShowComments(true)} title="Comments on the shared link">
-              <i className="ph ph-chat-circle-text i" />
-            </button>
-          )}
-          {readOnly ? (
-            <span className="chip">
-              <i className="ph ph-eye i" /> View only
-            </span>
-          ) : (
-            <>
-              <button className="ghost icon" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-                <i className="ph ph-arrow-counter-clockwise i" />
-              </button>
-              <button className="ghost icon" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-                <i className="ph ph-arrow-clockwise i" />
-              </button>
-            </>
-          )}
-        </div>
+        <AppBar
+          project={project}
+          commentToken={commentToken}
+          onShowMenu={() => setShowMenu(true)}
+          onShowHome={() => setShowHome(true)}
+          onShowBackup={() => setShowBackup(true)}
+          onShowShare={() => setShowShare(true)}
+          onShowComments={() => setShowComments(true)}
+        />
 
         {!isDesktop && <SongStrip project={project} />}
 
