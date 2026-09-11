@@ -1,11 +1,9 @@
-import { useRef } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { formatTime, segmentEnd } from '../lib/grid'
+import { formatTime } from '../lib/grid'
 import { MARKER_COLOUR, MARKER_ICON, markAt, splitSongAt } from '../lib/markers'
-import { beginGesture, endGesture, removeSegment, updateMarker, updateSegment } from '../lib/store'
-import type { Marker, Project, Segment } from '../lib/types'
-
-const SEG_COLOURS = ['#2a3350', '#3a2a4e', '#2a4340', '#4a3428', '#402a3a', '#28384a']
+import { updateMarker } from '../lib/store'
+import type { Marker, Project } from '../lib/types'
+import { SongTrack, useSongTrack } from './SongTrack'
 
 interface Props {
   project: Project
@@ -16,48 +14,8 @@ interface Props {
 
 export default function SongMap({ project, selectedSegmentId, onSelectSegment, onEditMarker }: Props) {
   const { time } = useAudio()
-  const track = useRef<HTMLDivElement>(null)
   const duration = project.duration || 1
-
-  const pct = (t: number) => `${(t / duration) * 100}%`
-  const timeAt = (clientX: number) => {
-    const rect = track.current!.getBoundingClientRect()
-    return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
-  }
-
-  /**
-   * Returns a pointerdown handler that drags along the track, then reports whether it moved.
-   * `gestureKey` scopes every `onMove` mutation into one undo entry for the whole drag.
-   */
-  function dragOnTrack(gestureKey: string, onMove: (time: number, key: string) => void, onTap?: () => void) {
-    return (e: React.PointerEvent) => {
-      e.stopPropagation()
-      e.preventDefault()
-      const originX = e.clientX
-      let moved = false
-      beginGesture(gestureKey)
-      const move = (ev: PointerEvent) => {
-        if (Math.abs(ev.clientX - originX) > 4) moved = true
-        if (moved) onMove(timeAt(ev.clientX), gestureKey)
-      }
-      const up = () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', up)
-        window.removeEventListener('pointercancel', up)
-        endGesture()
-        if (!moved) onTap?.()
-      }
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', up)
-      window.addEventListener('pointercancel', up)
-    }
-  }
-
-  function dragCut(seg: Segment) {
-    // Carry the downbeat with the cut so the grid does not jump on every drag.
-    const offset = seg.anchor - seg.start
-    return dragOnTrack(`cut-${seg.id}`, (start, key) => updateSegment(seg.id, { start, anchor: start + offset }, key))
-  }
+  const { trackRef, pct, timeAt, dragOnTrack } = useSongTrack(duration)
 
   return (
     <div className="songmap">
@@ -82,57 +40,18 @@ export default function SongMap({ project, selectedSegmentId, onSelectSegment, o
         </button>
       </div>
 
-      <div ref={track} className="map-track" onPointerDown={(e) => audio.seek(timeAt(e.clientX))}>
-        {project.segments.map((seg, i) => (
-          <div
-            key={seg.id}
-            className={`map-seg${seg.id === selectedSegmentId ? ' sel' : ''}`}
-            style={{
-              left: pct(seg.start),
-              width: pct(segmentEnd(project.segments, i, duration) - seg.start),
-              background: SEG_COLOURS[i % SEG_COLOURS.length],
-            }}
-            onPointerDown={(e) => {
-              e.stopPropagation()
-              onSelectSegment(seg.id)
-              audio.seek(timeAt(e.clientX))
-            }}
-          >
-            <div className="map-seg-name">{seg.name}</div>
-            <div className="faint mono" style={{ fontSize: 10 }}>
-              {seg.bpm} BPM
-            </div>
-          </div>
-        ))}
-
-        {project.segments.map(
-          (seg, i) =>
-            i > 0 && (
-              <div
-                key={`cut-${seg.id}`}
-                // Near the end of the track the delete button would sit outside
-                // the clipped map and be unreachable, so it flips to the left.
-                className={`map-cut${seg.start / duration > 0.88 ? ' flip' : ''}`}
-                style={{ left: pct(seg.start) }}
-                onPointerDown={dragCut(seg)}
-              >
-                <button
-                  className="ghost cut-x"
-                  title="Remove this song start"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    removeSegment(seg.id)
-                  }}
-                >
-                  <i className="ph ph-x" />
-                </button>
-              </div>
-            ),
-        )}
-
-        <div className="playhead" style={{ left: pct(time) }} />
-      </div>
+      <SongTrack
+        trackRef={trackRef}
+        pct={pct}
+        timeAt={timeAt}
+        dragOnTrack={dragOnTrack}
+        segments={project.segments}
+        duration={duration}
+        time={time}
+        selectedSegmentId={selectedSegmentId}
+        onSelectSegment={onSelectSegment}
+        showBpm
+      />
 
       <div className="map-markers">
         {project.markers.map((marker) => (

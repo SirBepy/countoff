@@ -1,12 +1,10 @@
-import { useRef } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { formatTime, segmentEnd } from '../lib/grid'
+import { formatTime } from '../lib/grid'
 import { addSongAt } from '../lib/markers'
-import { beginGesture, endGesture, redo, removeSegment, undo, updateSegment, useStore } from '../lib/store'
+import { redo, undo, updateSegment, useStore } from '../lib/store'
 import type { Project, Segment } from '../lib/types'
+import { SongTrack, useSongTrack } from './SongTrack'
 import { formatPrecise, TimeField } from './TimeField'
-
-const SEG_COLOURS = ['#2a3350', '#3a2a4e', '#2a4340', '#4a3428', '#402a3a', '#28384a']
 
 /** Where a segment's start is allowed to land: between its neighbours, never crossing them. */
 function startBounds(segments: Segment[], index: number, duration: number) {
@@ -25,17 +23,11 @@ function startBounds(segments: Segment[], index: number, duration: number) {
  */
 export default function SetupCuts({ project }: { project: Project }) {
   const { time } = useAudio()
-  const track = useRef<HTMLDivElement>(null)
   const duration = project.duration || 1
   const segments = [...project.segments].sort((a, b) => a.start - b.start)
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
-
-  const pct = (t: number) => `${(t / duration) * 100}%`
-  const timeAt = (clientX: number) => {
-    const rect = track.current!.getBoundingClientRect()
-    return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
-  }
+  const { trackRef, pct, timeAt, dragOnTrack } = useSongTrack(duration)
 
   // A field's draft only writes to the store on blur, so blur whatever's focused
   // before undoing/redoing - otherwise the pending value lands back on top right after.
@@ -46,35 +38,6 @@ export default function SetupCuts({ project }: { project: Project }) {
   const commitThenRedo = () => {
     ;(document.activeElement as HTMLElement | null)?.blur()
     redo()
-  }
-
-  function dragCut(seg: Segment) {
-    // Carry the downbeat with the cut so a later beat-detect pass doesn't jump on drag.
-    const offset = seg.anchor - seg.start
-    const key = `cut-${seg.id}`
-    return (e: React.PointerEvent) => {
-      e.stopPropagation()
-      e.preventDefault()
-      let moved = false
-      const originX = e.clientX
-      beginGesture(key)
-      const move = (ev: PointerEvent) => {
-        if (Math.abs(ev.clientX - originX) > 4) moved = true
-        if (moved) {
-          const start = timeAt(ev.clientX)
-          updateSegment(seg.id, { start, anchor: start + offset }, key)
-        }
-      }
-      const up = () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', up)
-        window.removeEventListener('pointercancel', up)
-        endGesture()
-      }
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', up)
-      window.addEventListener('pointercancel', up)
-    }
   }
 
   return (
@@ -91,47 +54,15 @@ export default function SetupCuts({ project }: { project: Project }) {
           </button>
         </div>
 
-        <div ref={track} className="map-track" onPointerDown={(e) => audio.seek(timeAt(e.clientX))}>
-          {segments.map((seg, i) => (
-            <div
-              key={seg.id}
-              className="map-seg"
-              style={{
-                left: pct(seg.start),
-                width: pct(segmentEnd(segments, i, duration) - seg.start),
-                background: SEG_COLOURS[i % SEG_COLOURS.length],
-              }}
-            >
-              <div className="map-seg-name">{seg.name}</div>
-            </div>
-          ))}
-
-          {segments.map(
-            (seg, i) =>
-              i > 0 && (
-                <div
-                  key={`cut-${seg.id}`}
-                  className={`map-cut${seg.start / duration > 0.88 ? ' flip' : ''}`}
-                  style={{ left: pct(seg.start) }}
-                  onPointerDown={dragCut(seg)}
-                >
-                  <button
-                    className="ghost cut-x"
-                    title="Remove this song start"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeSegment(seg.id)
-                    }}
-                  >
-                    <i className="ph ph-x" />
-                  </button>
-                </div>
-              ),
-          )}
-
-          <div className="playhead" style={{ left: pct(time) }} />
-        </div>
+        <SongTrack
+          trackRef={trackRef}
+          pct={pct}
+          timeAt={timeAt}
+          dragOnTrack={dragOnTrack}
+          segments={segments}
+          duration={duration}
+          time={time}
+        />
       </div>
 
       <div className="setup-head">
