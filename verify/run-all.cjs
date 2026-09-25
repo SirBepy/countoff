@@ -19,8 +19,13 @@
  * Verdicts come from each probe's exit code only, never stdout parsing - two throwaway
  * scripts (2026-09-07) got this wrong by grepping output for "errors" or a "N/M passed"
  * line, and both misreported real runs. A probe that cannot even attempt its assertions
- * (its port isn't serving, or - for collab-probe - the Firebase emulator suite isn't up)
- * is reported SKIPPED with the reason, never silently dropped and never counted as FAIL.
+ * (its port isn't serving, or - for collab-probe - the Firebase emulator suite isn't up,
+ * or - for bpm-window - its declared audio fixture is missing) is reported SKIPPED with
+ * the reason, never silently dropped and never counted as FAIL. See .claude/todos/56-...:
+ * a fixture requirement is declared in the same README run-list line as the port and the
+ * emulator requirement (`needs fixture `<path>` (or env `<VAR>`)`), not hardcoded per
+ * probe name, so a future probe with the same shape (`share-cache-probe.cjs`'s live
+ * network+token dependency is a candidate, noted in that todo) can opt in the same way.
  *
  * Serial execution only: several probes share port 42210 and all of them drive a real
  * browser, so concurrency would produce flaky nonsense (see refs/process-hygiene.md's
@@ -39,14 +44,15 @@ const GLOBAL_DEFAULT_PORT = '42210'
 const PORT_CHECK_TIMEOUT_MS = 1500
 const PROBE_TIMEOUT_MS = 120000
 
-// Libraries the probes import (harness.cjs, fixtures.cjs), this runner itself, and a
-// screenshot tool with no pass count (rehearse-shot.cjs). desktop-check.cjs used to be
-// excluded here too - it only called process.exit(1) from its top-level catch on a
-// thrown exception, never from its own `findings` array, so it reported PASS on every
-// run that didn't throw regardless of what it found. Fixed in .claude/todos/55-...: it
-// now uses the same createChecklist convention as every other assertion probe, so it
-// belongs in the discovered set like any of them.
-const NON_PROBES = new Set(['harness.cjs', 'fixtures.cjs', 'rehearse-shot.cjs', 'run-all.cjs'])
+// Libraries the probes import (harness.cjs, fixtures.cjs), this runner itself, and
+// screenshot/measuring tools with no pass count (rehearse-shot.cjs, viewer-measure.cjs -
+// see .claude/todos/53-...). desktop-check.cjs used to be excluded here too - it only
+// called process.exit(1) from its top-level catch on a thrown exception, never from its
+// own `findings` array, so it reported PASS on every run that didn't throw regardless of
+// what it found. Fixed in .claude/todos/55-...: it now uses the same createChecklist
+// convention as every other assertion probe, so it belongs in the discovered set like any
+// of them.
+const NON_PROBES = new Set(['harness.cjs', 'fixtures.cjs', 'rehearse-shot.cjs', 'viewer-measure.cjs', 'run-all.cjs'])
 
 // Probes that take no port argument at all.
 const NO_PORT = new Set(['readme-list-check', 'setup-lyrics-fit-unit'])
@@ -67,14 +73,15 @@ function readFirebaseEmulatorPorts() {
 }
 
 /** Parses every `verify/<name>.cjs` or `verify/<name>.mjs` line out of the README's
- *  run-list: the default port if the line says "defaults to N", and whether the probe
- *  needs the Firebase emulator (the line says so in prose, for collab-probe). Returns a
- *  Map keyed by name, covering every name the README documents - including ones excluded
- *  from execution above - so a probe deleted out from under a still-current README entry
- *  is caught as a failure below rather than just quietly vanishing from the discovered
- *  list. Still anchors on a leading `node `, so an incidental prose mention of a path
- *  (e.g. "`verify/harness.cjs` is the shared module...") isn't mistaken for a run-list
- *  line; `(?:--[\w-]+ )*` skips over node flags like the .mjs unit test's
+ *  run-list: the default port if the line says "defaults to N", whether the probe needs
+ *  the Firebase emulator (the line says so in prose, for collab-probe), and whether it
+ *  needs a fixture file (`needs fixture `<path>`` with an optional `(or env `<VAR>`)`).
+ *  Returns a Map keyed by name, covering every name the README documents - including ones
+ *  excluded from execution above - so a probe deleted out from under a still-current
+ *  README entry is caught as a failure below rather than just quietly vanishing from the
+ *  discovered list. Still anchors on a leading `node `, so an incidental prose mention of
+ *  a path (e.g. "`verify/harness.cjs` is the shared module...") isn't mistaken for a
+ *  run-list line; `(?:--[\w-]+ )*` skips over node flags like the .mjs unit test's
  *  `node --experimental-strip-types verify/...`. */
 function parseReadme(readmeText) {
   const info = new Map()
@@ -84,7 +91,12 @@ function parseReadme(readmeText) {
     const name = m[1]
     if (info.has(name)) continue // README mentions collab-probe twice (run-list + emulator section); first line wins
     const portMatch = line.match(/defaults to (\d+)/)
-    info.set(name, { port: portMatch ? portMatch[1] : null, requiresEmulator: /firebase emulators/i.test(line) })
+    const fixtureMatch = line.match(/needs fixture `([^`]+)`(?:\s*\(or env `([A-Z_]+)`\))?/)
+    info.set(name, {
+      port: portMatch ? portMatch[1] : null,
+      requiresEmulator: /firebase emulators/i.test(line),
+      fixture: fixtureMatch ? { path: fixtureMatch[1], env: fixtureMatch[2] || null } : null,
+    })
   }
   return info
 }
@@ -174,6 +186,17 @@ async function main() {
       const reachable = await checkPort(port)
       if (!reachable) {
         log('SKIP', label, `no server listening on port ${port}`)
+        continue
+      }
+    }
+
+    if (meta && meta.fixture) {
+      const fixturePath = meta.fixture.env && process.env[meta.fixture.env]
+        ? process.env[meta.fixture.env]
+        : path.join(VERIFY_DIR, '..', meta.fixture.path)
+      if (!fs.existsSync(fixturePath)) {
+        const override = meta.fixture.env ? ` (set ${meta.fixture.env} to override)` : ''
+        log('SKIP', label, `fixture ${meta.fixture.path} not found${override}`)
         continue
       }
     }

@@ -13,8 +13,9 @@ command, serially, against whatever dev server(s) and Firebase emulator are alre
 It discovers probes from disk and reads each one's default port straight out of this
 file's own run-list, so it can't drift from the list the way a hand-written script would.
 A probe whose server isn't reachable (or, for `collab-probe.cjs`, whose Firebase emulator
-isn't reachable) is reported SKIPPED with the reason, never silently dropped. Pass/fail is
-decided from each probe's exit code only. See `verify/run-all.cjs` for the exact rules.
+isn't reachable, or, for `bpm-window.cjs`, whose declared fixture file is missing) is
+reported SKIPPED with the reason, never silently dropped. Pass/fail is decided from each
+probe's exit code only. See `verify/run-all.cjs` for the exact rules.
 
 Every probe below defaults to port 42210, the one dev-server port the suite expects up by
 default (see .claude/todos/58-...). Each probe's own browser launch (`withBrowser` ->
@@ -48,7 +49,7 @@ node --experimental-strip-types verify/setup-lyrics-fit-unit.mjs  # direct unit 
 node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
 node verify/turns-probe.cjs [port]     # move shapes and turns: a half turn keeps the facing and is chased until something undoes it, a full turn passes through the same angles and leaves nothing
 node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
-node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm
+node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm - needs fixture `.for_bepy/probe.mp3` (or env `BPM_WINDOW_AUDIO`)
 node verify/collab-probe.cjs [port]   # the whole collaboration model against the REAL rules in the Firebase emulator: an owner's push, the song upload, invite by address, claiming it on the next sign-in, an outsider being refused, the join link, and a demotion landing - defaults to 42210, needs `firebase emulators:start --only auth,firestore,storage` running as well
 node verify/chair-probe.cjs [port]     # the focus chair's keyframes interpolate during playback, rescale with the floor, and don't move on a pre-keyframe project - defaults to 42210
 node verify/crop-probe.cjs [port]      # a take's crop renders correctly (pixel-sampled) on both the editor monitor and rehearse's fixed-ratio box - defaults to 42210
@@ -67,6 +68,16 @@ node verify/viewing-as-probe.cjs [port]  # reading the app as one dancer: the sh
 `node verify/rehearse-shot.cjs [port|origin] [token]` is a screenshot tool, not an assertion probe -
 it has no pass count. It loads a real share token (IndexedDB is per-origin, so localhost has no
 projects of its own) and shoots the rehearse screen through a real play-through.
+
+`node verify/viewer-measure.cjs [link] [seconds] [throttleKbps] [startAt] [mobile 0|1]` is a
+measuring tool, not an assertion probe - it has no pass count either. It opens a real share link
+in a fresh profile, optionally throttles the connection via CDP `Network.emulateNetworkConditions`,
+plays the song, and prints one row per second plus a final `stallRuns` count: seconds with no frame
+at the playhead (`readyState < 3` while the song plays and a clip covers it). That is the honest
+"footage looks stuck" number - the app's own drift-correction seek keeps `currentTime` advancing
+even on a stuck video, which is why the weaker `stuckRuns` count (frozen `currentTime`) is printed
+only alongside it, never in place of it. This is what found, fixed and A/B-verified the 2026-09-10
+viewer stall (28s vs 0s "no frame" at 3 Mbps from song start) - see .claude/todos/53-....
 
 A different, older 45-assertion probe also named `runway-probe.cjs` covered the floor mini-map; it
 has been rescued as `verify/movement-probe.cjs` above. The tracked `runway-probe.cjs` above is the
