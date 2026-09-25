@@ -1,4 +1,4 @@
-import { isFor } from './cast'
+import { isFor, pickTagged } from './cast'
 import { beatToTime, blocksInSegment, segmentAt, timeToBeat } from './grid'
 import type { Block, Move, Project, Segment } from './types'
 
@@ -26,10 +26,9 @@ export function nowState(project: Project, time: number, viewAs: string | null =
   const blocksIn = (seg: Segment) => blocksInSegment(project, seg.id).filter((b) => isFor(project, b, viewAs))
   const blocks = blocksIn(segment)
 
-  // A tagged block wins on the counts it covers, so a dancer with their own move here
-  // sees it rather than the default it is standing in front of.
+  // Tagged-wins rule lives in `pickTagged` (cast.ts), shared with `blockAt`.
   const here = blocks.filter((b) => beat >= b.startBeat && beat < b.startBeat + b.beats)
-  const block = here.find((b) => b.for?.length) ?? here[0] ?? null
+  const block = pickTagged(here)
   let upcoming = blocks.find((b) => b.startBeat > (block ? block.startBeat : beat)) ?? null
   let untilNext = upcoming ? upcoming.startBeat - beat : 0
 

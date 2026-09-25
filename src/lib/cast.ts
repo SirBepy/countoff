@@ -126,11 +126,19 @@ export function sheetBlocks(project: Project, viewAs: string | null): SheetBlock
   return out
 }
 
-/** What one viewer is doing on a count, used by the rehearse screen and the runway.
- *  A tagged block wins; otherwise the default stands. */
+/** A tagged candidate wins over an untagged one; otherwise the first (only) candidate
+ *  stands. The one place the "tagged block wins" rule lives: `blockAt` below and
+ *  `nowState` in `now.ts` each build their own candidate list, in their own order, then
+ *  both resolve through here. */
+export function pickTagged(candidates: Block[]): Block | null {
+  return candidates.find((b) => b.for?.length) ?? candidates[0] ?? null
+}
+
+/** What one viewer is doing on a count, used by `doingAt` in `facing.ts` to resolve the
+ *  floor's pucks and cast rail. A tagged block wins; otherwise the default stands. */
 export function blockAt(project: Project, segmentId: string, beat: number, viewAs: string | null): Block | null {
   const here = project.blocks.filter(
     (b) => b.segmentId === segmentId && beat >= b.startBeat && beat < b.startBeat + b.beats && isFor(project, b, viewAs),
   )
-  return here.find((b) => b.for?.length) ?? here[0] ?? null
+  return pickTagged(here)
 }
