@@ -189,17 +189,28 @@ async function freshPage(browser) {
   return page
 }
 
-/** Removes one project (meta, content, members) via the admin bypass. Scoped to a single
- *  project id rather than the whole `projects` collection: with a per-run RUN_ID (see above)
- *  that collection can hold a concurrently-running sibling probe's data too, and a blanket
- *  wipe of everything in it is exactly the mechanism that made this probe corrupt a
- *  concurrent run's state instead of only its own. Safe to call on an id nothing has written
- *  yet - `listAdmin` then returns no children and the final `drop` no-ops on a missing doc. */
+/** Removes one project and everything keyed to it - meta, content, members, its share link
+ *  and its invite rows - via the admin bypass. Scoped to a single project id rather than the
+ *  whole `projects` collection: with a per-run RUN_ID (see above) that collection can hold a
+ *  concurrently-running sibling probe's data too, and a blanket wipe of everything in it is
+ *  exactly the mechanism that made this probe corrupt a concurrent run's state instead of
+ *  only its own. `links/{token}` and `invites/{email}/for/{pid}` sit outside `projects/{pid}`,
+ *  so dropping the project doc alone leaves both behind for the life of the emulator process.
+ *  Safe to call on an id nothing has written yet - `listAdmin` returns no children and each
+ *  `drop` no-ops on a missing doc. */
 async function dropProject(pid) {
   const drop = (relative) =>
     fetch(`${FIRESTORE}/${relative}`, { method: 'DELETE', headers: { Authorization: 'Bearer owner' } })
   const relative = (doc) => doc.name.split('/documents/')[1]
   const base = `projects/${pid}`
+
+  // The token is only reachable through the project's own meta, so read it before the
+  // delete below makes it unreachable.
+  const meta = await fetch(`${FIRESTORE}/${base}`, { headers: { Authorization: 'Bearer owner' } })
+  const token = meta.ok ? (await meta.json()).fields?.link?.mapValue?.fields?.token?.stringValue : undefined
+  if (token) await drop(`links/${token}`)
+  for (const who of [OWNER, MATE, GUEST]) await drop(`invites/${who.email.toLowerCase()}/for/${pid}`)
+
   for (const child of ['content', 'members']) for (const kid of await listAdmin(`${base}/${child}`)) await drop(relative(kid))
   await drop(base)
 }
