@@ -145,7 +145,10 @@ export default function Waveform({
     // Accept would make is visible, not just the end state.
     if (hasProposal) {
       drawGrid(bpm, anchor, withAlpha(dimColor, 0.25), withAlpha(dimColor, 0.15), 1)
-      drawGrid(proposedBpm as number, proposedAnchor as number, accent, proposalColor, 1)
+      // Joe, 2026-09-25: full-strength amber on every off-beat competed with the
+      // waveform underneath. Downbeats stay at full accent; off-beats drop to a
+      // translucent amber so the proposed grid still reads amber without dominating.
+      drawGrid(proposedBpm as number, proposedAnchor as number, accent, withAlpha(proposalColor, 0.35), 1)
     } else {
       drawGrid(bpm, anchor, accent, tickColor, 1)
     }
