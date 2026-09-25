@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { audio } from '../lib/audio'
-import { bpmFromTaps } from '../lib/bpm'
 import { formatTime } from '../lib/grid'
 import { flash, removeSegment, updateSegment } from '../lib/store'
 import type { Segment } from '../lib/types'
+import { useTapTempo } from '../lib/useTapTempo'
 
 interface Props {
   segment: Segment
@@ -17,9 +17,7 @@ interface Props {
 }
 
 export default function SegmentHeader({ segment, end, selected, removable, first, onSelect, onEditLyrics }: Props) {
-  const taps = useRef<number[]>([])
-  const [tapping, setTapping] = useState(false)
-  const tapStartBpm = useRef<number | null>(null)
+  const { tapping, tap, cancel: cancelTap, reset: endTapSession } = useTapTempo(segment)
   // Eleven controls do not fit a quiet header, so they fold behind the BPM chip and a kebab menu.
   const [openPopover, setOpenPopover] = useState<'bpm' | 'menu' | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -32,12 +30,6 @@ export default function SegmentHeader({ segment, end, selected, removable, first
   useEffect(() => {
     if (renaming) nameInputRef.current?.select()
   }, [renaming])
-
-  function endTapSession() {
-    taps.current = []
-    setTapping(false)
-    tapStartBpm.current = null
-  }
 
   function closePopover() {
     if (openPopover === 'bpm' && tapping) endTapSession()
@@ -60,26 +52,6 @@ export default function SegmentHeader({ segment, end, selected, removable, first
       document.removeEventListener('keydown', onKey)
     }
   }, [openPopover, tapping])
-
-  function tap() {
-    const now = performance.now() / 1000
-    if (!tapping) tapStartBpm.current = segment.bpm
-    // A gap this long means a fresh attempt, not a continuation.
-    if (taps.current.length && now - taps.current[taps.current.length - 1] > 2) taps.current = []
-    taps.current.push(now)
-    setTapping(true)
-    const bpm = bpmFromTaps(taps.current)
-    if (bpm) updateSegment(segment.id, { bpm })
-  }
-
-  /** Right-click bails out of a stray tap session and puts the BPM back where it started. */
-  function cancelTap(e: React.MouseEvent) {
-    e.preventDefault()
-    if (!tapping) return
-    const revertTo = tapStartBpm.current
-    endTapSession()
-    if (revertTo !== null) updateSegment(segment.id, { bpm: revertTo })
-  }
 
   function startRename() {
     setNameDraft(segment.name)

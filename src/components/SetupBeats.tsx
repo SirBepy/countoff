@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { audio, useAudio } from '../lib/audio'
-import { bpmFromTaps, decodeAudioBlob, detectTempo, type TempoResult } from '../lib/bpm'
+import { decodeAudioBlob, detectTempo, type TempoResult } from '../lib/bpm'
 import { loadAudio } from '../lib/db'
 import { formatTime, segmentEnd } from '../lib/grid'
 import { flash, updateSegment } from '../lib/store'
 import type { Project, Segment } from '../lib/types'
+import { useTapTempo } from '../lib/useTapTempo'
 import Waveform from './Waveform'
 
 /** Reused across step re-entries within one tab so flipping Cuts <-> Beats doesn't
@@ -12,32 +13,11 @@ import Waveform from './Waveform'
  *  (or a fresh audio drop, which changes duration/name but not this id) re-decodes. */
 let bufferCache: { projectId: string; buffer: AudioBuffer } | null = null
 
-/** Tap-tempo, standalone from SegmentHeader's popover version since this screen
- *  has room to keep it inline. Right-click cancels and restores the pre-tap BPM. */
+/** Tap-tempo. Inline here since this screen has room, vs. SegmentHeader's popover
+ *  version - both share the timing machine itself via useTapTempo. Right-click
+ *  cancels and restores the pre-tap BPM. */
 function TapTempoButton({ segment }: { segment: Segment }) {
-  const taps = useRef<number[]>([])
-  const [tapping, setTapping] = useState(false)
-  const startBpm = useRef<number | null>(null)
-
-  function tap() {
-    const now = performance.now() / 1000
-    if (!tapping) startBpm.current = segment.bpm
-    if (taps.current.length && now - taps.current[taps.current.length - 1] > 2) taps.current = []
-    taps.current.push(now)
-    setTapping(true)
-    const bpm = bpmFromTaps(taps.current)
-    if (bpm) updateSegment(segment.id, { bpm })
-  }
-
-  function cancel(e: React.MouseEvent) {
-    e.preventDefault()
-    if (!tapping) return
-    const revertTo = startBpm.current
-    taps.current = []
-    setTapping(false)
-    startBpm.current = null
-    if (revertTo !== null) updateSegment(segment.id, { bpm: revertTo })
-  }
+  const { tapping, tap, cancel } = useTapTempo(segment)
 
   return (
     <button
