@@ -11,10 +11,11 @@ import {
 } from '../lib/backup'
 import { audio } from '../lib/audio'
 import { deleteProject, saveAudio } from '../lib/db'
-import { signInWithGoogle, signOutUser } from '../lib/firebase'
+import { signOutUser } from '../lib/firebase'
 import { cancelPendingSave, flash, replaceProject, updateProject } from '../lib/store'
 import { pushAllProjects, pushNow, resolveConflictKeepMine, resolveConflictTakeRemote, useSyncStatus } from '../lib/syncEngine'
 import type { Project } from '../lib/types'
+import { useSignIn } from '../lib/useSignIn'
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
@@ -22,7 +23,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [persisted, setPersisted] = useState<boolean | null>(null)
   const [usage, setUsage] = useState({ used: 0, quota: 0 })
-  const [signingIn, setSigningIn] = useState(false)
+  const { signingIn, signIn } = useSignIn(() => flash('Google sign-in failed'))
   const [syncingAll, setSyncingAll] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
@@ -82,15 +83,7 @@ export default function BackupModal({ project, onClose }: { project: Project; on
   }
 
   async function connectGoogle() {
-    setSigningIn(true)
-    try {
-      await signInWithGoogle()
-      flash('Signed in. Syncing...')
-    } catch {
-      flash('Google sign-in failed')
-    } finally {
-      setSigningIn(false)
-    }
+    if (await signIn()) flash('Signed in. Syncing...')
   }
 
   async function syncAll() {

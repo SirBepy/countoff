@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { OwnerRowStrandedError, deleteProjectDoc, leaveProject, listLibrary, type LibraryEntry, type Member, type Role } from '../lib/collab'
 import { deleteProject, duplicateProject, listProjects, loadProjectById, saveProjectRecord } from '../lib/db'
-import { signInWithGoogle, signOutUser } from '../lib/firebase'
+import { signOutUser } from '../lib/firebase'
 import { colourFor, distinctColours, initialsFrom } from '../lib/floor'
 import { openProjectById } from '../lib/openProject'
 import { flash } from '../lib/store'
 import { getLibrary, useSyncStatus } from '../lib/syncEngine'
+import { useSignIn } from '../lib/useSignIn'
 
 /** One project as the home screen reads it, whether it is on the service or only on this
  *  device. `role` null is the local-only case: nothing has ever synced it, so there is
@@ -76,7 +77,7 @@ export default function Home({ onNewProject, onOpened }: { onNewProject: () => v
   const [loading, setLoading] = useState(true)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
-  const [signingIn, setSigningIn] = useState(false)
+  const { signingIn, signIn } = useSignIn(() => flash('Could not sign in'))
   const cardsRef = useRef<HTMLDivElement>(null)
 
   /** The library is the union of two sources that disagree on purpose: the service knows
@@ -137,16 +138,6 @@ export default function Home({ onNewProject, onOpened }: { onNewProject: () => v
   async function open(id: string) {
     if (await openProjectById(id)) onOpened?.()
     else flash('Could not open that project')
-  }
-
-  async function signIn() {
-    setSigningIn(true)
-    try {
-      await signInWithGoogle()
-    } catch {
-      flash('Could not sign in')
-    }
-    setSigningIn(false)
   }
 
   async function commitRename(card: Card, raw: string) {

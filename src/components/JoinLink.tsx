@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { joinViaLink, resolveLink, type ResolvedLink } from '../lib/collab'
-import { signInWithGoogle } from '../lib/firebase'
 import { openProjectById } from '../lib/openProject'
 import { useSyncStatus } from '../lib/syncEngine'
+import { useSignIn } from '../lib/useSignIn'
 
 /** What a collaborator link does when it lands. Unlike the view-only link, this one grants
  *  access to a live document, so it cannot open anonymously: the member record that IS the
@@ -11,7 +11,7 @@ export default function JoinLink({ token, onOpened }: { token: string; onOpened:
   const sync = useSyncStatus()
   const [link, setLink] = useState<ResolvedLink | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [signingIn, setSigningIn] = useState(false)
+  const { signingIn, signIn } = useSignIn(() => setError('Could not sign in'))
   // Joining twice is harmless but the second run races the first's project open.
   const claimed = useRef(false)
 
@@ -39,15 +39,9 @@ export default function JoinLink({ token, onOpened }: { token: string; onOpened:
     })()
   }, [sync.configured, token, onOpened])
 
-  async function signIn() {
-    setSigningIn(true)
+  async function trySignIn() {
     setError(null)
-    try {
-      await signInWithGoogle()
-    } catch {
-      setError('Could not sign in')
-    }
-    setSigningIn(false)
+    await signIn()
   }
 
   const what = link?.role === 'viewer' ? 'read this choreography' : 'edit this choreography'
@@ -68,7 +62,7 @@ export default function JoinLink({ token, onOpened }: { token: string; onOpened:
               : 'Sign in with Google so the project lands in your library and stays there.')}
         </p>
         {!sync.configured && !error && (
-          <button className="primary" disabled={signingIn} onClick={() => void signIn()}>
+          <button className="primary" disabled={signingIn} onClick={() => void trySignIn()}>
             <i className="ph ph-google-logo i" /> {signingIn ? 'Signing in...' : 'Sign in and open it'}
           </button>
         )}
