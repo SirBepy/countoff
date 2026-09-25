@@ -45,13 +45,12 @@ const PORT_CHECK_TIMEOUT_MS = 1500
 const PROBE_TIMEOUT_MS = 120000
 
 // Libraries the probes import (harness.cjs, fixtures.cjs), this runner itself, and
-// screenshot/measuring tools with no pass count (rehearse-shot.cjs, viewer-measure.cjs -
-// see .claude/todos/53-...). desktop-check.cjs used to be excluded here too - it only
-// called process.exit(1) from its top-level catch on a thrown exception, never from its
-// own `findings` array, so it reported PASS on every run that didn't throw regardless of
-// what it found. Fixed in .claude/todos/55-...: it now uses the same createChecklist
-// convention as every other assertion probe, so it belongs in the discovered set like any
-// of them.
+// screenshot/measuring tools with no pass count (rehearse-shot.cjs, viewer-measure.cjs).
+// The bar for belonging here is having no pass/fail verdict to contribute, not being
+// awkward to run: a file that collects findings but never sets a non-zero exit code
+// reports PASS on every run that does not throw, and excluding it hides that instead of
+// fixing it. desktop-check.cjs is in the discovered set because it reports through
+// createChecklist like every other assertion probe.
 const NON_PROBES = new Set(['harness.cjs', 'fixtures.cjs', 'rehearse-shot.cjs', 'viewer-measure.cjs', 'run-all.cjs'])
 
 // Probes that take no port argument at all.
