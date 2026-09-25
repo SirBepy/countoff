@@ -4,7 +4,9 @@
  * hardcoded array goes stale the same week (this todo's own probe counts were already
  * wrong by the time it got picked up: 25/27 claimed, 30 files on disk). NON_PROBES below
  * excludes files that are not runnable assertion probes; everything else ending in
- * `.cjs` is treated as one.
+ * `.cjs` or `.mjs` (PROBE_EXTENSIONS) is treated as one - see .claude/todos/59-... for
+ * why `.mjs` is included: a probe importing a `.ts` module directly needs it, and
+ * PROBE_EXTENSIONS carries the extra node flags that extension needs to run.
  *
  * Ports: each probe has its own default port (42210, 42001, 5173, 42211-42216, ...).
  * Those defaults are parsed out of verify/README.md's own run-list (`defaults to N`)
@@ -37,18 +39,22 @@ const GLOBAL_DEFAULT_PORT = '42210'
 const PORT_CHECK_TIMEOUT_MS = 1500
 const PROBE_TIMEOUT_MS = 120000
 
-// Libraries the probes import (harness.cjs, fixtures.cjs), this runner itself, a
-// screenshot tool with no pass count (rehearse-shot.cjs), and desktop-check.cjs - which
-// only calls process.exit(1) from its top-level catch on a thrown exception, never from
-// its own `findings` array, so aggregating it by exit code would report PASS on every
-// run that doesn't throw regardless of what it actually found (verify/desktop-check.cjs,
-// checked this session: no exit-code path reads `findings.length`). Including it here
-// would be exactly the silent-pass bug this runner exists to avoid, so it stays out.
-// readme-list-check.cjs IS included below: it is a real check with a correct exit code.
-const NON_PROBES = new Set(['harness.cjs', 'fixtures.cjs', 'rehearse-shot.cjs', 'desktop-check.cjs', 'run-all.cjs'])
+// Libraries the probes import (harness.cjs, fixtures.cjs), this runner itself, and a
+// screenshot tool with no pass count (rehearse-shot.cjs). desktop-check.cjs used to be
+// excluded here too - it only called process.exit(1) from its top-level catch on a
+// thrown exception, never from its own `findings` array, so it reported PASS on every
+// run that didn't throw regardless of what it found. Fixed in .claude/todos/55-...: it
+// now uses the same createChecklist convention as every other assertion probe, so it
+// belongs in the discovered set like any of them.
+const NON_PROBES = new Set(['harness.cjs', 'fixtures.cjs', 'rehearse-shot.cjs', 'run-all.cjs'])
 
 // Probes that take no port argument at all.
-const NO_PORT = new Set(['readme-list-check'])
+const NO_PORT = new Set(['readme-list-check', 'setup-lyrics-fit-unit'])
+
+// Extensions treated as probe files, and the extra node flags each needs to run. A .mjs
+// probe (verify/setup-lyrics-fit-unit.mjs, see .claude/todos/59-...) imports a .ts module
+// directly and needs --experimental-strip-types; .cjs probes need nothing extra.
+const PROBE_EXTENSIONS = { '.cjs': [], '.mjs': ['--experimental-strip-types'] }
 
 function readFirebaseEmulatorPorts() {
   try {
@@ -60,16 +66,20 @@ function readFirebaseEmulatorPorts() {
   }
 }
 
-/** Parses every `node verify/<name>.cjs` line out of the README's run-list: the default
- *  port if the line says "defaults to N", and whether the probe needs the Firebase
- *  emulator (the line says so in prose, for collab-probe). Returns a Map keyed by name,
- *  covering every name the README documents - including ones excluded from execution
- *  above - so a probe deleted out from under a still-current README entry is caught as
- *  a failure below rather than just quietly vanishing from the discovered list. */
+/** Parses every `verify/<name>.cjs` or `verify/<name>.mjs` line out of the README's
+ *  run-list: the default port if the line says "defaults to N", and whether the probe
+ *  needs the Firebase emulator (the line says so in prose, for collab-probe). Returns a
+ *  Map keyed by name, covering every name the README documents - including ones excluded
+ *  from execution above - so a probe deleted out from under a still-current README entry
+ *  is caught as a failure below rather than just quietly vanishing from the discovered
+ *  list. Still anchors on a leading `node `, so an incidental prose mention of a path
+ *  (e.g. "`verify/harness.cjs` is the shared module...") isn't mistaken for a run-list
+ *  line; `(?:--[\w-]+ )*` skips over node flags like the .mjs unit test's
+ *  `node --experimental-strip-types verify/...`. */
 function parseReadme(readmeText) {
   const info = new Map()
   for (const line of readmeText.split('\n')) {
-    const m = line.match(/node verify\/([\w-]+)\.cjs/)
+    const m = line.match(/node (?:--[\w-]+ )*verify\/([\w-]+)\.[cm]js/)
     if (!m) continue
     const name = m[1]
     if (info.has(name)) continue // README mentions collab-probe twice (run-list + emulator section); first line wins
@@ -98,9 +108,9 @@ function checkPort(port, timeout = PORT_CHECK_TIMEOUT_MS) {
  *  timeout can be enforced with `taskkill /T` on Windows: a plain SIGTERM/kill() only
  *  reaches the Node process, not the Chromium tree it launched, which would otherwise
  *  orphan a chromium.exe on every probe that ever hangs. */
-function runProbe(scriptPath, args) {
+function runProbe(scriptPath, args, nodeFlags = []) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [scriptPath, ...args], { cwd: VERIFY_DIR })
+    const child = spawn(process.execPath, [...nodeFlags, scriptPath, ...args], { cwd: VERIFY_DIR })
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
@@ -131,8 +141,11 @@ async function main() {
   const readmeInfo = parseReadme(fs.readFileSync(README_PATH, 'utf8'))
   const emulatorPorts = readFirebaseEmulatorPorts()
 
-  const diskFiles = new Set(fs.readdirSync(VERIFY_DIR).filter((f) => f.endsWith('.cjs')))
-  const probes = [...diskFiles].filter((f) => !NON_PROBES.has(f)).map((f) => f.replace(/\.cjs$/, '')).sort()
+  const probeExts = Object.keys(PROBE_EXTENSIONS)
+  const diskFiles = new Set(fs.readdirSync(VERIFY_DIR).filter((f) => probeExts.some((ext) => f.endsWith(ext))))
+  // Name -> extension, so the run loop below knows which node flags a given probe needs.
+  const extByName = new Map([...diskFiles].map((f) => [f.replace(/\.[cm]js$/, ''), path.extname(f)]))
+  const probes = [...diskFiles].filter((f) => !NON_PROBES.has(f)).map((f) => f.replace(/\.[cm]js$/, '')).sort()
 
   const results = []
   const log = (status, name, extra) => {
@@ -147,7 +160,8 @@ async function main() {
   // out of the discovered list below.
   for (const [name, meta] of readmeInfo) {
     void meta
-    if (!diskFiles.has(`${name}.cjs`)) log('FAIL', name, 'listed in verify/README.md but no verify/' + name + '.cjs on disk')
+    if (!probeExts.some((ext) => diskFiles.has(`${name}${ext}`)))
+      log('FAIL', name, 'listed in verify/README.md but no verify/' + name + '.cjs or .mjs on disk')
   }
 
   for (const name of probes) {
@@ -178,9 +192,10 @@ async function main() {
     }
 
     console.log(`RUN   ${label}`)
-    const scriptPath = path.join(VERIFY_DIR, `${name}.cjs`)
+    const ext = extByName.get(name)
+    const scriptPath = path.join(VERIFY_DIR, `${name}${ext}`)
     const spawnArgs = noPort ? [] : [port]
-    const { code, timedOut, error } = await runProbe(scriptPath, spawnArgs)
+    const { code, timedOut, error } = await runProbe(scriptPath, spawnArgs, PROBE_EXTENSIONS[ext])
 
     if (error) log('FAIL', label, `could not start: ${error.message}`)
     else if (timedOut) log('FAIL', label, `timed out after ${PROBE_TIMEOUT_MS}ms`)

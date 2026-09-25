@@ -1,16 +1,16 @@
 /* Desktop regression pass: the stylesheet split and the merged bottom bar must not
    have changed the 1440px layout. Run: node verify/desktop-check.cjs [port] */
 const path = require('path')
-const { withBrowser, desktopContext, seedProject, silentWav, screenshotDir } = require('./harness.cjs')
+const { withBrowser, desktopContext, seedProject, silentWav, screenshotDir, createChecklist } = require('./harness.cjs')
 const { PROJECT } = require('./fixtures.cjs')
 
 const PORT = process.argv[2] || '42001'
 const URL = `http://localhost:${PORT}`
 const SHOTS = screenshotDir('desktop-check')
 
+const { check, report } = createChecklist()
+
 async function main() {
-  const findings = []
-  const ok = []
   await withBrowser(async (browser) => {
     const ctx = await browser.newContext(desktopContext())
     const page = await ctx.newPage()
@@ -48,28 +48,21 @@ async function main() {
     })
     console.log(JSON.stringify(g, null, 1))
 
-    if (g.docScrollW > g.vw + 2) findings.push(`page is ${g.docScrollW}px wide in ${g.vw}px`)
-    else ok.push('no sideways overflow')
-    if (!g.songmap) findings.push('song map is missing on desktop')
-    else ok.push(`song map present, ${g.songmap.h}px tall`)
-    if (g.strip) findings.push('the phone song strip leaked onto desktop')
-    else ok.push('song strip is phone-only')
-    if (g.railStatic !== 'static') findings.push(`rail is ${g.railStatic}, expected static`)
-    else ok.push(`rail is a static ${g.rail.w}px column`)
-    if (g.main.left < g.rail.w - 1) findings.push('main does not start after the rail')
-    else ok.push('main starts after the rail')
-    if (g.moreOpen === 'none') findings.push('the secondary controls row is hidden on desktop')
-    else ok.push('secondary controls row always visible on desktop')
-    if (g.narrowVisible) findings.push(`${g.narrowVisible} phone-only elements visible on desktop`)
-    else ok.push('no phone-only elements visible')
-    if (!g.wideVisible) findings.push('no desktop-only elements visible')
-    else ok.push(`${g.wideVisible} desktop-only elements visible`)
-    if (g.tap !== '34px') findings.push(`--tap is ${g.tap}, expected 34px`)
-    else ok.push('desktop tap sizing active')
-    if (g.bar.bottom > g.vh + 1) findings.push('bottom bar runs past the viewport')
-    else ok.push('bottom bar sits on screen')
-    if (g.counts.h !== 46) findings.push(`counts row is ${g.counts.h}px, expected 46`)
-    else ok.push('counts row back to 46px on desktop')
+    check('no sideways overflow', g.docScrollW <= g.vw + 2, `page is ${g.docScrollW}px wide in ${g.vw}px`)
+    check('song map is present on desktop', !!g.songmap, g.songmap ? `${g.songmap.h}px tall` : 'missing')
+    check('song strip is phone-only', !g.strip, g.strip ? 'the phone song strip leaked onto desktop' : 'absent')
+    check('rail is a static column', g.railStatic === 'static', `rail is ${g.railStatic}, expected static`)
+    check('main starts after the rail', g.main.left >= g.rail.w - 1, `main.left ${g.main.left}, rail.w ${g.rail.w}`)
+    check(
+      'secondary controls row always visible on desktop',
+      g.moreOpen !== 'none',
+      g.moreOpen === 'none' ? 'the secondary controls row is hidden on desktop' : g.moreOpen,
+    )
+    check('no phone-only elements visible on desktop', g.narrowVisible === 0, `${g.narrowVisible} phone-only elements visible`)
+    check('at least one desktop-only element visible', g.wideVisible > 0, `${g.wideVisible} desktop-only elements visible`)
+    check('desktop tap sizing active', g.tap === '34px', `--tap is ${g.tap}, expected 34px`)
+    check('bottom bar sits on screen', g.bar.bottom <= g.vh + 1, `bar.bottom ${g.bar.bottom}, vh ${g.vh}`)
+    check('counts row back to 46px on desktop', g.counts.h === 46, `counts row is ${g.counts.h}px, expected 46`)
 
     await page.screenshot({ path: path.join(SHOTS, 'desktop-sheet.png') })
     // An empty row: dragging from a block moves the block, which is a different test.
@@ -82,7 +75,7 @@ async function main() {
       }
       return null
     })
-    if (!empty) findings.push('no empty counts row on screen to drag across')
+    check('found an empty counts row to drag across', !!empty, empty ? JSON.stringify(empty) : 'no empty counts row on screen to drag across')
     const y = empty ? empty.y : Math.round((g.counts.top + g.counts.bottom) / 2)
     const x0 = empty ? empty.left : g.counts.left
     await page.mouse.move(x0 + 60, y)
@@ -92,15 +85,13 @@ async function main() {
     await page.waitForTimeout(300)
     const sel = await page.evaluate(() => document.querySelectorAll('.count-cell.sel').length)
     console.log('mouse drag selected', sel)
-    if (sel < 2) findings.push(`mouse drag selected ${sel} counts`)
-    else ok.push(`mouse drag selects ${sel} counts`)
+    check('mouse drag selects at least 2 counts', sel >= 2, `mouse drag selected ${sel} counts`)
     await page.screenshot({ path: path.join(SHOTS, 'desktop-selection.png') })
 
     console.log('\nerrors:', errors.length, errors.slice(0, 4))
-    console.log('\nPASSED:\n' + ok.map((f) => ' + ' + f).join('\n'))
-    console.log('\nFINDINGS:\n' + (findings.length ? findings.map((f) => ' - ' + f).join('\n') : ' none'))
     await ctx.close()
   })
+  report()
 }
 main().catch((e) => {
   console.error(e)

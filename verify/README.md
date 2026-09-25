@@ -30,6 +30,7 @@ node verify/row-truncation-probe.cjs [port]  # a row cut mid-song stops its grid
 node verify/setup-cuts-probe.cjs [port]  # setup step 1 shows only the timeline and start/end, a typed m:ss.mmm lands to the millisecond and survives a reload, and adding a cut runs no tempo scan
 node verify/setup-beats-probe.cjs [port]  # setup step 2 nudges the anchor and tempo across a reload and never silently overwrites an already-approved tempo
 node verify/setup-lyrics-probe.cjs [port]  # setup step 3 stops nagging a song marked as having no lyrics, keeps hand-placed lines put through a fit, and backfills the marker on an older project
+node --experimental-strip-types verify/setup-lyrics-fit-unit.mjs  # direct unit test for src/lib/fit.ts's computeFit (no dev server, no port): the two-point scale/offset solve, same-line and same-srcTime rejection, an implausible-scale rejection, an identity fit, and a negative offset
 node verify/movement-probe.cjs [port]  # rehearse runway scroll/labels and the floor mini-map - defaults to 42210
 node verify/turns-probe.cjs [port]     # move shapes and turns: a half turn keeps the facing and is chased until something undoes it, a full turn passes through the same angles and leaves nothing
 node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
