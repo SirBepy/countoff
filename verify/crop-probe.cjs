@@ -7,7 +7,7 @@ const fs = require('fs')
 const path = require('path')
 const { withBrowser, desktopContext, seedProject, readProject, silentWav, createChecklist } = require('./harness.cjs')
 
-const PORT = process.argv[2] || '5173'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const TAKE_ID = 'crop-take-a'
 

@@ -7,7 +7,7 @@ const path = require('path')
 const { withBrowser, desktopContext, seedProject, readProject, silentWav, screenshotDir, createChecklist } =
   require('./harness.cjs')
 
-const PORT = process.argv[2] || '42214'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const TAKE_ID = 'take-a'
 

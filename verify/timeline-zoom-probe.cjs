@@ -6,7 +6,7 @@ const path = require('path')
 const { withBrowser, desktopContext, seedProject, silentWav, screenshotDir, createChecklist } =
   require('./harness.cjs')
 
-const PORT = process.argv[2] || '42215'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const TAKE_ID = 'take-a'
 /** Parked off-centre on purpose: at 1x it sits three quarters along, so a zoom that does

@@ -5,7 +5,7 @@
    emulators need Java 21 and this Mac has 17 - so the positive path is Joe's browser. */
 const { withBrowser, desktopContext, seedProject, silentWav, createChecklist } = require('./harness.cjs')
 
-const PORT = process.argv[2] || '5173'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const TAKE_ID = 'take-local'
 

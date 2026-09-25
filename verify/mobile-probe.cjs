@@ -4,7 +4,7 @@ const path = require('path')
 const { withBrowser, phoneContext, seedProject, silentWav, screenshotDir } = require('./harness.cjs')
 const { PROJECT } = require('./fixtures.cjs')
 
-const PORT = process.argv[2] || '42001'
+const PORT = process.argv[2] || '42210'
 const LABEL = process.argv[3] || 'after'
 const URL = `http://localhost:${PORT}`
 const SHOTS = screenshotDir('mobile-probe')

@@ -16,14 +16,28 @@ A probe whose server isn't reachable (or, for `collab-probe.cjs`, whose Firebase
 isn't reachable) is reported SKIPPED with the reason, never silently dropped. Pass/fail is
 decided from each probe's exit code only. See `verify/run-all.cjs` for the exact rules.
 
+Every probe below defaults to port 42210, the one dev-server port the suite expects up by
+default (see .claude/todos/58-...). Each probe's own browser launch (`withBrowser` ->
+`chromium.launch()`, never `launchPersistentContext`) gets a fresh, unnamed profile
+directory per process, so two probes sharing 42210 never share IndexedDB even though
+IndexedDB is per-origin - confirmed empirically 2026-09-25 (write a marker in one throwaway
+probe run, read it back in a second separate one: the second saw no trace of the first's
+database).
+`share-cache-probe.cjs` has a second reason to want 42210 specifically, not just any shared
+port: `cors.json` allowlists Storage GET requests from `http://localhost:42210` and the
+production origins only, so it is the one localhost port a real cross-origin Storage fetch
+will actually succeed from. `collab-probe.cjs` (talks to the Firebase emulator, not
+production) and `viewing-as-probe.cjs`, `menu-probe.cjs` and the rest of the suite were
+already on 42210 before this note was added.
+
 ## Running a probe
 
 The dev server must already be running (`npm run dev`, or via `/supervised-run`). Then:
 
 ```
 node verify/menu-probe.cjs [port]      # sheet menu, comments, drag, lanes - defaults to 42210
-node verify/mobile-probe.cjs [port]    # phone touch/scroll/layout findings - defaults to 42001
-node verify/desktop-check.cjs [port]   # 1440px layout regression - defaults to 42001
+node verify/mobile-probe.cjs [port]    # phone touch/scroll/layout findings - defaults to 42210
+node verify/desktop-check.cjs [port]   # 1440px layout regression - defaults to 42210
 node verify/restore-race.cjs [port]    # snapshot-restore vs debounced-save race
 node verify/floor-probe.cjs [port]     # cast, movements, the walk menu, the sheet cue lane
 node verify/row-truncation-probe.cjs [port]  # a row cut mid-song stops its grid, lyric and blocks at the cut
@@ -36,17 +50,17 @@ node verify/turns-probe.cjs [port]     # move shapes and turns: a half turn keep
 node verify/boot-probe.cjs [port]      # empty-state routing to an already-pulled project, and whether the audio element and store survive a dev-mode hot reload
 node verify/bpm-window.cjs [port]      # splitSongAt on a real multi-tempo file, checking each cut's segment gets its own re-measured bpm
 node verify/collab-probe.cjs [port]   # the whole collaboration model against the REAL rules in the Firebase emulator: an owner's push, the song upload, invite by address, claiming it on the next sign-in, an outsider being refused, the join link, and a demotion landing - defaults to 42210, needs `firebase emulators:start --only auth,firestore,storage` running as well
-node verify/chair-probe.cjs [port]     # the focus chair's keyframes interpolate during playback, rescale with the floor, and don't move on a pre-keyframe project - defaults to 42213
-node verify/crop-probe.cjs [port]      # a take's crop renders correctly (pixel-sampled) on both the editor monitor and rehearse's fixed-ratio box - defaults to 5173
-node verify/runway-probe.cjs [port]    # the tracked 9-assertion probe: next song's moves, lyrics and counts show up on the runway ahead of the cut - defaults to 42211
-node verify/share-cache-probe.cjs [port] [token]  # a shared link caches firestore/storage reads across reloads, and a corrupted cache falls back to a full re-fetch - defaults to 5173
-node verify/share-probe.cjs [port]     # a read-only share view can't mutate or persist the project through any edit gesture or store call - defaults to 42212
-node verify/take-backup-probe.cjs [port]  # footage never reaches Storage for an unshared project, and does for a shared one - defaults to 5173
-node verify/take-sharing-probe.cjs [port]  # duplicating a project shares its source take rather than copying the file, and deletes only the copy's own reference - defaults to 5173
-node verify/video-probe.cjs [port]     # footage laid over a song: the clip track editor and rehearse's video layout - defaults to 5173
-node verify/preload-probe.cjs [port]   # the next clip has its own element parked on its opening frame and the cut shows that very element (never a reload), also for a second cut into the take already on screen; the pool is the clip on screen plus one, a take only reachable over the network warms by metadata only, a cut onto slow footage lands without a seek storm, and a take whose file is on this device is never streamed back out of its uploaded url - defaults to 42216
-node verify/timeline-zoom-probe.cjs [port]  # both timelines zoom the same way: a slider in the transport, a logarithmic range, ctrl+scroll still working, and every zoom change re-centring on the playhead on the clip track and the walk track alike - defaults to 42215
-node verify/clip-times-probe.cjs [port]  # the video inspector as fields: a typed song time to the millisecond, the 0.01/0.1 step chip governing both carets and arrow keys, footage sync holding the clip still, a typed From trimming only the head, and the clamp at the take's first frame - defaults to 42214
+node verify/chair-probe.cjs [port]     # the focus chair's keyframes interpolate during playback, rescale with the floor, and don't move on a pre-keyframe project - defaults to 42210
+node verify/crop-probe.cjs [port]      # a take's crop renders correctly (pixel-sampled) on both the editor monitor and rehearse's fixed-ratio box - defaults to 42210
+node verify/runway-probe.cjs [port]    # the tracked 9-assertion probe: next song's moves, lyrics and counts show up on the runway ahead of the cut - defaults to 42210
+node verify/share-cache-probe.cjs [port] [token]  # a shared link caches firestore/storage reads across reloads, and a corrupted cache falls back to a full re-fetch - defaults to 42210
+node verify/share-probe.cjs [port]     # a read-only share view can't mutate or persist the project through any edit gesture or store call - defaults to 42210
+node verify/take-backup-probe.cjs [port]  # footage never reaches Storage for an unshared project, and does for a shared one - defaults to 42210
+node verify/take-sharing-probe.cjs [port]  # duplicating a project shares its source take rather than copying the file, and deletes only the copy's own reference - defaults to 42210
+node verify/video-probe.cjs [port]     # footage laid over a song: the clip track editor and rehearse's video layout - defaults to 42210
+node verify/preload-probe.cjs [port]   # the next clip has its own element parked on its opening frame and the cut shows that very element (never a reload), also for a second cut into the take already on screen; the pool is the clip on screen plus one, a take only reachable over the network warms by metadata only, a cut onto slow footage lands without a seek storm, and a take whose file is on this device is never streamed back out of its uploaded url - defaults to 42210
+node verify/timeline-zoom-probe.cjs [port]  # both timelines zoom the same way: a slider in the transport, a logarithmic range, ctrl+scroll still working, and every zoom change re-centring on the playhead on the clip track and the walk track alike - defaults to 42210
+node verify/clip-times-probe.cjs [port]  # the video inspector as fields: a typed song time to the millisecond, the 0.01/0.1 step chip governing both carets and arrow keys, footage sync holding the clip still, a typed From trimming only the head, and the clamp at the take's first frame - defaults to 42210
 node verify/viewing-as-probe.cjs [port]  # reading the app as one dancer: the sheet's fold and per-count override, the cue lane, the floor, rehearse, what a move placed under the lens is tagged with, and whether the choice survives a reload
 ```
 

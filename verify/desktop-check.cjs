@@ -4,7 +4,7 @@ const path = require('path')
 const { withBrowser, desktopContext, seedProject, silentWav, screenshotDir, createChecklist } = require('./harness.cjs')
 const { PROJECT } = require('./fixtures.cjs')
 
-const PORT = process.argv[2] || '42001'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}`
 const SHOTS = screenshotDir('desktop-check')
 

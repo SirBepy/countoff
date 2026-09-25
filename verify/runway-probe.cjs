@@ -4,7 +4,7 @@ const { withBrowser, desktopContext, seedProject, silentWav, createChecklist } =
 const path = require('path')
 const fs = require('fs')
 
-const PORT = process.argv[2] || '42211'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 const SHOTS = path.join(__dirname, '..', '.for_bepy', 'screenshots', 'fbee9649-4c93-4ea9-b002-e68e81d24bd8')
 

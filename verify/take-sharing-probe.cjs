@@ -3,7 +3,7 @@
    the take files are stand-in bytes, since nothing here ever decodes them. */
 const { withBrowser, desktopContext, seedProject, silentWav, createChecklist } = require('./harness.cjs')
 
-const PORT = process.argv[2] || '5173'
+const PORT = process.argv[2] || '42210'
 const URL = `http://localhost:${PORT}/`
 
 function makeProject(id, name, takeId) {

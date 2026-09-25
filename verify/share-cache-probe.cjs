@@ -5,7 +5,7 @@
 const path = require('path')
 const { withBrowser, screenshotDir, createChecklist } = require('./harness.cjs')
 
-const WHERE = process.argv[2] || '5173'
+const WHERE = process.argv[2] || '42210'
 const TOKEN = process.argv[3] || '984a22aa0d1940429f665f80520cb562'
 const BASE = WHERE.startsWith('http') ? WHERE.replace(/\/$/, '') : `http://localhost:${WHERE}`
 const URL = `${BASE}/#${TOKEN}`
