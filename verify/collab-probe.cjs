@@ -14,6 +14,7 @@
 */
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { withBrowser, desktopContext, seedProject, silentWav, screenshotDir, createChecklist } = require('./harness.cjs')
 
 const PORT = process.argv[2] || 42210
@@ -29,17 +30,29 @@ const STORAGE_OBJECT = (key) =>
 // as the emulator process does, so this is a required argument rather than a credential.
 // It has to be stable across runs all the same: the accounts survive between them, and a
 // fresh value would fail to create an account that exists and fail to sign into one it
-// does not have the argument for.
+// does not have the argument for. (This is about the password staying constant, not the
+// email - see RUN_ID below for why the email itself now changes every run.)
 const SIGN_IN_ARG = process.env.COUNTOFF_PROBE_SIGN_IN || 'changeme'
 
-const OWNER = { email: 'owner@countoff.test', pass: SIGN_IN_ARG }
+// Todo 57: the Firestore/Auth/Storage emulator is one process shared by every probe run
+// against this port, including two agents' `verify/run-all.cjs` hitting it at the same time
+// (the documented failure this fixes). A literal project id or account email reused between
+// runs is a collision waiting to happen: a stale prior run's rows corrupt a rerun's
+// assertions, and two truly concurrent runs corrupt each other's live writes. A fresh
+// per-run id namespace removes both at once - each run's data is disjoint from every other
+// run's, so runs no longer need to be serialized. Accepted cost: the auth emulator's
+// accounts accumulate one set per run instead of five fixed ones reused forever, until the
+// emulator itself restarts.
+const RUN_ID = (process.env.COUNTOFF_PROBE_RUN_ID || crypto.randomUUID()).replace(/-/g, '').slice(0, 10)
+
+const OWNER = { email: `owner-${RUN_ID}@countoff.test`, pass: SIGN_IN_ARG }
 // Deliberately mixed case: the invite is keyed lowercase and the token comes back however
 // the account was created, so this is the assertion that the two still meet.
-const MATE = { email: 'Mate@Countoff.Test', pass: SIGN_IN_ARG }
-const GUEST = { email: 'guest@countoff.test', pass: SIGN_IN_ARG }
+const MATE = { email: `Mate-${RUN_ID}@Countoff.Test`, pass: SIGN_IN_ARG }
+const GUEST = { email: `guest-${RUN_ID}@countoff.test`, pass: SIGN_IN_ARG }
 
 const PROJECT = {
-  id: 'collab-probe-project',
+  id: `collab-probe-project-${RUN_ID}`,
   name: 'Collab probe medley',
   audioName: 'probe.wav',
   duration: 12,
@@ -56,7 +69,7 @@ const PROJECT = {
 // block, move) is distinct from PROJECT's own, so any assertion comparing the two catches
 // a leak in either direction rather than passing by coincidence on a shared name.
 const PROJECT2 = {
-  id: 'collab-probe-project-two',
+  id: `collab-probe-project-two-${RUN_ID}`,
   name: 'Collab probe second project',
   audioName: 'probe2.wav',
   duration: 8,
@@ -101,8 +114,8 @@ function plain(fields) {
 const admin = async (docPath) => plain(await adminRaw(docPath))
 
 /** Every document in a collection, via the same admin bypass `adminRaw` uses. Shared by
- *  `wipe()` and the defect-C guard below, which needs to find a member row by its role or
- *  email rather than a uid nothing here already knows. */
+ *  `dropProject()` and the defect-C guard below, which needs to find a member row by its
+ *  role or email rather than a uid nothing here already knows. */
 async function listAdmin(relative) {
   const res = await fetch(`${FIRESTORE}/${relative}?pageSize=300`, { headers: { Authorization: 'Bearer owner' } })
   return res.ok ? ((await res.json()).documents ?? []) : []
@@ -176,20 +189,19 @@ async function freshPage(browser) {
   return page
 }
 
-/** Clean state per run, or the second run reads the first run's roster. */
-async function wipe() {
+/** Removes one project (meta, content, members) via the admin bypass. Scoped to a single
+ *  project id rather than the whole `projects` collection: with a per-run RUN_ID (see above)
+ *  that collection can hold a concurrently-running sibling probe's data too, and a blanket
+ *  wipe of everything in it is exactly the mechanism that made this probe corrupt a
+ *  concurrent run's state instead of only its own. Safe to call on an id nothing has written
+ *  yet - `listAdmin` then returns no children and the final `drop` no-ops on a missing doc. */
+async function dropProject(pid) {
   const drop = (relative) =>
     fetch(`${FIRESTORE}/${relative}`, { method: 'DELETE', headers: { Authorization: 'Bearer owner' } })
   const relative = (doc) => doc.name.split('/documents/')[1]
-
-  for (const project of await listAdmin('projects')) {
-    const base = relative(project)
-    // Deleting a document does not delete its subcollections, so the known ones go by name.
-    for (const child of ['content', 'members']) for (const kid of await listAdmin(`${base}/${child}`)) await drop(relative(kid))
-    await drop(base)
-  }
-  for (const link of await listAdmin('links')) await drop(relative(link))
-  for (const invitee of await listAdmin('invites')) for (const kid of await listAdmin(`${relative(invitee)}/for`)) await drop(relative(kid))
+  const base = `projects/${pid}`
+  for (const child of ['content', 'members']) for (const kid of await listAdmin(`${base}/${child}`)) await drop(relative(kid))
+  await drop(base)
 }
 
 async function openSharePeople(page) {
@@ -225,7 +237,12 @@ async function deleteFromHome(page, name) {
 async function run(browser) {
   const { check, report } = createChecklist()
   const shots = screenshotDir('collab')
-  await wipe()
+  // Defensive only, not load-bearing: a fresh RUN_ID has never been written to, so this
+  // normally finds nothing. It only matters if COUNTOFF_PROBE_RUN_ID is pinned on purpose
+  // (e.g. for a reproducible debug run) and a previous run under that same id crashed
+  // before reaching its own cleanup below.
+  await dropProject(PROJECT.id)
+  await dropProject(PROJECT2.id)
   const pages = {}
 
   /** Every failure here is a rules denial two screens back, so a thrown probe still has to
@@ -537,6 +554,14 @@ async function run(browser) {
   } catch (e) {
     await dumpAll(e.message)
     check(`the probe ran to the end`, false, e.message)
+  } finally {
+    // PROJECT deletes itself as part of the flow under test (todo 40's storage-reclaim
+    // check), so this is normally a no-op for it. PROJECT2 never goes through that UI path
+    // at all, so without this it would outlive the run as untouchable junk sitting under an
+    // owner account nobody signs into again. Also covers PROJECT if the run threw before
+    // reaching its own delete step above.
+    await dropProject(PROJECT2.id).catch(() => {})
+    await dropProject(PROJECT.id).catch(() => {})
   }
   return report()
 }
