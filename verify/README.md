@@ -57,6 +57,7 @@ node verify/runway-probe.cjs [port]    # the tracked 9-assertion probe: next son
 node verify/share-cache-probe.cjs [port] [token]  # a shared link caches firestore/storage reads across reloads, and a corrupted cache falls back to a full re-fetch - defaults to 42210
 node verify/share-probe.cjs [port]     # a read-only share view can't mutate or persist the project through any edit gesture or store call - defaults to 42210
 node verify/take-backup-probe.cjs [port]  # footage never reaches Storage for an unshared project, and does for a shared one - defaults to 42210
+node verify/take-error-probe.cjs [port] [token]  # the background take download refuses a 404 instead of caching the error page as footage, and still caches a good response - defaults to 42210
 node verify/take-sharing-probe.cjs [port]  # duplicating a project shares its source take rather than copying the file, and deletes only the copy's own reference - defaults to 42210
 node verify/video-probe.cjs [port]     # footage laid over a song: the clip track editor and rehearse's video layout - defaults to 42210
 node verify/preload-probe.cjs [port]   # the next clip has its own element parked on its opening frame and the cut shows that very element (never a reload), also for a second cut into the take already on screen; the pool is the clip on screen plus one, a take only reachable over the network warms by metadata only, a cut onto slow footage lands without a seek storm, and a take whose file is on this device is never streamed back out of its uploaded url - defaults to 42210

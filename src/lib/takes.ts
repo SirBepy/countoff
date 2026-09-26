@@ -79,13 +79,22 @@ async function downloadWhilePaused(url: string): Promise<Blob> {
   for (;;) {
     await waitForPause()
     const res = await fetch(url, { priority: 'low', headers: received ? { Range: `bytes=${received}-` } : {} })
-    if (!res.body) return res.blob()
+    // `fetch` rejects on a dropped link but not on an HTTP error status, so without this
+    // the error page's body reads as footage and the caller saves it as this take's cached
+    // file - corruption that outlives the session, since a local copy wins over Storage on
+    // every later visit. Throwing reaches the caller's catch, which leaves the take
+    // streaming; the next visit retries, so a transient 5xx needs no retry loop here.
+    if (!res.ok) throw new Error(`take download answered ${res.status}`)
     // The server ignoring Range and answering with the whole object again (200
     // instead of 206) would otherwise duplicate the bytes already collected.
     if (received > 0 && res.status !== 206) {
       parts = []
       received = 0
     }
+    // The reset above has to come first: on a 200-for-a-Range this response IS the whole
+    // object, and `parts` is empty by then. On a 206 it is only the tail, so the bytes
+    // already collected go in front of it.
+    if (!res.body) return new Blob([...parts, await res.blob()])
     const reader = res.body.getReader()
     try {
       for (;;) {
