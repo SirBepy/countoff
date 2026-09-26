@@ -17,7 +17,7 @@ import {
   updateTake,
   useStore,
 } from '../lib/store'
-import { dropTake, importTake } from '../lib/takes'
+import { importTake } from '../lib/takes'
 import { useFollowPlayhead, useWheelZoom, useZoomAnchor } from '../lib/timeline'
 import {
   clipEnd,
@@ -34,21 +34,18 @@ import {
 import type { Clip, Project, Take } from '../lib/types'
 import CastPicker from './CastPicker'
 import CropEditor from './CropEditor'
+import TakesBin, { TAKE_DRAG } from './TakesBin'
 import { formatPrecise, TimeField } from './TimeField'
 import VideoStage from './VideoStage'
 import ZoomSlider from './ZoomSlider'
 
 /** A drag under this many pixels is a click, so tapping a clip selects instead of retiming it. */
 const DRAG_SLOP = 4
-/** Marks a bin drag as one of ours, so the file-upload overlay stays out of its way. */
-const TAKE_DRAG = 'application/x-countoff-take'
 /** What one caret click or arrow key is worth. A hundredth is a frame or two, a tenth is
  *  the size of a sync that is visibly off. */
 const STEPS = [0.01, 0.1]
 
 type Grab = 'body' | 'in' | 'out'
-
-const mb = (bytes: number) => `${Math.max(1, Math.round(bytes / 1e6))} MB`
 
 const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
 
@@ -327,59 +324,14 @@ export default function VideoScreen({ project }: { project: Project }) {
         </VideoStage>
         </div>
 
-        <div className="vs-bin">
-          <h3>Takes</h3>
-          <div className="vs-takes">
-            {project.takes.map((t) => (
-              <div
-                key={t.id}
-                className="vs-take"
-                draggable
-                title="Drag onto the Video lane, or use the button to drop it at the playhead"
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(TAKE_DRAG, t.id)
-                  e.dataTransfer.effectAllowed = 'copy'
-                }}
-                onDragEnd={() => setGhost(null)}
-              >
-                <span className="thumb">
-                  <i className="ph ph-play" />
-                </span>
-                <span className="t">
-                  <b>{t.name}</b>
-                  <span>
-                    {formatTime(t.duration)} · {mb(t.bytes)}
-                  </span>
-                </span>
-                <button className="ghost icon" title="Lay this take at the playhead" onClick={() => lay(t)}>
-                  <i className="ph ph-arrow-fat-down" />
-                </button>
-                <button
-                  className={`ghost icon${t.crop ? ' on' : ''}`}
-                  title="Crop this take's footage"
-                  onClick={() => enterCrop(t)}
-                >
-                  <i className="ph ph-crop" />
-                </button>
-                <button className="ghost icon" title="Remove this take and its clips" onClick={() => void dropTake(t.id)}>
-                  <i className="ph ph-trash" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div
-            className="vs-drop"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              void pick(e.dataTransfer.files)
-            }}
-            onClick={() => picker.current?.click()}
-          >
-            <i className="ph ph-upload-simple" />
-            Drop a video here, then send it to the playhead
-          </div>
-        </div>
+        <TakesBin
+          takes={project.takes}
+          onLay={lay}
+          onCrop={enterCrop}
+          onImport={(files) => void pick(files)}
+          onPickFile={() => picker.current?.click()}
+          onDragEnd={() => setGhost(null)}
+        />
       </div>
 
       <div className="vs-insp">
