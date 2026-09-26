@@ -1,3 +1,4 @@
+import { audio } from './audio'
 import { deleteTakeFileIfUnused, getActiveProjectId, loadTakeFile, saveTakeFile } from './db'
 import { addTake, flash, removeTake, setTakeUrl, uid } from './store'
 import { backUpTakes } from './takeBackup'
@@ -56,6 +57,50 @@ function byFirstCut(project: Project, takes: Take[]): Take[] {
   return [...takes].sort((a, b) => (firstCut.get(a.id) ?? Infinity) - (firstCut.get(b.id) ?? Infinity))
 }
 
+/** Resolves at the next moment playback is not advancing: immediately if the audio
+ *  element is already paused, otherwise at the next 'pause' event - which also fires
+ *  when a song simply reaches its end. */
+function waitForPause(): Promise<void> {
+  if (audio.el.paused) return Promise.resolve()
+  return new Promise((resolve) => audio.el.addEventListener('pause', () => resolve(), { once: true }))
+}
+
+/**
+ * Downloads one take without competing with the video element streaming that same
+ * object: reads the response body in chunks and stops - cancelling the fetch, so the
+ * browser actually releases the link rather than merely deprioritising it - the instant
+ * playback starts, resuming with a Range request from the last byte read once playback
+ * stops again (paused, between songs, or the song ending). Falls back to a plain
+ * whole-file read if the response carries no readable stream.
+ */
+async function downloadWhilePaused(url: string): Promise<Blob> {
+  let parts: BlobPart[] = []
+  let received = 0
+  for (;;) {
+    await waitForPause()
+    const res = await fetch(url, { priority: 'low', headers: received ? { Range: `bytes=${received}-` } : {} })
+    if (!res.body) return res.blob()
+    // The server ignoring Range and answering with the whole object again (200
+    // instead of 206) would otherwise duplicate the bytes already collected.
+    if (received > 0 && res.status !== 206) {
+      parts = []
+      received = 0
+    }
+    const reader = res.body.getReader()
+    try {
+      for (;;) {
+        if (!audio.el.paused) break
+        const { done, value } = await reader.read()
+        if (done) return new Blob(parts)
+        parts.push(value)
+        received += value.byteLength
+      }
+    } finally {
+      void reader.cancel().catch(() => {})
+    }
+  }
+}
+
 /** A viewer's version of attachTakes: a take whose remote url matches `previous`
  *  (this device's last cache of the same share) plays local, no Storage hit. The
  *  rest still stream remotely now, and get fetched into the background for next time. */
@@ -77,13 +122,16 @@ export async function attachSharedTakes(project: Project, previous?: Project): P
     }),
   )
   // Live, not just next session: `takeSrc` prefers this copy the moment it lands, at
-  // the cost of one reload of a local blob under the clip on screen. One take at a time,
-  // in cut order, at low priority: that clip is streaming over the same link, and every
-  // download racing it at once is bandwidth taken from the frame the viewer is watching.
+  // the cost of one reload of a local blob under the clip on screen. One take at a
+  // time, in cut order: that clip is streaming over the same link, and `priority: 'low'`
+  // alone does not stop a `fetch(...).blob()` from pulling the whole file regardless of
+  // the hint, which is bandwidth taken straight from the frame the viewer is watching.
+  // `downloadWhilePaused` is the actual mitigation: it only pulls bytes while the song
+  // is not advancing, in project-open idle time, between songs, or after a song ends.
   void (async () => {
     for (const take of byFirstCut(project, pending)) {
       try {
-        const blob = await (await fetch(take.url!, { priority: 'low' })).blob()
+        const blob = await downloadWhilePaused(take.url!)
         await saveTakeFile(take.id, blob)
         setTakeUrl(take.id, URL.createObjectURL(blob))
       } catch {
