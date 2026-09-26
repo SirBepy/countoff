@@ -64,6 +64,17 @@ async function run() {
       })
     }
 
+    // Seeks are what the drift correction issues, and at one sample a second the row above
+    // cannot show a correction firing every animation frame - it only shows where the
+    // playhead landed. Counting them in the page is the difference between "the footage is
+    // behind" and "the footage is being restarted faster than it can arrive" (todo 64).
+    // Media events do not bubble, but a capture-phase listener on the document still sees
+    // them, so one listener covers every element the pool mounts and unmounts.
+    await page.addInitScript(() => {
+      window.__seeks = 0
+      document.addEventListener('seeking', () => (window.__seeks += 1), true)
+    })
+
     await page.goto(LINK, { waitUntil: 'domcontentloaded' })
 
     // Two link shapes reach the rehearse screen differently: a join-link/spectator token lands
@@ -102,6 +113,7 @@ async function run() {
           ready: v.readyState,
           net: v.networkState,
           paused: v.paused,
+          seeking: v.seeking,
           buffered: v.buffered.length ? `${v.buffered.start(0).toFixed(1)}-${v.buffered.end(v.buffered.length - 1).toFixed(1)}` : '-',
         })
         return {
@@ -110,6 +122,7 @@ async function run() {
           warm: warm.map(desc),
           gap: !!document.querySelector('.vstage.is-gap'),
           videos: document.querySelectorAll('video').length,
+          seeks: window.__seeks ?? 0,
         }
       })
 
@@ -124,6 +137,7 @@ async function run() {
     console.log(`pressed play at ${stamp()}s`)
 
     let lastMain = null
+    let lastSeeks = null
     let stuckRuns = 0
     let stallRuns = 0
     for (let i = 0; i < SECONDS; i++) {
@@ -139,8 +153,10 @@ async function run() {
       // measure-viewer-playback-by-readystate-not-currenttime).
       const stall = m && !s.gap && m.ready < 3 && s.audio && !s.audio.paused
       if (stall) stallRuns++
+      const seeksThisSecond = s.seeks - (lastSeeks ?? s.seeks)
+      lastSeeks = s.seeks
       console.log(
-        `${stamp().padStart(5)}s audio=${s.audio?.t.toFixed(1).padStart(6)} ${s.gap ? 'GAP ' : '    '}main=${m ? `${m.src} t=${m.t} rs=${m.ready} ns=${m.net} ${m.paused ? 'PAUSED' : 'play'} buf=${m.buffered}` : '-'} warm=${s.warm.map((w) => `${w.src}@${w.t}/rs${w.ready}`).join(',')} inflight=${inflight.size}${stuck ? '  <<< STUCK' : ''}${stall ? '  <<< NO FRAME' : ''}`,
+        `${stamp().padStart(5)}s audio=${s.audio?.t.toFixed(1).padStart(6)} ${s.gap ? 'GAP ' : '    '}main=${m ? `${m.src} t=${m.t} rs=${m.ready} ns=${m.net} ${m.paused ? 'PAUSED' : 'play'}${m.seeking ? ' SEEKING' : ''} buf=${m.buffered}` : '-'} seeks=${seeksThisSecond}/s warm=${s.warm.map((w) => `${w.src}@${w.t}/rs${w.ready}`).join(',')} inflight=${inflight.size}${stuck ? '  <<< STUCK' : ''}${stall ? '  <<< NO FRAME' : ''}`,
       )
       if (i === 10 || i === 25 || i === SECONDS - 1) await page.screenshot({ path: path.join(DIR, `viewer-${String(i).padStart(2, '0')}.png`) })
       lastMain = m

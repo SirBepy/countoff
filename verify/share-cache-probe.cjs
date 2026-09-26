@@ -26,8 +26,44 @@ function countRequests(page) {
   return { counts, stop: () => page.off('request', listener) }
 }
 
-async function waitBooted(page) {
-  await page.waitForSelector('.rehearse-top', { timeout: 30000 })
+/** Every Storage/Firestore request still open, with how long it has been open, so a boot
+ *  timeout can say what it was waiting on. Installed once per page. */
+function trackInflight(page) {
+  const open = new Map()
+  page.on('request', (r) => /googleapis\.com/.test(r.url()) && open.set(r, Date.now()))
+  const close = (r) => open.delete(r)
+  page.on('requestfinished', close)
+  page.on('requestfailed', close)
+  return () =>
+    [...open].map(([r, at]) => `${((Date.now() - at) / 1000).toFixed(1)}s ${r.url().slice(0, 100)}`)
+}
+
+/** A boot that misses this window is .claude/todos/31-...: the share itself resolves, the
+ *  footage behind it has not arrived yet, and the bare TimeoutError says neither. Twice now
+ *  working out which of the two it was has cost a whole session, so the throw carries the
+ *  page's own state out with it - what is on screen, what each video element is doing, and
+ *  what was still on the wire. */
+async function waitBooted(page, inflight) {
+  try {
+    await page.waitForSelector('.rehearse-top', { timeout: 30000 })
+  } catch (e) {
+    const state = await page
+      .evaluate(() => ({
+        onScreen: document.body.innerText.replace(/\s+/g, ' ').slice(0, 160),
+        videos: [...document.querySelectorAll('video')].map((v) => ({
+          ready: v.readyState,
+          net: v.networkState,
+          t: Number(v.currentTime.toFixed(2)),
+          buffered: v.buffered.length ? v.buffered.end(v.buffered.length - 1).toFixed(1) : '-',
+        })),
+      }))
+      .catch(() => null)
+    console.error(`boot timed out after 30s`)
+    console.error(`  on screen: ${state ? state.onScreen : '(page unreadable)'}`)
+    console.error(`  videos: ${state ? JSON.stringify(state.videos) : '-'}`)
+    console.error(`  still in flight: ${inflight ? inflight().join('\n    ') || 'nothing' : 'not tracked'}`)
+    throw e
+  }
   await page.waitForTimeout(1500)
 }
 
@@ -83,10 +119,11 @@ withBrowser(async (browser) => {
   const context = await browser.newContext()
   const page = await context.newPage()
   const dir = screenshotDir('share-cache')
+  const inflight = trackInflight(page)
 
   const r1 = countRequests(page)
   await page.goto(URL, { waitUntil: 'domcontentloaded' })
-  await waitBooted(page)
+  await waitBooted(page, inflight)
   await page.screenshot({ path: path.join(dir, '1-first-load.png') })
   const s1 = await readState(page)
   r1.stop()
@@ -104,7 +141,7 @@ withBrowser(async (browser) => {
 
   const r2 = countRequests(page)
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await waitBooted(page)
+  await waitBooted(page, inflight)
   await page.screenshot({ path: path.join(dir, '2-second-load.png') })
   const s2 = await readState(page)
   r2.stop()
@@ -143,7 +180,7 @@ withBrowser(async (browser) => {
 
   const r3 = countRequests(page)
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await waitBooted(page)
+  await waitBooted(page, inflight)
   await page.screenshot({ path: path.join(dir, '3-corrupt-cache-fallback.png') })
   const s3 = await readState(page)
   r3.stop()
