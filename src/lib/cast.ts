@@ -129,7 +129,14 @@ export function sheetBlocks(project: Project, viewAs: string | null): SheetBlock
 /** A tagged candidate wins over an untagged one; otherwise the first (only) candidate
  *  stands. The one place the "tagged block wins" rule lives: `blockAt` below and
  *  `nowState` in `now.ts` each build their own candidate list, in their own order, then
- *  both resolve through here. */
+ *  both resolve through here.
+ *
+ *  Blocks specifically. `clipAt` in `video.ts` resolves the same preference separately and
+ *  deliberately, because a clip can be tagged and still have no file on this device, so its
+ *  rule is "tagged wins among candidates that can actually render" and it falls through to
+ *  the next candidate when one cannot. A block always renders, so there is nothing here to
+ *  fall through to, and giving this function a predicate for a condition its only two
+ *  callers never pass would be a shared helper that is worse than two honest copies. */
 export function pickTagged(candidates: Block[]): Block | null {
   return candidates.find((b) => b.for?.length) ?? candidates[0] ?? null
 }

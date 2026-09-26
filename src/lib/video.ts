@@ -45,6 +45,11 @@ export function clipAt(
   const covering = project.clips.filter(
     (c) => time >= c.songStart && time < clipEnd(c) && isFor(project, c, viewAs),
   )
+  // Not `pickTagged` from `cast.ts`, on purpose. That one owns the rule for blocks, where
+  // the first tagged candidate always stands; here a clip can be tagged and still have no
+  // resolvable footage, so the rule is "tagged wins among candidates that can actually
+  // render" and an unshowable one falls through to the next. The two passes are that
+  // fallthrough, and it has no analogue in the block case.
   for (const clip of covering.filter((c) => c.for?.length)) {
     const found = showing(clip)
     if (found) return found
